@@ -7,9 +7,9 @@
 
 #include "hash_table.h"
 
-class TestHashData {
+class TestHashTable {
 public:
-  __host__ void Run(HashData &hash_data, int3 pos);
+  __host__ void Run(HashTable &hash_data, int3 pos);
 };
 
 #endif //MRF_VH_TEST_HASH_DATA_H

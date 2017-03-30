@@ -8,13 +8,13 @@
 #define T_PER_BLOCK 8
 #define NUM_GROUPS_X 1024
 
-__global__ void renderKernel(const HashData hashData, const RayCastData rayCastData, const DepthCameraData cameraData) {
+__global__ void renderKernel(const HashTable HashTable, const RayCastData rayCastData, const DepthCameraData cameraData) {
   const unsigned int x = blockIdx.x*blockDim.x + threadIdx.x;
   const unsigned int y = blockIdx.y*blockDim.y + threadIdx.y;
 
   const RayCastParams& rayCastParams = c_rayCastParams;
 
-  const HashParams& hashParams = c_hashParams;
+  const HashParams& hashParams = kHashParams;
 
   if (x < rayCastParams.m_width && y < rayCastParams.m_height) {
     rayCastData.d_depth[y*rayCastParams.m_width+x] = MINF;
@@ -46,17 +46,17 @@ __global__ void renderKernel(const HashData hashData, const RayCastData rayCastD
     //	printf("ERROR (%d,%d): [ %f, %f ]\n", x, y, minInterval, maxInterval);
     //}
 
-    rayCastData.traverseCoarseGridSimpleSampleAll(hashData, cameraData, worldCamPos, worldDir, camDir, make_int3(x,y,1), minInterval, maxInterval);
+    rayCastData.traverseCoarseGridSimpleSampleAll(HashTable, cameraData, worldCamPos, worldDir, camDir, make_int3(x,y,1), minInterval, maxInterval);
   }
 }
 
-void renderCS(const HashData        &hashData,   const RayCastData   &rayCastData,
+void renderCS(const HashTable        &HashTable,   const RayCastData   &rayCastData,
               const DepthCameraData &cameraData, const RayCastParams &rayCastParams) {
 
   const dim3 gridSize((rayCastParams.m_width + T_PER_BLOCK - 1)/T_PER_BLOCK, (rayCastParams.m_height + T_PER_BLOCK - 1)/T_PER_BLOCK);
   const dim3 blockSize(T_PER_BLOCK, T_PER_BLOCK);
 
-  renderKernel<<<gridSize, blockSize>>>(hashData, rayCastData, cameraData);
+  renderKernel<<<gridSize, blockSize>>>(HashTable, rayCastData, cameraData);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }

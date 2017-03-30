@@ -99,18 +99,18 @@ int main() {
 
   /// Mapper
   HashParams hash_params;
-  hash_params.m_hashNumBuckets = 500000;
-  hash_params.m_hashBucketSize = 10;
-  hash_params.m_hashMaxCollisionLinkedListSize = 7;
-  hash_params.m_numSDFBlocks = 1000000;
-  hash_params.m_SDFBlockSize = 8;
-  hash_params.m_virtualVoxelSize = 0.004;
+  hash_params.bucket_count = 500000;
+  hash_params.bucket_size = 10;
+  hash_params.hash_linked_list_size = 7;
+  hash_params.block_count = 1000000;
+  hash_params.block_size = 8;
+  hash_params.voxel_size = 0.004;
 
-  hash_params.m_maxIntegrationDistance = 4.0;
-  hash_params.m_truncScale = 0.01;
-  hash_params.m_truncation = 0.02;
-  hash_params.m_integrationWeightSample = 10;
-  hash_params.m_integrationWeightMax = 255;
+  hash_params.sdf_upper_bound = 4.0;
+  hash_params.truncation_distance_scale = 0.01;
+  hash_params.truncation_distance = 0.02;
+  hash_params.weight_sample = 10;
+  hash_params.weight_upper_bound = 255;
 
   CUDASceneRepHashSDF mapper(hash_params);
   //mapper.debugHash();
@@ -150,7 +150,7 @@ int main() {
   ray_cast_params.m_height = 480;
   ray_cast_params.m_minDepth = 0.5f;
   ray_cast_params.m_maxDepth = 5.0f;
-  ray_cast_params.m_rayIncrement = 0.8f * hash_params.m_truncation;
+  ray_cast_params.m_rayIncrement = 0.8f * hash_params.truncation_distance;
   ray_cast_params.m_thresSampleDist = 50.5f * ray_cast_params.m_rayIncrement;
   ray_cast_params.m_thresDist = 50.0f * ray_cast_params.m_rayIncrement;
   bool m_useGradients = true;
@@ -181,7 +181,7 @@ int main() {
   /// output blocks seems correct
 
   LOG(INFO) << "Render";
-  ray_caster.render(mapper.getHashData(), mapper.getHashParams(),
+  ray_caster.render(mapper.getHashTable(), mapper.getHashParams(),
                     sensor.getDepthCameraData(), T);
   /// runnable, still have bugs
 

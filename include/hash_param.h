@@ -21,20 +21,24 @@ struct __ALIGN__(16) HashParams {
   //////////////////////////////////////////////////
   /// TODO: add m_num_voxels and m_num_hash_entries
   /// Currently used parameters
-  unsigned int	m_hashNumBuckets;                 // 500000
-  unsigned int	m_hashBucketSize;                 // 10
-  unsigned int	m_hashMaxCollisionLinkedListSize; // 7
-  unsigned int	m_numSDFBlocks;                   // 256 * 256 * 4 -> 1000000 (8x8x8 per block)
+  uint  bucket_count;               // 500000
+  uint  bucket_size;                // 10 (entries)
+  uint  entry_count;                // bucket_count * bucket_size
+  uint  hash_linked_list_size;      // 7
 
-  int				    m_SDFBlockSize;                   // 8 (8x8x8)
-  float			    m_virtualVoxelSize;               // 0.004 (m)
-  unsigned int	m_numOccupiedBlocks;	            // occupied blocks in the viewing frustum
+  uint  block_count;                // 1000000
+  uint  occupied_block_count;	      // occupied blocks in the viewing frustum
+  int   block_size;                 // 8 (voxels)
 
-  float			    m_maxIntegrationDistance;         // 4.0 (m)
-  float			    m_truncScale;                     // 0.01 (m / m)
-  float		    	m_truncation;                     // 0.02 (m)
-  unsigned int	m_integrationWeightSample;        // 10,  TODO: change it!
-  unsigned int	m_integrationWeightMax;           // 255
+  uint  voxel_count;                // block_count * block_size^3
+  float	voxel_size;                 // 0.004 (m)
+
+  float	truncation_distance_scale;  // 0.01 (m / m)
+  float	truncation_distance;        // 0.02 (m)
+  float	sdf_upper_bound;            // 4.0 (m)
+
+  uint  weight_sample;              // 10,  TODO: change it dynamically!
+  uint  weight_upper_bound;         // 255
   //////////////////////////////////////////////////
 
   /// Stream from GPU to CPU (external storage)
@@ -42,8 +46,6 @@ struct __ALIGN__(16) HashParams {
   float3		m_streamingVoxelExtents;
   int3			m_streamingGridDimensions;
   int3			m_streamingMinGridPos;
-  unsigned int	m_streamingInitialChunkListSize;
-  uint2			m_dummy;
-
+  uint      m_streamingInitialChunkListSize;
 };
 #endif //VH_HASH_PARAM_H

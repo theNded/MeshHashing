@@ -3,11 +3,11 @@
 #include "sensor_param.h"
 #include <helper_cuda.h>
 
-__constant__ HashParams c_hashParams;
-void updateConstantHashParams(const HashParams& params) {
+__constant__ HashParams kHashParams;
+void UpdateConstantHashParams(const HashParams& params) {
   size_t size;
-  checkCudaErrors(cudaGetSymbolSize(&size, c_hashParams));
-  checkCudaErrors(cudaMemcpyToSymbol(c_hashParams, &params, size, 0, cudaMemcpyHostToDevice));
+  checkCudaErrors(cudaGetSymbolSize(&size, kHashParams));
+  checkCudaErrors(cudaMemcpyToSymbol(kHashParams, &params, size, 0, cudaMemcpyHostToDevice));
 }
 
 __constant__ DepthCameraParams c_depthCameraParams;

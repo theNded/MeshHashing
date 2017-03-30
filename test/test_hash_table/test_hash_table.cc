@@ -22,19 +22,19 @@ uint CpuRun(int3 pos) {
 }
 
 int main(int argc, const char **argv) {
-  HashData hash_data;
+  HashTable hash_data;
 
   findCudaDevice(argc, argv);
   HashParams params;
-  params.m_numSDFBlocks = 256 * 256 * 4;
-  params.m_hashNumBuckets = 500000;
-  params.m_hashBucketSize = 10;
-  params.m_SDFBlockSize = 8;
+  params.block_count = 256 * 256 * 4;
+  params.bucket_count = 500000;
+  params.bucket_size = 10;
+  params.block_size = 8;
 
   hash_data.allocate(params, true);
   LOG(INFO) << "Hash data allocated";
 
-  TestHashData test;
+  TestHashTable test;
   test.Run(hash_data, make_int3(142, 33, 5));
   LOG(INFO) << CpuRun(make_int3(142, 33, 5));
 

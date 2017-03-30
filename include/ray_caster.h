@@ -13,7 +13,7 @@
 #include "sensor_data.h"
 
 /// CUDA functions
-extern void renderCS(const HashData& hashData, const RayCastData &rayCastData, const DepthCameraData &cameraData, const RayCastParams &rayCastParams);
+extern void renderCS(const HashTable& HashTable, const RayCastData &rayCastData, const DepthCameraData &cameraData, const RayCastParams &rayCastParams);
 
 extern void computeNormals(float4* d_output, float4* d_input, unsigned int width, unsigned int height);
 extern void convertDepthFloatToCameraSpaceFloat4(float4* d_output, float* d_input, float4x4 intrinsicsInv, unsigned int width, unsigned int height, const DepthCameraData& depthCameraData);
@@ -24,7 +24,7 @@ public:
   CUDARayCastSDF(const RayCastParams& params);
   ~CUDARayCastSDF(void);
 
-  void render(const HashData& hashData, const HashParams& hashParams, const DepthCameraData& cameraData, const float4x4& lastRigidTransform);
+  void render(const HashTable& HashTable, const HashParams& hashParams, const DepthCameraData& cameraData, const float4x4& lastRigidTransform);
 
   const RayCastData& getRayCastData(void) {
     return m_data;
