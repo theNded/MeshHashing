@@ -27,7 +27,7 @@ void CUDASceneRepHashSDF::integrate(const float4x4 &lastRigidTransform, const De
   /// transform ok ?
 
   //make the rigid transform available on the GPU
-  m_HashTable.updateParams(m_hashParams);
+  m_hashData.updateParams(m_hashParams);
   /// seems OK
 
   //allocate all hash blocks which are corresponding to depth map entries
@@ -71,13 +71,13 @@ void CUDASceneRepHashSDF::reset() {
   m_hashParams.m_rigidTransform.setIdentity();
   m_hashParams.m_rigidTransformInverse.setIdentity();
   m_hashParams.occupied_block_count = 0;
-  m_HashTable.updateParams(m_hashParams);
-  resetCUDA(m_HashTable, m_hashParams);
+  m_hashData.updateParams(m_hashParams);
+  resetCUDA(m_hashData, m_hashParams);
 }
 
 
 HashTable& CUDASceneRepHashSDF::getHashTable() {
-  return m_HashTable;
+  return m_hashData;
 }
 
 const HashParams& CUDASceneRepHashSDF::getHashParams() const {
@@ -88,7 +88,7 @@ const HashParams& CUDASceneRepHashSDF::getHashParams() const {
 //! debug only!
 unsigned int CUDASceneRepHashSDF::getHeapFreeCount() {
   unsigned int count;
-  checkCudaErrors(cudaMemcpy(&count, m_HashTable.heap_counter, sizeof(unsigned int),
+  checkCudaErrors(cudaMemcpy(&count, m_hashData.heap_counter, sizeof(unsigned int),
                              cudaMemcpyDeviceToHost));
   return count + 1;  //there is one more free than the address suggests (0 would be also a valid address)
 }
@@ -101,15 +101,15 @@ void CUDASceneRepHashSDF::debugHash() {
   unsigned int *heapCPU = new unsigned int[m_hashParams.block_count];
   unsigned int heapCounterCPU;
 
-  checkCudaErrors(cudaMemcpy(&heapCounterCPU, m_HashTable.heap_counter, sizeof(unsigned int), cudaMemcpyDeviceToHost));
+  checkCudaErrors(cudaMemcpy(&heapCounterCPU, m_hashData.heap_counter, sizeof(unsigned int), cudaMemcpyDeviceToHost));
   heapCounterCPU++;  //points to the first free entry: number of blocks is one more
 
-  checkCudaErrors(cudaMemcpy(heapCPU, m_HashTable.heap, sizeof(unsigned int) * m_hashParams.block_count, cudaMemcpyDeviceToHost));
-  checkCudaErrors(cudaMemcpy(hashCPU, m_HashTable.hash_entries,
+  checkCudaErrors(cudaMemcpy(heapCPU, m_hashData.heap, sizeof(unsigned int) * m_hashParams.block_count, cudaMemcpyDeviceToHost));
+  checkCudaErrors(cudaMemcpy(hashCPU, m_hashData.hash_entries,
              sizeof(HashEntry) * m_hashParams.bucket_size * m_hashParams.bucket_count, cudaMemcpyDeviceToHost));
-  checkCudaErrors(cudaMemcpy(hashCompCPU, m_HashTable.compacted_hash_entries,
+  checkCudaErrors(cudaMemcpy(hashCompCPU, m_hashData.compacted_hash_entries,
                              sizeof(HashEntry) * m_hashParams.occupied_block_count, cudaMemcpyDeviceToHost));
-  checkCudaErrors(cudaMemcpy(voxelCPU, m_HashTable.blocks,
+  checkCudaErrors(cudaMemcpy(voxelCPU, m_hashData.blocks,
                   sizeof(Voxel) * m_hashParams.block_count * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE,
                              cudaMemcpyDeviceToHost));
 
@@ -221,13 +221,13 @@ void CUDASceneRepHashSDF::debugHash() {
 
 void CUDASceneRepHashSDF::create(const HashParams &params) {
   m_hashParams = params;
-  m_HashTable.allocate(m_hashParams);
+  m_hashData.allocate(m_hashParams);
 
   reset();
 }
 
 void CUDASceneRepHashSDF::destroy() {
-  m_HashTable.free();
+  m_hashData.free();
 }
 
 void CUDASceneRepHashSDF::alloc(const DepthCameraData &depthCameraData, const DepthCameraParams &depthCameraParams,
@@ -238,8 +238,8 @@ void CUDASceneRepHashSDF::alloc(const DepthCameraData &depthCameraData, const De
     //allocate until all blocks are allocated
     unsigned int prevFree = getHeapFreeCount();
     while (1) {
-      resetHashBucketMutexCUDA(m_HashTable, m_hashParams);
-      allocCUDA(m_HashTable, m_hashParams, depthCameraData, depthCameraParams, d_bitMask);
+      resetHashBucketMutexCUDA(m_hashData, m_hashParams);
+      allocCUDA(m_hashData, m_hashParams, depthCameraData, depthCameraParams, d_bitMask);
 
       unsigned int currFree = getHeapFreeCount();
 
@@ -251,8 +251,8 @@ void CUDASceneRepHashSDF::alloc(const DepthCameraData &depthCameraData, const De
     }
   } else {
     //this version is faster, but it doesn't guarantee that all blocks are allocated (staggers alloc to the next frame)
-    resetHashBucketMutexCUDA(m_HashTable, m_hashParams);
-    allocCUDA(m_HashTable, m_hashParams, depthCameraData, depthCameraParams, d_bitMask);
+    resetHashBucketMutexCUDA(m_hashData, m_hashParams);
+    allocCUDA(m_hashData, m_hashParams, depthCameraData, depthCameraParams, d_bitMask);
     /// !!! NOBODY IS ALLOCATED
   }
 }
@@ -260,14 +260,14 @@ void CUDASceneRepHashSDF::alloc(const DepthCameraData &depthCameraData, const De
 
 void CUDASceneRepHashSDF::compactifyHashEntries(const DepthCameraData &depthCameraData) {
 
-  m_hashParams.occupied_block_count = compactifyHashAllInOneCUDA(m_HashTable,
+  m_hashParams.occupied_block_count = compactifyHashAllInOneCUDA(m_hashData,
                                                                 m_hashParams);    //this version uses atomics over prefix sums, which has a much better performance
   std::cout << "Occupied Blocks: " << m_hashParams.occupied_block_count << std::endl;
-  m_HashTable.updateParams(m_hashParams);  //make sure numOccupiedBlocks is updated on the GPU
+  m_hashData.updateParams(m_hashParams);  //make sure numOccupiedBlocks is updated on the GPU
 }
 
 void CUDASceneRepHashSDF::integrateDepthMap(const DepthCameraData &depthCameraData, const DepthCameraParams &depthCameraParams) {
-  integrateDepthMapCUDA(m_HashTable, m_hashParams, depthCameraData, depthCameraParams);
+  integrateDepthMapCUDA(m_hashData, m_hashParams, depthCameraData, depthCameraParams);
 }
 
 void CUDASceneRepHashSDF::garbageCollect(const DepthCameraData &depthCameraData) {
@@ -277,11 +277,11 @@ void CUDASceneRepHashSDF::garbageCollect(const DepthCameraData &depthCameraData)
   if (garbage_collect) {
 
     if (m_numIntegratedFrames > 0 && m_numIntegratedFrames % garbage_collect_starve == 0) {
-      starveVoxelsKernelCUDA(m_HashTable, m_hashParams);
+      starveVoxelsKernelCUDA(m_hashData, m_hashParams);
     }
 
-    garbageCollectIdentifyCUDA(m_HashTable, m_hashParams);
-    resetHashBucketMutexCUDA(m_HashTable, m_hashParams);  //needed if linked lists are enabled -> for memeory deletion
-    garbageCollectFreeCUDA(m_HashTable, m_hashParams);
+    garbageCollectIdentifyCUDA(m_hashData, m_hashParams);
+    resetHashBucketMutexCUDA(m_hashData, m_hashParams);  //needed if linked lists are enabled -> for memeory deletion
+    garbageCollectFreeCUDA(m_hashData, m_hashParams);
   }
 }

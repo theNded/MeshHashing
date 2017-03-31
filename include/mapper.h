@@ -13,23 +13,23 @@
 #include "sensor_param.h"
 
 /// CUDA functions
-extern void resetCUDA(HashTable& HashTable, const HashParams& hashParams);
-extern void resetHashBucketMutexCUDA(HashTable& HashTable, const HashParams& hashParams);
-extern void allocCUDA(HashTable& HashTable, const HashParams& hashParams, const DepthCameraData& depthCameraData, const DepthCameraParams& depthCameraParams, const unsigned int* d_bitMask);
+extern void resetCUDA(HashTable& hashData, const HashParams& hashParams);
+extern void resetHashBucketMutexCUDA(HashTable& hashData, const HashParams& hashParams);
+extern void allocCUDA(HashTable& hashData, const HashParams& hashParams, const DepthCameraData& depthCameraData, const DepthCameraParams& depthCameraParams, const unsigned int* d_bitMask);
 
 /// Assume it is only used for streaming
-extern void fillDecisionArrayCUDA(HashTable& HashTable, const HashParams& hashParams, const DepthCameraData& depthCameraData);
-extern void compactifyHashCUDA(HashTable& HashTable, const HashParams& hashParams);
-extern unsigned int compactifyHashAllInOneCUDA(HashTable& HashTable, const HashParams& hashParams);
+extern void fillDecisionArrayCUDA(HashTable& hashData, const HashParams& hashParams, const DepthCameraData& depthCameraData);
+extern void compactifyHashCUDA(HashTable& hashData, const HashParams& hashParams);
+extern unsigned int compactifyHashAllInOneCUDA(HashTable& hashData, const HashParams& hashParams);
 
 /// ! FUSION PART !
-extern void integrateDepthMapCUDA(HashTable& HashTable, const HashParams& hashParams, const DepthCameraData& depthCameraData, const DepthCameraParams& depthCameraParams);
+extern void integrateDepthMapCUDA(HashTable& hashData, const HashParams& hashParams, const DepthCameraData& depthCameraData, const DepthCameraParams& depthCameraParams);
 extern void bindInputDepthColorTextures(const DepthCameraData& depthCameraData);
 
 /// Garbage collection
-extern void starveVoxelsKernelCUDA(HashTable& HashTable, const HashParams& hashParams);
-extern void garbageCollectIdentifyCUDA(HashTable& HashTable, const HashParams& hashParams);
-extern void garbageCollectFreeCUDA(HashTable& HashTable, const HashParams& hashParams);
+extern void starveVoxelsKernelCUDA(HashTable& hashData, const HashParams& hashParams);
+extern void garbageCollectIdentifyCUDA(HashTable& hashData, const HashParams& hashParams);
+extern void garbageCollectFreeCUDA(HashTable& hashData, const HashParams& hashParams);
 
 /// CUDA / C++ shared class
 class CUDASceneRepHashSDF {
@@ -70,7 +70,7 @@ private:
   void garbageCollect(const DepthCameraData& depthCameraData);
 
   HashParams	m_hashParams;
-  HashTable		m_HashTable;
+  HashTable		m_hashData;
 
   // CUDAScan		m_cudaScan; disable at current
   unsigned int	m_numIntegratedFrames;	//used for garbage collect

@@ -101,7 +101,7 @@ int main() {
   HashParams hash_params;
   hash_params.bucket_count = 500000;
   hash_params.bucket_size = 10;
-  hash_params.hash_linked_list_size = 7;
+  hash_params.linked_list_size = 7;
   hash_params.block_count = 1000000;
   hash_params.block_size = 8;
   hash_params.voxel_size = 0.004;

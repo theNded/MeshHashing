@@ -423,7 +423,7 @@ struct HashTable {
     HashEntry curr_entry;
 
     #pragma unroll 1
-    for (uint iter = 0; iter < kHashParams.hash_linked_list_size; ++iter) {
+    for (uint iter = 0; iter < kHashParams.linked_list_size; ++iter) {
       curr_entry = hash_entries[i];
 
       if (IsBlockAllocated(block_pos, curr_entry)) {
@@ -466,11 +466,27 @@ struct HashTable {
 				return;
 			}
 
-			if (curr_entry.ptr == FREE_ENTRY) {
+      /// wei: should not break and alloc before a thorough searching is over
+			if (empty_entry_idx == -1 && curr_entry.ptr == FREE_ENTRY) {
 				empty_entry_idx = i;
-				break;
 			}
 		}
+
+#ifdef HANDLE_COLLISIONS
+    const uint bucket_last_entry_idx = bucket_first_entry_idx + HASH_BUCKET_SIZE - 1;
+		uint i = bucket_last_entry_idx;
+		int offset = 0;
+		for (uint iter = 0; iter < kHashParams.linked_list_size; ++iter) {
+		  HashEntry& curr_entry = hash_entries[i];
+		  if (IsBlockAllocated(pos, curr_entry)) {
+		    return;
+		  }
+		  if (curr_entry.offset == 0) {
+		    break;
+		  }
+		  i = (bucket_last_entry_idx + curr_entry.offset) % kHashParams.entry_count;
+		}
+#endif
 
 		if (empty_entry_idx != -1) {
 			int lock = atomicExch(&bucket_mutexes[bucket_idx], LOCK_ENTRY);
@@ -484,12 +500,11 @@ struct HashTable {
 		}
 
 #ifdef HANDLE_COLLISIONS
-    const uint bucket_last_entry_idx = bucket_first_entry_idx + HASH_BUCKET_SIZE - 1;
-		uint i = bucket_last_entry_idx;
-		int offset = 0;
+		i = bucket_last_entry_idx;
+		offset = 0;
 
 		#pragma  unroll 1
-		for (uint iter = 0; iter < kHashParams.hash_linked_list_size; ++iter) {
+		for (uint iter = 0; iter < kHashParams.linked_list_size; ++iter) {
 			offset ++;
 			if ((offset % HASH_BUCKET_SIZE) == 0) continue;
 
@@ -573,7 +588,7 @@ struct HashTable {
     i = (bucket_last_entry_idx + curr.offset) % kHashParams.entry_count;
 
     #pragma unroll 1
-    for (uint iter = 0; iter < kHashParams.hash_linked_list_size; ++iter) {
+    for (uint iter = 0; iter < kHashParams.linked_list_size; ++iter) {
       curr = hash_entries[i];
 
       if (IsBlockAllocated(block_pos, curr)) {
@@ -602,7 +617,7 @@ struct HashTable {
     return false;
   }
 
-
+  /// (wei): reported bug on GitHub, wait for responce)
   //  TODO MATTHIAS check the atomics in this function
   //!inserts a hash entry without allocating any memory: used by streaming:
   __device__
@@ -624,7 +639,7 @@ struct HashTable {
     uint i = idxLastEntryInBucket;
 
     #pragma  unroll 1
-    for (uint maxIter = 0; maxIter < kHashParams.hash_linked_list_size; ++maxIter) {
+    for (uint maxIter = 0; maxIter < kHashParams.linked_list_size; ++maxIter) {
       //curr = GetHashEntry(hash, i);
       HashEntry curr = hash_entries[i];	//TODO MATTHIAS do by reference
       if (curr.offset == 0) break;									//we have found the end of the list
@@ -635,7 +650,7 @@ struct HashTable {
     uint maxIter = 0;
     int offset = 0;
     #pragma  unroll 1
-    while (maxIter < kHashParams.hash_linked_list_size) {													//linear search for free entry
+    while (maxIter < kHashParams.linked_list_size) {													//linear search for free entry
       offset++;
       uint i = (idxLastEntryInBucket + offset) % (HASH_BUCKET_SIZE * kHashParams.bucket_count);	//go to next hash element
       if ((offset % HASH_BUCKET_SIZE) == 0) continue;										//cannot insert into a last bucket element (would conflict with other linked lists)
@@ -669,8 +684,6 @@ struct HashTable {
     return false;
   }
 
-
-
   //////////
   // Histogram (no collision traversal)
   __device__
@@ -697,7 +710,7 @@ struct HashTable {
     //traverse list until end: memorize idx at list end and memorize offset from last element of bucket to list end
 
     unsigned int maxIter = 0;
-    uint g_MaxLoopIterCount = kHashParams.hash_linked_list_size;
+    uint g_MaxLoopIterCount = kHashParams.linked_list_size;
     #pragma unroll 1
     while (maxIter < g_MaxLoopIterCount) {
       //offset = curr.offset;

@@ -20,7 +20,7 @@
 #include "sensor_data.h"
 #include "renderer.h"
 
-#define ICL
+#define ICL_
 #ifdef ICL
 const std::string kDefaultDatasetPath = "/home/wei/data/ICL/kt2/";
 
@@ -75,7 +75,7 @@ void depthToHSV(float4* d_output, float* d_input,
 
 void LoadImageList(std::string dataset_path, std::string dataset_txt,
                    std::vector<std::string> &image_name_list) {
-  std::ifstream list_stream(dataset_path + dataset_txt);
+  std::ifstream list_stream(dataset_path + "depth.txt");
   std::string file_name;
 
   std::getline(list_stream, file_name);
@@ -154,13 +154,13 @@ int main() {
   hash_params.bucket_count = 500000;
   hash_params.bucket_size = 10;
   hash_params.entry_count = hash_params.bucket_count * hash_params.bucket_size;
-  hash_params.hash_linked_list_size = 7;
+  hash_params.linked_list_size = 7;
 
   hash_params.block_count = 1000000;
   hash_params.block_size = 8;
   hash_params.voxel_count = hash_params.block_count
                             * (hash_params.block_size * hash_params.block_size * hash_params.block_size);
-  hash_params.voxel_size = 0.004;
+  hash_params.voxel_size = 0.01;
 
   hash_params.sdf_upper_bound = 4.0;
   hash_params.truncation_distance_scale = 0.01;
@@ -222,7 +222,7 @@ int main() {
   float4 *cuda_hsv;
   checkCudaErrors(cudaMalloc(&cuda_hsv, sizeof(float4) * 640 * 480));
 
-  for (int i = 0; i < 880; ++i) {
+  for (int i = 0; i < 790; ++i) {
     LOG(INFO) << i;
     cv::Mat depth = cv::imread(depth_img_list[i], -1);
     //cv::flip(depth, depth, 2);
@@ -240,7 +240,7 @@ int main() {
     ray_caster.render(mapper.getHashTable(), mapper.getHashParams(), sensor.getDepthCameraData(), T.getInverse());
     //depthToHSV(cuda_hsv, ray_caster.getRayCastData().d_depth, 640, 480, 0.5f, 3.5f);
     //checkCudaFloat4Memory(cuda_hsv);
-    checkCudaFloat4Memory(ray_caster.getRayCastData().d_normals);
+    //checkCudaFloat4Memory(ray_caster.getRayCastData().d_normals);
     cv::waitKey(1);
   }
 

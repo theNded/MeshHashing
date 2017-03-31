@@ -24,14 +24,14 @@ void CUDARayCastSDF::destroy(void) {
 }
 
 /// Major function, extract surface and normal from the volumes
-void CUDARayCastSDF::render(const HashTable& HashTable, const HashParams& hashParams,
+void CUDARayCastSDF::render(const HashTable& hashData, const HashParams& hashParams,
                             const DepthCameraData& cameraData, const float4x4& lastRigidTransform) {
 
   m_params.m_viewMatrix = lastRigidTransform;
   m_params.m_viewMatrixInverse = m_params.m_viewMatrix.getInverse();
   m_data.updateParams(m_params);
 
-  renderCS(HashTable, m_data, cameraData, m_params);
+  renderCS(hashData, m_data, cameraData, m_params);
 
   //convertToCameraSpace(cameraData);
   //if (!m_params.m_useGradients) {

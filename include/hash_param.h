@@ -24,7 +24,7 @@ struct __ALIGN__(16) HashParams {
   uint  bucket_count;               // 500000
   uint  bucket_size;                // 10 (entries)
   uint  entry_count;                // bucket_count * bucket_size
-  uint  hash_linked_list_size;      // 7
+  uint  linked_list_size;      // 7
 
   uint  block_count;                // 1000000
   uint  occupied_block_count;	      // occupied blocks in the viewing frustum
