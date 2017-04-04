@@ -10,13 +10,13 @@
 #include "sensor_param.h"
 
 /// At first get rid of CUDARGBDAdaptor and RGBDSensor, use it directly
-class CUDARGBDSensor {
+class Sensor {
 public:
-  CUDARGBDSensor();
-  ~CUDARGBDSensor();
+  Sensor();
+  ~Sensor();
 
   void free();
-  int alloc(unsigned int width, unsigned int height, DepthCameraParams &params);
+  int alloc(unsigned int width, unsigned int height, SensorParams &params);
 
   /// Get data from CUDARGBDAdapter, which reads from RGBDSensor
   int process(cv::Mat &depth, cv::Mat &color);
@@ -31,13 +31,13 @@ public:
   unsigned int getColorHeight() const;
 
   //! the depth camera data (lives on the GPU)
-  const DepthCameraData& getDepthCameraData() {
-    return m_depthCameraData;
+  const SensorData& getSensorData() {
+    return sensor_data_;
   }
 
   //! the depth camera parameter struct (lives on the CPU)
-  const DepthCameraParams& getDepthCameraParams() {
-    return m_depthCameraParams;
+  const SensorParams& getSensorParams() {
+    return sensor_params_;
   }
 
   //! computes and returns the depth map in hsv
@@ -45,10 +45,11 @@ public:
 
 private:
   /// sensor data
-  DepthCameraData		m_depthCameraData;
-  DepthCameraParams	m_depthCameraParams;
+  SensorData		sensor_data_;
+  SensorParams	sensor_params_;
 
   /// filters the raw data
+  /// Check out this later
   bool  m_bFilterDepthValues;
   float m_fBilateralFilterSigmaD;
   float m_fBilateralFilterSigmaR;

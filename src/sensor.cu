@@ -4,7 +4,6 @@
 
 #include <helper_cuda.h>
 #include <helper_math.h>
-#include <driver_types.h>
 
 /// Input short* depth (cpu) to float* depth (gpu)
 __global__ void convertDepthRawToFloatKernel(float *d_output, short *d_input,

@@ -38,5 +38,13 @@ typedef signed char schar;
 #include <cuda_runtime.h>
 #endif
 
+#define HANDLE_COLLISIONS
+
+#define HASH_BUCKET_SIZE  10
+#define SDF_BLOCK_SIZE    8
+
+#define LOCK_ENTRY -1
+#define FREE_ENTRY -2
+#define NO_OFFSET   0
 
 #endif //_VH_COMMON_H_

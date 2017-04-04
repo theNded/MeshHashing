@@ -16,8 +16,8 @@
 #endif
 
 /// constant.cu
-extern __constant__ RayCastParams c_rayCastParams;
-extern void updateConstantRayCastParams(const RayCastParams &params);
+extern __constant__ RayCastParams kRayCastParams;
+extern void UpdateConstantRayCastParams(const RayCastParams &params);
 
 struct RayCastSample {
   float sdf;
@@ -25,13 +25,13 @@ struct RayCastSample {
   uint weight;
 };
 
-struct RayCastData {
+struct RayCasterData {
   ///////////////
   // Host part //
   ///////////////
 
   __device__ __host__
-  RayCastData() {
+  RayCasterData() {
     d_depth = NULL;
     d_depth4 = NULL;
     d_normals = NULL;
@@ -39,7 +39,7 @@ struct RayCastData {
   }
 
   __host__
-  void allocate(const RayCastParams &params) {
+  void Alloc(const RayCastParams &params) {
     checkCudaErrors(cudaMalloc(&d_depth, sizeof(float) * params.m_width * params.m_height));
     checkCudaErrors(cudaMalloc(&d_depth4, sizeof(float4) * params.m_width * params.m_height));
     checkCudaErrors(cudaMalloc(&d_normals, sizeof(float4) * params.m_width * params.m_height));
@@ -51,7 +51,7 @@ struct RayCastData {
 
   __host__
   void updateParams(const RayCastParams &params) {
-    updateConstantRayCastParams(params);
+    UpdateConstantRayCastParams(params);
   }
 
   __host__
@@ -68,7 +68,7 @@ struct RayCastData {
 #ifdef __CUDACC__
   __device__
     const RayCastParams& params() const {
-      return c_rayCastParams;
+      return kRayCastParams;
   }
 
   __device__
@@ -84,7 +84,7 @@ struct RayCastData {
   bool trilinearInterpolationSimpleFastFast(const HashTable& hash, const float3& pos, float& dist, uchar3& color) const {
     const float oSet = kHashParams.voxel_size;
     const float3 posDual = pos-make_float3(oSet/2.0f, oSet/2.0f, oSet/2.0f);
-    float3 weight = frac(hash.WorldToVoxelf(pos));
+      float3 weight = frac(WorldToVoxelf(pos));
 
     dist = 0.0f;
     float3 colorFloat = make_float3(0.0f, 0.0f, 0.0f);
@@ -159,12 +159,12 @@ struct RayCastData {
   }
 
   __device__
-  void traverseCoarseGridSimpleSampleAll(const HashTable& hash, const DepthCameraData& cameraData,
+  void traverseCoarseGridSimpleSampleAll(const HashTable& hash, const SensorData& cameraData,
    const float3& worldCamPos, const float3& worldDir, const float3& camDir, const int3& dTid, float minInterval, float maxInterval) const {
     int x = dTid.x, y = dTid.y;
     bool flag = (x == 589 && y == 477);
 
-    const RayCastParams& rayCastParams = c_rayCastParams;
+    const RayCastParams& rayCastParams = kRayCastParams;
 
     // Last Sample
     RayCastSample lastSample; lastSample.sdf = 0.0f; lastSample.alpha = 0.0f; lastSample.weight = 0; // lastSample.color = int3(0, 0, 0);
@@ -199,7 +199,7 @@ struct RayCastData {
               float depth = alpha / depthToRayLength; // Convert ray length to depth depthToRayLength
 
               d_depth[dTid.y*rayCastParams.m_width+dTid.x] = depth;
-              d_depth4[dTid.y*rayCastParams.m_width+dTid.x] = make_float4(cameraData.kinectDepthToSkeleton(dTid.x, dTid.y, depth), 1.0f);
+              d_depth4[dTid.y*rayCastParams.m_width+dTid.x] = make_float4(kinectDepthToSkeleton(dTid.x, dTid.y, depth), 1.0f);
               d_colors[dTid.y*rayCastParams.m_width+dTid.x] = make_float4(color2.x/255.f, color2.y/255.f, color2.z/255.f, 1.0f);
 
               if(rayCastParams.m_useGradients)

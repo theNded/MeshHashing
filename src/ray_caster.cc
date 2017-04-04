@@ -6,32 +6,32 @@
 #include "ray_caster_data.h"
 #include "hash_table.h"
 
-CUDARayCastSDF::CUDARayCastSDF(const RayCastParams& params) {
+RayCaster::RayCaster(const RayCastParams& params) {
   create(params);
 }
 
-CUDARayCastSDF::~CUDARayCastSDF(void) {
+RayCaster::~RayCaster(void) {
   destroy();
 }
 
-void CUDARayCastSDF::create(const RayCastParams& params) {
+void RayCaster::create(const RayCastParams& params) {
   m_params = params;
-  m_data.allocate(m_params);
+  m_data.Alloc(m_params);
 }
 
-void CUDARayCastSDF::destroy(void) {
+void RayCaster::destroy(void) {
   m_data.free();
 }
 
 /// Major function, extract surface and normal from the volumes
-void CUDARayCastSDF::render(const HashTable& hashData, const HashParams& hashParams,
-                            const DepthCameraData& cameraData, const float4x4& lastRigidTransform) {
+void RayCaster::render(const HashTable& hash_table, const HashParams& hash_params,
+                            const SensorData& cameraData, const float4x4& lastRigidTransform) {
 
   m_params.m_viewMatrix = lastRigidTransform;
   m_params.m_viewMatrixInverse = m_params.m_viewMatrix.getInverse();
   m_data.updateParams(m_params);
 
-  renderCS(hashData, m_data, cameraData, m_params);
+  renderCS(hash_table, m_data, cameraData, m_params);
 
   //convertToCameraSpace(cameraData);
   //if (!m_params.m_useGradients) {
@@ -40,7 +40,7 @@ void CUDARayCastSDF::render(const HashTable& hashData, const HashParams& hashPar
 }
 
 //
-//void CUDARayCastSDF::convertToCameraSpace(const DepthCameraData& cameraData) {
+//void RayCaster::convertToCameraSpace(const SensorData& cameraData) {
 //  convertDepthFloatToCameraSpaceFloat4(m_data.d_depth4, m_data.d_depth, m_params.m_intrinsicsInverse, m_params.m_width, m_params.m_height, cameraData);
 //
 //  if(!m_params.m_useGradients) {

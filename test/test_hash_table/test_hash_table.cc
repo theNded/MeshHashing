@@ -31,7 +31,7 @@ int main(int argc, const char **argv) {
   params.bucket_size = 10;
   params.block_size = 8;
 
-  hash_data.allocate(params, true);
+  hash_data.Alloc(params, true);
   LOG(INFO) << "Hash data allocated";
 
   TestHashTable test;

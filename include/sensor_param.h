@@ -9,17 +9,17 @@
 
 /// We may generate a virtual camera for LiDAR
 /// where many points are null
-struct __ALIGN__(16) DepthCameraParams {
-  float fx;                    /// Set manually
+struct __ALIGN__(16) SensorParams {
+  float fx;              /// Set manually
   float fy;
-  float mx;
-  float my;
+  float cx;
+  float cy;
 
-  unsigned int m_imageWidth;   /// 640
-  unsigned int m_imageHeight;  /// 480
+  uint width;            /// 640
+  uint height;           /// 480
 
-  float m_sensorDepthWorldMin; /// 5.0f
-  float m_sensorDepthWorldMax; /// 0.5f, might need modify for LiDAR
+  float min_depth_range; /// 0.5f
+  float max_depth_range; /// 5.0f, might need modify for LiDAR
 };
 
 

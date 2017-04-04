@@ -3,6 +3,7 @@
 //
 
 /// HashTable for VoxelHashing
+// TODO(wei): put util functions (geometry transform) into another .h
 
 /// Header both used for .cu and .cc
 /// To correctly use this header,
@@ -18,22 +19,15 @@
 #include <helper_math.h>
 
 #include "core.h"
+#include "geometry_util.h"
 #include "hash_param.h"
 #include "sensor_data.h"
-
-#define HANDLE_COLLISIONS
-
-#define HASH_BUCKET_SIZE  10
-#define SDF_BLOCK_SIZE    8
-
-#define LOCK_ENTRY -1
-#define FREE_ENTRY -2
-#define NO_OFFSET   0
 
 /// constant.cu
 extern void UpdateConstantHashParams(const HashParams &params);
 extern __constant__ HashParams kHashParams;
 
+// TODO(wei): make a templated class to adapt to more types
 struct HashTable {
   /// Hash VALUE part
   uint      *heap;               /// index to free blocks
@@ -76,7 +70,7 @@ struct HashTable {
   }
 
   __host__
-  void allocate(const HashParams &params, bool is_data_on_gpu = true) {
+  void Alloc(const HashParams &params, bool is_data_on_gpu = true) {
     is_on_gpu = is_data_on_gpu;
     if (is_on_gpu) {
       checkCudaErrors(cudaMalloc(&heap, sizeof(uint) * params.block_count));
@@ -146,7 +140,7 @@ struct HashTable {
   __host__
   HashTable CopyToCPU(const HashParams &params) const {
     HashTable hash_table;
-    hash_table.allocate(params, false);
+    hash_table.Alloc(params, false);
 
     checkCudaErrors(cudaMemcpy(hash_table.heap, heap,
                                sizeof(uint) * params.block_count,
@@ -227,98 +221,11 @@ struct HashTable {
          + kHashParams.truncation_distance_scale * z;
   }
 
-
-  ///////////////////////////////////////////////////
-  /// Transforms
-
-  /// float is only used to do interpolation
-  /// Semantic: A pos To B pos; A, B in {world, voxel, block}
-  __device__
-  float3 WorldToVoxelf(const float3& world_pos) const	{
-    return world_pos / kHashParams.voxel_size;
-  }
-  __device__
-  int3 WorldToVoxeli(const float3& world_pos) const {
-    const float3 p = world_pos / kHashParams.voxel_size;
-    return make_int3(p + make_float3(sign(p)) * 0.5f);
-  }
-
-  __device__
-  int3 VoxelToBlock(int3 voxel_pos) const {
-    if (voxel_pos.x < 0) voxel_pos.x -= SDF_BLOCK_SIZE-1;
-    if (voxel_pos.y < 0) voxel_pos.y -= SDF_BLOCK_SIZE-1;
-    if (voxel_pos.z < 0) voxel_pos.z -= SDF_BLOCK_SIZE-1;
-
-    return make_int3(
-      voxel_pos.x / SDF_BLOCK_SIZE,
-      voxel_pos.y / SDF_BLOCK_SIZE,
-      voxel_pos.z / SDF_BLOCK_SIZE);
-  }
-
-  // corner voxel with smallest xyz
-  __device__
-  int3 BlockToVoxel(const int3& block_pos) const {
-    return block_pos * SDF_BLOCK_SIZE;
-  }
-
-  __device__
-  float3 VoxelToWorld(const int3& voxel_pos) const {
-    return make_float3(voxel_pos) * kHashParams.voxel_size;
-  }
-
-  __device__
-  float3 BlockToWorld(const int3& block_pos) const {
-    return VoxelToWorld(BlockToVoxel(block_pos));
-  }
-
-  __device__
-  int3 WorldToBlock(const float3& world_pos) const {
-    return VoxelToBlock(WorldToVoxeli(world_pos));
-  }
-
-  // TODO: wei, a better implementation?
+  // TODO(wei): a better implementation?
   __device__
   bool IsBlockInCameraFrustum(const int3& block_pos) {
     float3 world_pos = VoxelToWorld(BlockToVoxel(block_pos)) + kHashParams.voxel_size * 0.5f * (SDF_BLOCK_SIZE - 1.0f);
-    return DepthCameraData::isInCameraFrustumApprox(kHashParams.m_rigidTransformInverse, world_pos);
-  }
-
-  /// Idx means local idx inside a block \in [0, 511]
-  __device__
-  uint3 IdxToVoxelLocalPos(uint idx) const	{
-    uint x = idx % SDF_BLOCK_SIZE;
-    uint y = (idx % (SDF_BLOCK_SIZE * SDF_BLOCK_SIZE)) / SDF_BLOCK_SIZE;
-    uint z = idx / (SDF_BLOCK_SIZE * SDF_BLOCK_SIZE);
-    return make_uint3(x, y, z);
-  }
-
-  //! computes the linearized index of a local virtual voxel pos; pos in [0;7]^3
-  __device__
-  uint VoxelLocalPosToIdx(const int3& voxel_local_pos) const {
-    return
-      voxel_local_pos.z * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE +
-      voxel_local_pos.y * SDF_BLOCK_SIZE +
-      voxel_local_pos.x;
-  }
-
-  __device__
-  int VoxelPosToIdx(const int3& voxel_pos) const	{
-    int3 voxel_local_pos = make_int3(
-      voxel_pos.x % SDF_BLOCK_SIZE,
-      voxel_pos.y % SDF_BLOCK_SIZE,
-      voxel_pos.z % SDF_BLOCK_SIZE);
-
-    if (voxel_local_pos.x < 0) voxel_local_pos.x += SDF_BLOCK_SIZE;
-    if (voxel_local_pos.y < 0) voxel_local_pos.y += SDF_BLOCK_SIZE;
-    if (voxel_local_pos.z < 0) voxel_local_pos.z += SDF_BLOCK_SIZE;
-
-    return VoxelLocalPosToIdx(voxel_local_pos);
-  }
-
-  __device__
-  int WorldPosToIdx(const float3& world_pos) const	{
-    int3 voxel_pos = WorldToVoxeli(world_pos);
-    return VoxelPosToIdx(voxel_pos);
+    return isInCameraFrustumApprox(kHashParams.m_rigidTransformInverse, world_pos);
   }
 
   ////////////////////////////////////////

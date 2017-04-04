@@ -8,109 +8,109 @@
 #include <vector>
 #include <list>
 
-CUDASceneRepHashSDF::CUDASceneRepHashSDF(const HashParams &params) {
+Mapper::Mapper(const HashParams &params) {
   create(params);
 }
 
-CUDASceneRepHashSDF::~CUDASceneRepHashSDF() {
+Mapper::~Mapper() {
   destroy();
 }
 
-void CUDASceneRepHashSDF::bindDepthCameraTextures(const DepthCameraData &depthCameraData) {
-  bindInputDepthColorTextures(depthCameraData);
+void Mapper::bindDepthCameraTextures(const SensorData &sensor_data) {
+  bindInputDepthColorTextures(sensor_data);
 }
 
-void CUDASceneRepHashSDF::integrate(const float4x4 &lastRigidTransform, const DepthCameraData &depthCameraData,
-               const DepthCameraParams &depthCameraParams, unsigned int *d_bitMask) {
+void Mapper::integrate(const float4x4 &lastRigidTransform, const SensorData &sensor_data,
+               const SensorParams &depthCameraParams, unsigned int *d_bitMask) {
 
   setLastRigidTransform(lastRigidTransform);
   /// transform ok ?
 
   //make the rigid transform available on the GPU
-  m_hashData.updateParams(m_hashParams);
+  hash_table_.updateParams(hash_params_);
   /// seems OK
 
   //allocate all hash blocks which are corresponding to depth map entries
-  alloc(depthCameraData, depthCameraParams, d_bitMask);
+  alloc(sensor_data, depthCameraParams, d_bitMask);
   /// DIFFERENT: d_bitMask now empty
   /// seems OK now, supported by MATLAB scatter3
 
   //generate a linear hash array with only occupied entries
-  compactifyHashEntries(depthCameraData);
+  compactifyHashEntries(sensor_data);
   /// seems OK, supported by MATLAB scatter3
 
   //volumetrically integrate the depth data into the depth SDFBlocks
-  integrateDepthMap(depthCameraData, depthCameraParams);
+  integrateDepthMap(sensor_data, depthCameraParams);
   /// cuda kernel launching ok
   /// seems ok according to CUDA output
 
-  garbageCollect(depthCameraData);
+  garbageCollect(sensor_data);
   /// not processed, ok
 
   m_numIntegratedFrames++;
 }
 
-void CUDASceneRepHashSDF::setLastRigidTransform(const float4x4 &lastRigidTransform) {
-  m_hashParams.m_rigidTransform = lastRigidTransform;
-  m_hashParams.m_rigidTransformInverse = m_hashParams.m_rigidTransform.getInverse();
+void Mapper::setLastRigidTransform(const float4x4 &lastRigidTransform) {
+  hash_params_.m_rigidTransform = lastRigidTransform;
+  hash_params_.m_rigidTransformInverse = hash_params_.m_rigidTransform.getInverse();
 }
 
-void CUDASceneRepHashSDF::setLastRigidTransformAndCompactify(const float4x4 &lastRigidTransform, const DepthCameraData &depthCameraData) {
+void Mapper::setLastRigidTransformAndCompactify(const float4x4 &lastRigidTransform, const SensorData &sensor_data) {
   setLastRigidTransform(lastRigidTransform);
-  compactifyHashEntries(depthCameraData);
+  compactifyHashEntries(sensor_data);
 }
 
-const float4x4 CUDASceneRepHashSDF::getLastRigidTransform() const {
-  return m_hashParams.m_rigidTransform;
+const float4x4 Mapper::getLastRigidTransform() const {
+  return hash_params_.m_rigidTransform;
 }
 
 //! resets the hash to the initial state (i.e., clears all data)
-void CUDASceneRepHashSDF::reset() {
+void Mapper::reset() {
   m_numIntegratedFrames = 0;
 
-  m_hashParams.m_rigidTransform.setIdentity();
-  m_hashParams.m_rigidTransformInverse.setIdentity();
-  m_hashParams.occupied_block_count = 0;
-  m_hashData.updateParams(m_hashParams);
-  resetCUDA(m_hashData, m_hashParams);
+  hash_params_.m_rigidTransform.setIdentity();
+  hash_params_.m_rigidTransformInverse.setIdentity();
+  hash_params_.occupied_block_count = 0;
+  hash_table_.updateParams(hash_params_);
+  resetCUDA(hash_table_, hash_params_);
 }
 
 
-HashTable& CUDASceneRepHashSDF::getHashTable() {
-  return m_hashData;
+HashTable& Mapper::getHashTable() {
+  return hash_table_;
 }
 
-const HashParams& CUDASceneRepHashSDF::getHashParams() const {
-  return m_hashParams;
+const HashParams& Mapper::getHashParams() const {
+  return hash_params_;
 }
 
 
 //! debug only!
-unsigned int CUDASceneRepHashSDF::getHeapFreeCount() {
+unsigned int Mapper::getHeapFreeCount() {
   unsigned int count;
-  checkCudaErrors(cudaMemcpy(&count, m_hashData.heap_counter, sizeof(unsigned int),
+  checkCudaErrors(cudaMemcpy(&count, hash_table_.heap_counter, sizeof(unsigned int),
                              cudaMemcpyDeviceToHost));
   return count + 1;  //there is one more free than the address suggests (0 would be also a valid address)
 }
 
 //! debug only!
-void CUDASceneRepHashSDF::debugHash() {
-  HashEntry *hashCPU = new HashEntry[m_hashParams.bucket_size * m_hashParams.bucket_count];
-  HashEntry *hashCompCPU = new HashEntry[m_hashParams.occupied_block_count];
-  Voxel *voxelCPU = new Voxel[m_hashParams.block_count * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE];
-  unsigned int *heapCPU = new unsigned int[m_hashParams.block_count];
+void Mapper::debugHash() {
+  HashEntry *hashCPU = new HashEntry[hash_params_.bucket_size * hash_params_.bucket_count];
+  HashEntry *hashCompCPU = new HashEntry[hash_params_.occupied_block_count];
+  Voxel *voxelCPU = new Voxel[hash_params_.block_count * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE];
+  unsigned int *heapCPU = new unsigned int[hash_params_.block_count];
   unsigned int heapCounterCPU;
 
-  checkCudaErrors(cudaMemcpy(&heapCounterCPU, m_hashData.heap_counter, sizeof(unsigned int), cudaMemcpyDeviceToHost));
+  checkCudaErrors(cudaMemcpy(&heapCounterCPU, hash_table_.heap_counter, sizeof(unsigned int), cudaMemcpyDeviceToHost));
   heapCounterCPU++;  //points to the first free entry: number of blocks is one more
 
-  checkCudaErrors(cudaMemcpy(heapCPU, m_hashData.heap, sizeof(unsigned int) * m_hashParams.block_count, cudaMemcpyDeviceToHost));
-  checkCudaErrors(cudaMemcpy(hashCPU, m_hashData.hash_entries,
-             sizeof(HashEntry) * m_hashParams.bucket_size * m_hashParams.bucket_count, cudaMemcpyDeviceToHost));
-  checkCudaErrors(cudaMemcpy(hashCompCPU, m_hashData.compacted_hash_entries,
-                             sizeof(HashEntry) * m_hashParams.occupied_block_count, cudaMemcpyDeviceToHost));
-  checkCudaErrors(cudaMemcpy(voxelCPU, m_hashData.blocks,
-                  sizeof(Voxel) * m_hashParams.block_count * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE,
+  checkCudaErrors(cudaMemcpy(heapCPU, hash_table_.heap, sizeof(unsigned int) * hash_params_.block_count, cudaMemcpyDeviceToHost));
+  checkCudaErrors(cudaMemcpy(hashCPU, hash_table_.hash_entries,
+             sizeof(HashEntry) * hash_params_.bucket_size * hash_params_.bucket_count, cudaMemcpyDeviceToHost));
+  checkCudaErrors(cudaMemcpy(hashCompCPU, hash_table_.compacted_hash_entries,
+                             sizeof(HashEntry) * hash_params_.occupied_block_count, cudaMemcpyDeviceToHost));
+  checkCudaErrors(cudaMemcpy(voxelCPU, hash_table_.blocks,
+                  sizeof(Voxel) * hash_params_.block_count * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE,
                              cudaMemcpyDeviceToHost));
 
   std::cout << "Compactified" << std::endl;
@@ -143,7 +143,7 @@ void CUDASceneRepHashSDF::debugHash() {
 
 
   std::unordered_set<unsigned int> pointersFreeHash;
-  std::vector<int> pointersFreeVec(m_hashParams.block_count, 0);
+  std::vector<int> pointersFreeVec(hash_params_.block_count, 0);
   for (unsigned int i = 0; i < heapCounterCPU; i++) {
     pointersFreeHash.insert(heapCPU[i]);
     pointersFreeVec[heapCPU[i]] = FREE_ENTRY;
@@ -160,7 +160,7 @@ void CUDASceneRepHashSDF::debugHash() {
   std::list<myint3Voxel> l;
   //std::vector<myint3Voxel> v;
 
-  for (unsigned int i = 0; i < m_hashParams.bucket_size * m_hashParams.bucket_count; i++) {
+  for (unsigned int i = 0; i < hash_params_.bucket_size * hash_params_.bucket_count; i++) {
     if (hashCPU[i].ptr == -1) {
       numMinusOne++;
     }
@@ -176,7 +176,7 @@ void CUDASceneRepHashSDF::debugHash() {
       //v.push_back(a);
 
       unsigned int linearBlockSize =
-              m_hashParams.block_size * m_hashParams.block_size * m_hashParams.block_size;
+              hash_params_.block_size * hash_params_.block_size * hash_params_.block_size;
       if (pointersFreeHash.find(hashCPU[i].ptr / linearBlockSize) != pointersFreeHash.end()) {
         std::cerr << ("ERROR: ptr is on free heap, but also marked as an allocated entry");
       }
@@ -186,7 +186,7 @@ void CUDASceneRepHashSDF::debugHash() {
 
   unsigned int numHeapFree = 0;
   unsigned int numHeapOccupied = 0;
-  for (unsigned int i = 0; i < m_hashParams.block_count; i++) {
+  for (unsigned int i = 0; i < hash_params_.block_count; i++) {
     if (pointersFreeVec[i] == FREE_ENTRY) numHeapFree++;
     else if (pointersFreeVec[i] == LOCK_ENTRY) numHeapOccupied++;
     else {
@@ -194,7 +194,7 @@ void CUDASceneRepHashSDF::debugHash() {
       exit(-1);
     }
   }
-  if (numHeapFree + numHeapOccupied == m_hashParams.block_count) std::cout << "HEAP OK!" << std::endl;
+  if (numHeapFree + numHeapOccupied == hash_params_.block_count) std::cout << "HEAP OK!" << std::endl;
   else {
     std::cerr << "HEAP CORRUPTED";
     exit(-1);
@@ -210,7 +210,7 @@ void CUDASceneRepHashSDF::debugHash() {
   std::cout << "minOne: " << numMinusOne << std::endl;
   std::cout << "numOccupied: " << numOccupied << "\t numFree: " << getHeapFreeCount() << std::endl;
   std::cout << "numOccupied + free: " << numOccupied + getHeapFreeCount() << std::endl;
-  std::cout << "numInFrustum: " << m_hashParams.occupied_block_count << std::endl;
+  std::cout << "numInFrustum: " << hash_params_.occupied_block_count << std::endl;
 
   delete [] hashCPU;
   delete [] hashCompCPU;
@@ -219,18 +219,18 @@ void CUDASceneRepHashSDF::debugHash() {
 }
 
 
-void CUDASceneRepHashSDF::create(const HashParams &params) {
-  m_hashParams = params;
-  m_hashData.allocate(m_hashParams);
+void Mapper::create(const HashParams &params) {
+  hash_params_ = params;
+  hash_table_.Alloc(hash_params_);
 
   reset();
 }
 
-void CUDASceneRepHashSDF::destroy() {
-  m_hashData.free();
+void Mapper::destroy() {
+  hash_table_.free();
 }
 
-void CUDASceneRepHashSDF::alloc(const DepthCameraData &depthCameraData, const DepthCameraParams &depthCameraParams,
+void Mapper::alloc(const SensorData &sensor_data, const SensorParams &depthCameraParams,
            const unsigned int *d_bitMask) {
 
   bool offline_processing = false; /// assumed to be false
@@ -238,8 +238,8 @@ void CUDASceneRepHashSDF::alloc(const DepthCameraData &depthCameraData, const De
     //allocate until all blocks are allocated
     unsigned int prevFree = getHeapFreeCount();
     while (1) {
-      resetHashBucketMutexCUDA(m_hashData, m_hashParams);
-      allocCUDA(m_hashData, m_hashParams, depthCameraData, depthCameraParams, d_bitMask);
+      resetHashBucketMutexCUDA(hash_table_, hash_params_);
+      allocCUDA(hash_table_, hash_params_, sensor_data, depthCameraParams, d_bitMask);
 
       unsigned int currFree = getHeapFreeCount();
 
@@ -251,37 +251,37 @@ void CUDASceneRepHashSDF::alloc(const DepthCameraData &depthCameraData, const De
     }
   } else {
     //this version is faster, but it doesn't guarantee that all blocks are allocated (staggers alloc to the next frame)
-    resetHashBucketMutexCUDA(m_hashData, m_hashParams);
-    allocCUDA(m_hashData, m_hashParams, depthCameraData, depthCameraParams, d_bitMask);
+    resetHashBucketMutexCUDA(hash_table_, hash_params_);
+    allocCUDA(hash_table_, hash_params_, sensor_data, depthCameraParams, d_bitMask);
     /// !!! NOBODY IS ALLOCATED
   }
 }
 
 
-void CUDASceneRepHashSDF::compactifyHashEntries(const DepthCameraData &depthCameraData) {
+void Mapper::compactifyHashEntries(const SensorData &sensor_data) {
 
-  m_hashParams.occupied_block_count = compactifyHashAllInOneCUDA(m_hashData,
-                                                                m_hashParams);    //this version uses atomics over prefix sums, which has a much better performance
-  std::cout << "Occupied Blocks: " << m_hashParams.occupied_block_count << std::endl;
-  m_hashData.updateParams(m_hashParams);  //make sure numOccupiedBlocks is updated on the GPU
+  hash_params_.occupied_block_count = compactifyHashAllInOneCUDA(hash_table_,
+                                                                hash_params_);    //this version uses atomics over prefix sums, which has a much better performance
+  std::cout << "Occupied Blocks: " << hash_params_.occupied_block_count << std::endl;
+  hash_table_.updateParams(hash_params_);  //make sure numOccupiedBlocks is updated on the GPU
 }
 
-void CUDASceneRepHashSDF::integrateDepthMap(const DepthCameraData &depthCameraData, const DepthCameraParams &depthCameraParams) {
-  integrateDepthMapCUDA(m_hashData, m_hashParams, depthCameraData, depthCameraParams);
+void Mapper::integrateDepthMap(const SensorData &sensor_data, const SensorParams &depthCameraParams) {
+  integrateDepthMapCUDA(hash_table_, hash_params_, sensor_data, depthCameraParams);
 }
 
-void CUDASceneRepHashSDF::garbageCollect(const DepthCameraData &depthCameraData) {
+void Mapper::garbageCollect(const SensorData &sensor_data) {
   //only perform if enabled by global app state
   bool garbage_collect = true;         /// false
   int garbage_collect_starve = 15;      /// 15
   if (garbage_collect) {
 
     if (m_numIntegratedFrames > 0 && m_numIntegratedFrames % garbage_collect_starve == 0) {
-      starveVoxelsKernelCUDA(m_hashData, m_hashParams);
+      starveVoxelsKernelCUDA(hash_table_, hash_params_);
     }
 
-    garbageCollectIdentifyCUDA(m_hashData, m_hashParams);
-    resetHashBucketMutexCUDA(m_hashData, m_hashParams);  //needed if linked lists are enabled -> for memeory deletion
-    garbageCollectFreeCUDA(m_hashData, m_hashParams);
+    garbageCollectIdentifyCUDA(hash_table_, hash_params_);
+    resetHashBucketMutexCUDA(hash_table_, hash_params_);  //needed if linked lists are enabled -> for memeory deletion
+    garbageCollectFreeCUDA(hash_table_, hash_params_);
   }
 }

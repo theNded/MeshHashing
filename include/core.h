@@ -11,6 +11,7 @@
 
 #include "common.h"
 
+/// HashEntry
 struct __ALIGN__(16) HashEntry {
   int3	pos;		   // hash position (lower left corner of SDFBlock))
   int		ptr;	     // pointer into heap to SDFBlock
@@ -23,6 +24,9 @@ struct __ALIGN__(16) HashEntry {
   }
 };
 
+/// Block: Cluster of 256 Voxels
+
+/// Voxel
 struct __ALIGN__(8) Voxel {
   float   sdf;		// signed distance function
   uchar3	color;	// color

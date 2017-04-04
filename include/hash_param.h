@@ -5,11 +5,12 @@
 /// Parameters for HashTable
 /// Shared in __constant__ form
 /// Update it ONLY in hash_table
+// TODO(wei): put rigid transform elsewhere
+
 #ifndef VH_HASH_PARAM_H
 #define VH_HASH_PARAM_H
 
 #include "common.h"
-
 #include <matrix.h>
 
 struct __ALIGN__(16) HashParams {
@@ -19,12 +20,11 @@ struct __ALIGN__(16) HashParams {
   float4x4		m_rigidTransformInverse;
 
   //////////////////////////////////////////////////
-  /// TODO: add m_num_voxels and m_num_hash_entries
   /// Currently used parameters
   uint  bucket_count;               // 500000
   uint  bucket_size;                // 10 (entries)
   uint  entry_count;                // bucket_count * bucket_size
-  uint  linked_list_size;      // 7
+  uint  linked_list_size;           // 7
 
   uint  block_count;                // 1000000
   uint  occupied_block_count;	      // occupied blocks in the viewing frustum
@@ -37,7 +37,7 @@ struct __ALIGN__(16) HashParams {
   float	truncation_distance;        // 0.02 (m)
   float	sdf_upper_bound;            // 4.0 (m)
 
-  uint  weight_sample;              // 10,  TODO: change it dynamically!
+  uint  weight_sample;              // 10,  TODO(wei): change it dynamically!
   uint  weight_upper_bound;         // 255
   //////////////////////////////////////////////////
 

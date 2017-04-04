@@ -21,7 +21,7 @@ void depthToHSV(float4* d_output, float* d_input,
                 unsigned int width, unsigned int height,
                 float minDepth, float maxDepth);
 
-CUDARGBDSensor::CUDARGBDSensor() {
+Sensor::Sensor() {
   m_bFilterDepthValues = false;
   m_fBilateralFilterSigmaD = 1.0f;
   m_fBilateralFilterSigmaR = 1.0f;
@@ -33,91 +33,91 @@ CUDARGBDSensor::CUDARGBDSensor() {
   d_depthHSV = NULL;
 }
 
-CUDARGBDSensor::~CUDARGBDSensor() {
+Sensor::~Sensor() {
   free();
 }
 
-void CUDARGBDSensor::free() {
+void Sensor::free() {
   checkCudaErrors(cudaFree(d_depthHSV));
 
-  m_depthCameraData.free();
+  sensor_data_.free();
 }
 
-int CUDARGBDSensor::alloc(unsigned int width, unsigned int height, DepthCameraParams &params) {
+int Sensor::alloc(unsigned int width, unsigned int height, SensorParams &params) {
 
   const unsigned int bufferDimDepth = width * height;
   checkCudaErrors(cudaMalloc(&d_depthHSV, sizeof(float4)*bufferDimDepth));
 
   /// Parameter settings
-  m_depthCameraParams = params; // Is it copy constructing?
-  m_depthCameraData.alloc(m_depthCameraParams);
+  sensor_params_ = params; // Is it copy constructing?
+  sensor_data_.alloc(sensor_params_);
 
   return 0;
 }
 
-int CUDARGBDSensor::process(cv::Mat &depth, cv::Mat &color) {
+int Sensor::process(cv::Mat &depth, cv::Mat &color) {
   /// Distortion is not yet dealt with yet
   /// Disable all filter at current
 
   /// Input:  CPU short*
   /// Output: GPU float *
-  convertDepthRawToFloat(m_depthCameraData.d_depthData, (short *)depth.data,
-                         m_depthCameraParams.m_imageWidth, m_depthCameraParams.m_imageHeight,
-                         m_depthCameraParams.m_sensorDepthWorldMin,
-                         m_depthCameraParams.m_sensorDepthWorldMax);
+  convertDepthRawToFloat(sensor_data_.d_depthData, (short *)depth.data,
+                         sensor_params_.width, sensor_params_.height,
+                         sensor_params_.min_depth_range,
+                         sensor_params_.max_depth_range);
 
   /// Input:  CPU uchar4 *
   /// Output: GPU float4 *
-  convertColorRawToFloat4(m_depthCameraData.d_colorData, color.data,
-                          m_depthCameraParams.m_imageWidth,
-                          m_depthCameraParams.m_imageHeight);
+  convertColorRawToFloat4(sensor_data_.d_colorData, color.data,
+                          sensor_params_.width,
+                          sensor_params_.height);
 
-  /// TODO: Put intrinsics into DepthCameraParams
-  m_depthCameraData.updateParams(getDepthCameraParams());
+  /// TODO: Put intrinsics into SensorParams
+  sensor_data_.updateParams(getSensorParams());
 
   /// Array used as texture in mapper
-  checkCudaErrors(cudaMemcpyToArray(m_depthCameraData.d_depthArray, 0, 0, m_depthCameraData.d_depthData,
-                                    sizeof(float)*m_depthCameraParams.m_imageHeight*m_depthCameraParams.m_imageWidth,
+  checkCudaErrors(cudaMemcpyToArray(sensor_data_.d_depthArray, 0, 0, sensor_data_.d_depthData,
+                                    sizeof(float)*sensor_params_.height*sensor_params_.width,
                                     cudaMemcpyDeviceToDevice));
-  checkCudaErrors(cudaMemcpyToArray(m_depthCameraData.d_colorArray, 0, 0, m_depthCameraData.d_colorData,
-                                    sizeof(float4)*m_depthCameraParams.m_imageHeight*m_depthCameraParams.m_imageWidth,
+  checkCudaErrors(cudaMemcpyToArray(sensor_data_.d_colorArray, 0, 0, sensor_data_.d_colorData,
+                                    sizeof(float4)*sensor_params_.height*sensor_params_.width,
                                     cudaMemcpyDeviceToDevice));
 
   return 0;
 }
 
 //! enables bilateral filtering of the depth value
-void CUDARGBDSensor::setFiterDepthValues(bool b, float sigmaD, float sigmaR) {
+void Sensor::setFiterDepthValues(bool b, float sigmaD, float sigmaR) {
   m_bFilterDepthValues = b;
   m_fBilateralFilterSigmaD = sigmaD;
   m_fBilateralFilterSigmaR = sigmaR;
 }
 
-void CUDARGBDSensor::setFiterIntensityValues(bool b, float sigmaD, float sigmaR) {
+void Sensor::setFiterIntensityValues(bool b, float sigmaD, float sigmaR) {
   m_bFilterIntensityValues = b;
   m_fBilateralFilterSigmaDIntensity = sigmaD;
   m_fBilateralFilterSigmaRIntensity = sigmaR;
 }
 
-unsigned int CUDARGBDSensor::getDepthWidth() const {
-  return m_depthCameraParams.m_imageWidth;
+unsigned int Sensor::getDepthWidth() const {
+  return sensor_params_.width;
 }
 
-unsigned int CUDARGBDSensor::getDepthHeight() const {
-  return m_depthCameraParams.m_imageHeight;
+unsigned int Sensor::getDepthHeight() const {
+  return sensor_params_.height;
 }
 
-unsigned int CUDARGBDSensor::getColorWidth() const {
-  return m_depthCameraParams.m_imageHeight;
+unsigned int Sensor::getColorWidth() const {
+  return sensor_params_.height;
 }
 
-unsigned int CUDARGBDSensor::getColorHeight() const {
-  return m_depthCameraParams.m_imageWidth;
+unsigned int Sensor::getColorHeight() const {
+  return sensor_params_.width;
 }
 
-float4* CUDARGBDSensor::getAndComputeDepthHSV() const {
-  depthToHSV(d_depthHSV, m_depthCameraData.d_depthData, getDepthWidth(), getDepthHeight(),
-             m_depthCameraParams.m_sensorDepthWorldMin,
-             m_depthCameraParams.m_sensorDepthWorldMax);
+float4* Sensor::getAndComputeDepthHSV() const {
+  depthToHSV(d_depthHSV, sensor_data_.d_depthData, getDepthWidth(), getDepthHeight(),
+             sensor_params_.min_depth_range,
+             sensor_params_.max_depth_range);
   return d_depthHSV;
 }

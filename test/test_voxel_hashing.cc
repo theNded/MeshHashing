@@ -112,23 +112,23 @@ int main() {
   hash_params.weight_sample = 10;
   hash_params.weight_upper_bound = 255;
 
-  CUDASceneRepHashSDF mapper(hash_params);
+  Mapper mapper(hash_params);
   //mapper.debugHash();
   /// Only to alloc cuda memory, suppose its ok
 
   /// Sensor
-  DepthCameraParams sensor_params;
+  SensorParams sensor_params;
   sensor_params.fx = 517.306408f;
   sensor_params.fy = 516.469215f;
-  sensor_params.mx = 318.643040f;
-  sensor_params.my = 255.313989f;
+  sensor_params.cx = 318.643040f;
+  sensor_params.cy = 255.313989f;
 
-  sensor_params.m_sensorDepthWorldMin = 0.5f;
-  sensor_params.m_sensorDepthWorldMax = 5.0f;
-  sensor_params.m_imageHeight = 480;
-  sensor_params.m_imageWidth = 640;
+  sensor_params.min_depth_range = 0.5f;
+  sensor_params.max_depth_range = 5.0f;
+  sensor_params.height = 480;
+  sensor_params.width = 640;
 
-  CUDARGBDSensor sensor;
+  Sensor sensor;
   sensor.alloc(640, 480, sensor_params);
   /// suppose its ok
   /// check camera params
@@ -136,9 +136,9 @@ int main() {
   float4x4 T; T.setIdentity();
   float4x4 K; K.setIdentity();
   K.m11 = sensor_params.fx;
-  K.m13 = sensor_params.mx;
+  K.m13 = sensor_params.cx;
   K.m22 = sensor_params.fy;
-  K.m23 = sensor_params.my;
+  K.m23 = sensor_params.cy;
 
   /// Ray Caster
   RayCastParams ray_cast_params;
@@ -155,8 +155,8 @@ int main() {
   ray_cast_params.m_thresDist = 50.0f * ray_cast_params.m_rayIncrement;
   bool m_useGradients = true;
 
-  CUDARayCastSDF ray_caster(ray_cast_params);
-  mapper.bindDepthCameraTextures(sensor.getDepthCameraData());
+  RayCaster ray_caster(ray_cast_params);
+  mapper.bindDepthCameraTextures(sensor.getSensorData());
 
   /// Process
   cv::Mat depth = cv::imread(depth_img_list[0], -1);
@@ -167,14 +167,14 @@ int main() {
 
 
   sensor.process(depth, color);
-  // checkCudaFloatMemory(sensor.getDepthCameraData().d_depthData);
-  // checkCudaFloat4Memory(sensor.getDepthCameraData().d_colorData);
+  // checkCudaFloatMemory(sensor.getSensorData().d_depthData);
+  // checkCudaFloat4Memory(sensor.getSensorData().d_colorData);
   /// input gpu data OK
 
   LOG(INFO) << "Integrate";
-  mapper.integrate(T, sensor.getDepthCameraData(), sensor.getDepthCameraParams(), NULL);
-  mapper.integrate(T, sensor.getDepthCameraData(), sensor.getDepthCameraParams(), NULL);
-  mapper.integrate(T, sensor.getDepthCameraData(), sensor.getDepthCameraParams(), NULL);
+  mapper.integrate(T, sensor.getSensorData(), sensor.getSensorParams(), NULL);
+  mapper.integrate(T, sensor.getSensorData(), sensor.getSensorParams(), NULL);
+  mapper.integrate(T, sensor.getSensorData(), sensor.getSensorParams(), NULL);
 
   //mapper.debugHash();
   /// seems ok
@@ -182,12 +182,12 @@ int main() {
 
   LOG(INFO) << "Render";
   ray_caster.render(mapper.getHashTable(), mapper.getHashParams(),
-                    sensor.getDepthCameraData(), T);
+                    sensor.getSensorData(), T);
   /// runnable, still have bugs
 
   float4 *cuda_hsv;
   checkCudaErrors(cudaMalloc(&cuda_hsv, sizeof(float4) * 640 * 480));
-  depthToHSV(cuda_hsv, ray_caster.getRayCastData().d_depth, 640, 480, 0.5f, 3.5f);
+  depthToHSV(cuda_hsv, ray_caster.getRayCasterData().d_depth, 640, 480, 0.5f, 3.5f);
   checkCudaFloat4Memory(cuda_hsv);
-  //checkCudaFloat4Memory(ray_caster.getRayCastData().d_colors);
+  //checkCudaFloat4Memory(ray_caster.getRayCasterData().d_colors);
 }
