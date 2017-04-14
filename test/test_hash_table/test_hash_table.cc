@@ -47,6 +47,6 @@ int main(int argc, const char **argv) {
   test.Run(hash_data, make_int3(34, 52, 142));
   LOG(INFO) << CpuRun(make_int3(34, 52, 142));
 
-  hash_data.free();
+  hash_data.Free();
   LOG(INFO) << "Hash data freed";
 }

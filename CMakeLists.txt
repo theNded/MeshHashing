@@ -107,6 +107,7 @@ LIST(APPEND CUDA_NVCC_FLAGS -gencode=arch=compute_52,code=sm_52)
 CUDA_ADD_LIBRARY(CUDAVoxelHashing
         ${VH}/src/constant.cu
         ${VH}/src/sensor.cu
+        ${VH}/src/map.cu
         ${VH}/src/mapper.cu
         ${VH}/src/ray_caster.cu)
 
@@ -114,6 +115,7 @@ CUDA_ADD_LIBRARY(CUDAVoxelHashing
 ADD_LIBRARY(VoxelHashing
         ${VH}/src/renderer.cc
         ${VH}/src/sensor.cc
+        ${VH}/src/map.cc
         ${VH}/src/mapper.cc
         ${VH}/src/ray_caster.cc)
 TARGET_LINK_LIBRARIES(VoxelHashing GL_UTILS)

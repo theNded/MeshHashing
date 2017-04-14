@@ -12,7 +12,7 @@ Map::Map(const HashParams &hash_params) {
 }
 
 Map::~Map() {
-  hash_table_.free();
+  hash_table_.Free();
 }
 
 void Map::Reset() {
@@ -29,10 +29,13 @@ void Map::Reset() {
 void Map::AllocBlocks(const SensorData &sensor_data,
                       const SensorParams& sensor_params) {
   resetHashBucketMutexCUDA(hash_table_, hash_params_);
-  allocCUDA(hash_table_, hash_params_, sensor_data, depthCameraParams, d_bitMask);
+  // TODO(wei): add bit_mask
+  allocCUDA(hash_table_, hash_params_,
+            sensor_data, sensor_params, NULL);
+  // TODO(wei): change it here
 }
 
-void GenerateCompressedHashEntries() {
+void Map::GenerateCompressedHashEntries() {
   hash_params_.occupied_block_count = compactifyHashAllInOneCUDA(hash_table_,
                                                                  hash_params_);
   //this version uses atomics over prefix sums, which has a much better performance
@@ -40,7 +43,7 @@ void GenerateCompressedHashEntries() {
   hash_table_.updateParams(hash_params_);  //make sure numOccupiedBlocks is updated on the GPU
 }
 
-void RecycleInvalidBlocks() {
+void Map::RecycleInvalidBlocks() {
   bool garbage_collect = true;         /// false
   int garbage_collect_starve = 15;      /// 15
   if (garbage_collect) {

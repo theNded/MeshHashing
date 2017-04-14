@@ -55,7 +55,7 @@ struct RayCasterData {
   }
 
   __host__
-  void free() {
+  void Free() {
     checkCudaErrors(cudaFree(d_depth));
     checkCudaErrors(cudaFree(d_depth4));
     checkCudaErrors(cudaFree(d_normals));

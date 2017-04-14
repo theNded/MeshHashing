@@ -15,7 +15,7 @@ public:
   Sensor();
   ~Sensor();
 
-  void free();
+  void Free();
   int alloc(unsigned int width, unsigned int height, SensorParams &params);
 
   /// Get data from CUDARGBDAdapter, which reads from RGBDSensor

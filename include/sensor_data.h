@@ -47,7 +47,7 @@ struct SensorData {
   }
 
   __host__
-  void free() {
+  void Free() {
     if (d_depthData) checkCudaErrors(cudaFree(d_depthData));
     if (d_colorData) checkCudaErrors(cudaFree(d_colorData));
     if (d_depthArray) checkCudaErrors(cudaFreeArray(d_depthArray));

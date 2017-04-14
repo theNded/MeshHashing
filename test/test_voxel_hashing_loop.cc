@@ -135,7 +135,7 @@ cv::Mat checkCudaFloat4Memory(float4 *cuda_memory) {
   cv::Mat a = cv::Mat(480, 640, CV_32FC4, cpu_memory);
 
   checkCudaErrors(cudaMemcpy(cpu_memory, cuda_memory, sizeof(float) * 4 * 640 * 480, cudaMemcpyDeviceToHost));
-
+#define VIDEO
 #ifdef VIDEO
   cv::Mat b = cv::Mat(480, 640, CV_8UC3);
   for (int i = 0; i < 480; ++i) {
@@ -149,8 +149,9 @@ cv::Mat checkCudaFloat4Memory(float4 *cuda_memory) {
     }
   }
   cv::imshow("check", b);
-#endif
+#else
   cv::imshow("check", a);
+#endif
   cv::waitKey(10);
   return a;
 }
@@ -184,7 +185,8 @@ int main() {
   hash_params.weight_sample = 10;
   hash_params.weight_upper_bound = 255;
 
-  Mapper mapper(hash_params);
+  Map voxel_map(hash_params);
+  Mapper mapper(&voxel_map);
   //mapper.debugHash();
   /// Only to alloc cuda memory, suppose its ok
 
@@ -257,7 +259,7 @@ int main() {
     mapper.integrate(T, sensor.getSensorData(), sensor.getSensorParams(), NULL);
 
     float4x4 I; I.setIdentity();
-    ray_caster.render(mapper.getHashTable(), mapper.getHashParams(), sensor.getSensorData(), T.getInverse());
+    ray_caster.render(voxel_map.hash_table(), voxel_map.hash_params(), sensor.getSensorData(), T.getInverse());
     //depthToHSV(cuda_hsv, ray_caster.getRayCasterData().d_depth, 640, 480, 0.5f, 3.5f);
     //checkCudaFloat4Memory(cuda_hsv);
     checkCudaFloat4Memory(ray_caster.getRayCasterData().d_normals);

@@ -15,7 +15,6 @@ extern void allocCUDA(HashTable& hash_table, const HashParams& hash_params, cons
 
 extern unsigned int compactifyHashAllInOneCUDA(HashTable& hash_table, const HashParams& hash_params);
 
-
 /// Garbage collection
 extern void starveVoxelsKernelCUDA(HashTable& hash_table, const HashParams& hash_params);
 extern void garbageCollectIdentifyCUDA(HashTable& hash_table, const HashParams& hash_params);
@@ -26,9 +25,9 @@ private:
   HashParams hash_params_;
   HashTable  hash_table_;
 
+public:
   uint integrated_frame_count_;
 
-public:
   Map(const HashParams& hash_params);
   ~Map();
   void Reset();
@@ -40,6 +39,9 @@ public:
 
   HashTable &hash_table() {
     return hash_table_;
+  }
+  HashParams &hash_params() {
+    return hash_params_;
   }
 };
 

@@ -34,13 +34,13 @@ Sensor::Sensor() {
 }
 
 Sensor::~Sensor() {
-  free();
+  Free();
 }
 
-void Sensor::free() {
+void Sensor::Free() {
   checkCudaErrors(cudaFree(d_depthHSV));
 
-  sensor_data_.free();
+  sensor_data_.Free();
 }
 
 int Sensor::alloc(unsigned int width, unsigned int height, SensorParams &params) {

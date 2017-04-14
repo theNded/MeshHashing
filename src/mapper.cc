@@ -8,13 +8,11 @@
 #include <vector>
 #include <list>
 
-Mapper::Mapper(const HashParams &params) {
-  create(params);
+Mapper::Mapper(Map* voxel_map) {
+  map_ = voxel_map;
 }
 
-Mapper::~Mapper() {
-  destroy();
-}
+Mapper::~Mapper() {}
 
 void Mapper::bindDepthCameraTextures(const SensorData &sensor_data) {
   bindInputDepthColorTextures(sensor_data);
@@ -27,16 +25,16 @@ void Mapper::integrate(const float4x4 &lastRigidTransform, const SensorData &sen
   /// transform ok ?
 
   //make the rigid transform available on the GPU
-  hash_table_.updateParams(hash_params_);
+  map_->hash_table().updateParams(map_->hash_params());
   /// seems OK
 
   //allocate all hash blocks which are corresponding to depth map entries
-  alloc(sensor_data, depthCameraParams, d_bitMask);
+  map_->AllocBlocks(sensor_data, depthCameraParams);
   /// DIFFERENT: d_bitMask now empty
   /// seems OK now, supported by MATLAB scatter3
 
   //generate a linear hash array with only occupied entries
-  compactifyHashEntries(sensor_data);
+  map_->GenerateCompressedHashEntries();
   /// seems OK, supported by MATLAB scatter3
 
   //volumetrically integrate the depth data into the depth SDFBlocks
@@ -44,57 +42,29 @@ void Mapper::integrate(const float4x4 &lastRigidTransform, const SensorData &sen
   /// cuda kernel launching ok
   /// seems ok according to CUDA output
 
-  garbageCollect(sensor_data);
+  map_->RecycleInvalidBlocks();
   /// not processed, ok
-
-  m_numIntegratedFrames++;
+  map_->integrated_frame_count_++;
 }
 
 void Mapper::setLastRigidTransform(const float4x4 &lastRigidTransform) {
-  hash_params_.m_rigidTransform = lastRigidTransform;
-  hash_params_.m_rigidTransformInverse = hash_params_.m_rigidTransform.getInverse();
+  map_->hash_params().m_rigidTransform = lastRigidTransform;
+  map_->hash_params().m_rigidTransformInverse
+          = map_->hash_params().m_rigidTransform.getInverse();
 }
-
-void Mapper::setLastRigidTransformAndCompactify(const float4x4 &lastRigidTransform, const SensorData &sensor_data) {
-  setLastRigidTransform(lastRigidTransform);
-  compactifyHashEntries(sensor_data);
-}
-
-const float4x4 Mapper::getLastRigidTransform() const {
-  return hash_params_.m_rigidTransform;
-}
-
-//! resets the hash to the initial state (i.e., clears all data)
-void Mapper::reset() {
-  m_numIntegratedFrames = 0;
-
-  hash_params_.m_rigidTransform.setIdentity();
-  hash_params_.m_rigidTransformInverse.setIdentity();
-  hash_params_.occupied_block_count = 0;
-  hash_table_.updateParams(hash_params_);
-  resetCUDA(hash_table_, hash_params_);
-}
-
-
-HashTable& Mapper::getHashTable() {
-  return hash_table_;
-}
-
-const HashParams& Mapper::getHashParams() const {
-  return hash_params_;
-}
-
 
 //! debug only!
 unsigned int Mapper::getHeapFreeCount() {
   unsigned int count;
-  checkCudaErrors(cudaMemcpy(&count, hash_table_.heap_counter, sizeof(unsigned int),
+  checkCudaErrors(cudaMemcpy(&count, map_->hash_table().heap_counter, sizeof(unsigned int),
                              cudaMemcpyDeviceToHost));
   return count + 1;  //there is one more free than the address suggests (0 would be also a valid address)
 }
 
 //! debug only!
 void Mapper::debugHash() {
+  HashTable  hash_table_ = map_->hash_table();
+  HashParams hash_params_ = map_->hash_params();
   HashEntry *hashCPU = new HashEntry[hash_params_.bucket_size * hash_params_.bucket_count];
   HashEntry *hashCompCPU = new HashEntry[hash_params_.occupied_block_count];
   Voxel *voxelCPU = new Voxel[hash_params_.block_count * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE];
@@ -218,70 +188,6 @@ void Mapper::debugHash() {
   delete [] heapCPU;
 }
 
-
-void Mapper::create(const HashParams &params) {
-  hash_params_ = params;
-  hash_table_.Alloc(hash_params_);
-
-  reset();
-}
-
-void Mapper::destroy() {
-  hash_table_.free();
-}
-
-void Mapper::alloc(const SensorData &sensor_data, const SensorParams &depthCameraParams,
-           const unsigned int *d_bitMask) {
-
-  bool offline_processing = false; /// assumed to be false
-  if (offline_processing) {
-    //allocate until all blocks are allocated
-    unsigned int prevFree = getHeapFreeCount();
-    while (1) {
-      resetHashBucketMutexCUDA(hash_table_, hash_params_);
-      allocCUDA(hash_table_, hash_params_, sensor_data, depthCameraParams, d_bitMask);
-
-      unsigned int currFree = getHeapFreeCount();
-
-      if (prevFree != currFree) {
-        prevFree = currFree;
-      } else {
-        break;
-      }
-    }
-  } else {
-    //this version is faster, but it doesn't guarantee that all blocks are allocated (staggers alloc to the next frame)
-    resetHashBucketMutexCUDA(hash_table_, hash_params_);
-    allocCUDA(hash_table_, hash_params_, sensor_data, depthCameraParams, d_bitMask);
-    /// !!! NOBODY IS ALLOCATED
-  }
-}
-
-
-void Mapper::compactifyHashEntries(const SensorData &sensor_data) {
-
-  hash_params_.occupied_block_count = compactifyHashAllInOneCUDA(hash_table_,
-                                                                hash_params_);    //this version uses atomics over prefix sums, which has a much better performance
-  std::cout << "Occupied Blocks: " << hash_params_.occupied_block_count << std::endl;
-  hash_table_.updateParams(hash_params_);  //make sure numOccupiedBlocks is updated on the GPU
-}
-
 void Mapper::integrateDepthMap(const SensorData &sensor_data, const SensorParams &depthCameraParams) {
-  integrateDepthMapCUDA(hash_table_, hash_params_, sensor_data, depthCameraParams);
-}
-
-void Mapper::garbageCollect(const SensorData &sensor_data) {
-  //only perform if enabled by global app state
-  bool garbage_collect = true;         /// false
-  int garbage_collect_starve = 15;      /// 15
-  if (garbage_collect) {
-
-    if (m_numIntegratedFrames > 0 && m_numIntegratedFrames % garbage_collect_starve == 0) {
-      starveVoxelsKernelCUDA(hash_table_, hash_params_);
-    }
-
-    garbageCollectIdentifyCUDA(hash_table_, hash_params_);
-    resetHashBucketMutexCUDA(hash_table_, hash_params_);  //needed if linked lists are enabled -> for memeory deletion
-    garbageCollectFreeCUDA(hash_table_, hash_params_);
-  }
+  integrateDepthMapCUDA(map_->hash_table(), map_->hash_params(), sensor_data, depthCameraParams);
 }

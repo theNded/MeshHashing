@@ -20,7 +20,7 @@ void RayCaster::create(const RayCastParams& params) {
 }
 
 void RayCaster::destroy(void) {
-  m_data.free();
+  m_data.Free();
 }
 
 /// Major function, extract surface and normal from the volumes

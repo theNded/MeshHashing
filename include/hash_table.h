@@ -100,7 +100,7 @@ struct HashTable {
   }
 
   __host__
-  void free() {
+  void Free() {
     if (is_on_gpu) {
       checkCudaErrors(cudaFree(heap));
       checkCudaErrors(cudaFree(heap_counter));
