@@ -22,7 +22,7 @@ __global__ void renderKernel(const HashTable hash_table, const RayCasterData ray
     rayCastData.d_normals[y*rayCastParams.m_width+x] = make_float4(MINF,MINF,MINF,MINF);
     rayCastData.d_colors[y*rayCastParams.m_width+x] = make_float4(MINF,MINF,MINF,MINF);
 
-    float3 camDir = normalize(kinectProjToCamera(x, y, 1.0f));
+    float3 camDir = normalize(ImageReprojectToCamera(x, y, 1.0f));
     float3 worldCamPos = rayCastParams.m_viewMatrixInverse * make_float3(0.0f, 0.0f, 0.0f);
     float4 w = rayCastParams.m_viewMatrixInverse * make_float4(camDir, 0.0f);
     float3 worldDir = normalize(make_float3(w.x, w.y, w.z));

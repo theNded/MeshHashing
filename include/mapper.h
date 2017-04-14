@@ -10,6 +10,7 @@
 #include "geometry_util.h"
 #include "hash_param.h"
 #include "hash_table.h"
+#include "map.h"
 #include "sensor_data.h"
 #include "sensor_param.h"
 

@@ -103,44 +103,30 @@ inline int WorldPosToIdx(const float3& world_pos) {
 /// Between the Camera coordinate system and the image plane
 /// Projection
 __device__
-static inline float2 cameraToKinectScreenFloat(const float3& pos)	{
+static inline float2 CameraProjectToImagef(const float3& pos)	{
   return make_float2(
           pos.x*kSensorParams.fx/pos.z + kSensorParams.cx,
           pos.y*kSensorParams.fy/pos.z + kSensorParams.cy);
 }
 
 __device__
-static inline int2 cameraToKinectScreenInt(const float3& pos)	{
-  float2 pImage = cameraToKinectScreenFloat(pos);
+static inline int2 CameraProjectToImagei(const float3& pos)	{
+  float2 pImage = CameraProjectToImagef(pos);
   return make_int2(pImage + make_float2(0.5f, 0.5f));
 }
 
 __device__
-static inline uint2 cameraToKinectScreen(const float3& pos)	{
-  int2 p = cameraToKinectScreenInt(pos);
+static inline uint2 CameraProjectToImageui(const float3& pos)	{
+  int2 p = CameraProjectToImagei(pos);
   return make_uint2(p.x, p.y);
 }
 
-__device__
 /// R^3 -> [0, 1]^3
 /// maybe used for rendering
-static inline float cameraToKinectProjZ(float z)	{
+__device__
+static inline float NormalizeDepth(float z)	{
   return (z - kSensorParams.min_depth_range)
          /(kSensorParams.max_depth_range - kSensorParams.min_depth_range);
-}
-
-__device__
-static inline float3 cameraToKinectProj(const float3& pos) {
-  float2 proj = cameraToKinectScreenFloat(pos);
-
-  float3 pImage = make_float3(proj.x, proj.y, pos.z);
-
-  pImage.x = (2.0f*pImage.x - (kSensorParams.width- 1.0f))/(kSensorParams.width- 1.0f);
-  //pImage.y = (2.0f*pImage.y - (kSensorParams.height-1.0f))/(kSensorParams.height-1.0f);
-  pImage.y = ((kSensorParams.height-1.0f) - 2.0f*pImage.y)/(kSensorParams.height-1.0f);
-  pImage.z = cameraToKinectProjZ(pImage.z);
-
-  return pImage;
 }
 
 ///////////////////////////////////////////////////////////////
@@ -148,10 +134,9 @@ static inline float3 cameraToKinectProj(const float3& pos) {
 ///////////////////////////////////////////////////////////////
 /// R^2 -> R^3
 __device__
-static inline float3 kinectDepthToSkeleton(uint ux, uint uy, float depth)	{
+static inline float3 ImageReprojectToCamera(uint ux, uint uy, float depth)	{
   const float x = ((float)ux-kSensorParams.cx) / kSensorParams.fx;
   const float y = ((float)uy-kSensorParams.cy) / kSensorParams.fy;
-  //const float y = (kSensorParams.cy-(float)uy) / kSensorParams.fy;
   return make_float3(depth*x, depth*y, depth);
 }
 
@@ -159,29 +144,25 @@ static inline float3 kinectDepthToSkeleton(uint ux, uint uy, float depth)	{
 // RenderScreen to Camera -- ATTENTION ASSUMES [1,0]-Z range!!!!
 ///////////////////////////////////////////////////////////////
 /// [0, 1]^3 -> R^3
-__device__
-static inline float kinectProjToCameraZ(float z) {
+__device__ /// Normalize
+static inline float DenormalizeDepth(float z) {
   return z * (kSensorParams.max_depth_range - kSensorParams.min_depth_range)
          + kSensorParams.min_depth_range;
 }
 
-// z has to be in [0, 1]
 __device__
-static inline float3 kinectProjToCamera(uint ux, uint uy, float z)	{
-  // TODO: wei check if its correct
-  float fSkeletonZ = kinectProjToCameraZ(z);
-  return kinectDepthToSkeleton(ux, uy, fSkeletonZ);
-}
+static inline bool IsInCameraFrustumApprox(const float4x4& viewMatrixInverse, const float3& pos) {
+  float3 p_camera = viewMatrixInverse * pos;
+  float2 uv = CameraProjectToImagef(p_camera);
+  float3 normalized_p = make_float3(
+          (2.0f*uv.x - (kSensorParams.width- 1.0f))/(kSensorParams.width- 1.0f),
+          ((kSensorParams.height-1.0f) - 2.0f*uv.y)/(kSensorParams.height-1.0f),
+          NormalizeDepth(p_camera.z));
 
-__device__
-static inline bool isInCameraFrustumApprox(const float4x4& viewMatrixInverse, const float3& pos) {
-  float3 pCamera = viewMatrixInverse * pos;
-  float3 pProj = cameraToKinectProj(pCamera);
-  //pProj *= 1.5f;	//TODO THIS IS A HACK FIX IT :)
-  pProj *= 0.95;
-  return !(pProj.x < -1.0f || pProj.x > 1.0f
-           || pProj.y < -1.0f || pProj.y > 1.0f
-           || pProj.z < 0.0f || pProj.z > 1.0f);
+  normalized_p *= 0.95;
+  return !(normalized_p.x < -1.0f || normalized_p.x > 1.0f
+           || normalized_p.y < -1.0f || normalized_p.y > 1.0f
+           || normalized_p.z < 0.0f || normalized_p.z > 1.0f);
 }
 
 #endif //VOXEL_HASHING_POSITION_CONVERTER_H

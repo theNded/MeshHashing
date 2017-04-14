@@ -199,7 +199,7 @@ struct RayCasterData {
               float depth = alpha / depthToRayLength; // Convert ray length to depth depthToRayLength
 
               d_depth[dTid.y*rayCastParams.m_width+dTid.x] = depth;
-              d_depth4[dTid.y*rayCastParams.m_width+dTid.x] = make_float4(kinectDepthToSkeleton(dTid.x, dTid.y, depth), 1.0f);
+              d_depth4[dTid.y*rayCastParams.m_width+dTid.x] = make_float4(ImageReprojectToCamera(dTid.x, dTid.y, depth), 1.0f);
               d_colors[dTid.y*rayCastParams.m_width+dTid.x] = make_float4(color2.x/255.f, color2.y/255.f, color2.z/255.f, 1.0f);
 
               if(rayCastParams.m_useGradients)

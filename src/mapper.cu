@@ -178,9 +178,9 @@ __global__ void allocKernel(HashTable hash_table, SensorData cameraData, const u
     float maxDepth = min(hash_params.sdf_upper_bound, d+t);
     if (minDepth >= maxDepth) return;
 
-    float3 rayMin = kinectDepthToSkeleton(x, y, minDepth);
+    float3 rayMin = ImageReprojectToCamera(x, y, minDepth);
     rayMin = hash_params.m_rigidTransform * rayMin;
-    float3 rayMax = kinectDepthToSkeleton(x, y, maxDepth);
+    float3 rayMax = ImageReprojectToCamera(x, y, maxDepth);
     rayMax = hash_params.m_rigidTransform * rayMax;
 
 
@@ -404,7 +404,7 @@ __global__ void integrateDepthMapKernel(HashTable hash_table, SensorData cameraD
   float3 pf = VoxelToWorld(pi);
 
   pf = hash_params.m_rigidTransformInverse * pf;
-  uint2 screenPos = make_uint2(cameraToKinectScreenInt(pf));
+  uint2 screenPos = make_uint2(CameraProjectToImagei(pf));
 
 
   if (screenPos.x < cameraParams.width && screenPos.y < cameraParams.height) {	//on screen
@@ -414,14 +414,14 @@ __global__ void integrateDepthMapKernel(HashTable hash_table, SensorData cameraD
     float4 color  = make_float4(MINF, MINF, MINF, MINF);
     if (cameraData.d_colorData) {
       color = tex2D(colorTextureRef, screenPos.x, screenPos.y);
-      //color = bilinearFilterColor(cameraData.cameraToKinectScreenFloat(pf));
+      //color = bilinearFilterColor(cameraData.CameraProjectToImagef(pf));
     }
 
     if (color.x != MINF && depth != MINF) { // valid depth and color
       //if (depth != MINF) {	//valid depth
 
       if (depth < hash_params.sdf_upper_bound) {
-        float depthZeroOne = cameraToKinectProjZ(depth);
+        float depthZeroOne = NormalizeDepth(depth);
 
         float sdf = depth - pf.z;
         float truncation = hash_table.getTruncation(depth);
