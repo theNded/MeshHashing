@@ -14,11 +14,6 @@
 #include <matrix.h>
 
 struct __ALIGN__(16) HashParams {
-  /// Latest rigid transform of the sensor
-  /// TODO: move it elsewhere (maybe sensor?), or not __constant__
-  float4x4		m_rigidTransform;
-  float4x4		m_rigidTransformInverse;
-
   //////////////////////////////////////////////////
   /// Currently used parameters
   uint  bucket_count;               // 500000

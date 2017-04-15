@@ -18,6 +18,19 @@ public:
   void Free();
   int alloc(unsigned int width, unsigned int height, SensorParams &params);
 
+  void set_transform(float4x4 w_T_c) {
+    w_T_c_ = w_T_c;
+    c_T_w_ = w_T_c_.getInverse();
+  }
+
+  const float4x4& w_T_c() const {
+    return w_T_c_;
+  }
+
+  const float4x4& c_T_w() const {
+    return c_T_w_;
+  }
+
   /// Get data from CUDARGBDAdapter, which reads from RGBDSensor
   int process(cv::Mat &depth, cv::Mat &color);
 
@@ -47,6 +60,9 @@ private:
   /// sensor data
   SensorData		sensor_data_;
   SensorParams	sensor_params_;
+
+  float4x4      w_T_c_; // camera -> world
+  float4x4      c_T_w_;
 
   /// filters the raw data
   /// Check out this later

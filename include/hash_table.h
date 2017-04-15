@@ -214,19 +214,7 @@ struct HashTable {
   }
 
 
-  //! returns the truncation of the SDF for a given distance value
-  __device__
-  float getTruncation(float z) const {
-    return kHashParams.truncation_distance
-         + kHashParams.truncation_distance_scale * z;
-  }
 
-  // TODO(wei): a better implementation?
-  __device__
-  bool IsBlockInCameraFrustum(const int3& block_pos) {
-    float3 world_pos = VoxelToWorld(BlockToVoxel(block_pos)) + kHashParams.voxel_size * 0.5f * (SDF_BLOCK_SIZE - 1.0f);
-    return IsInCameraFrustumApprox(kHashParams.m_rigidTransformInverse, world_pos);
-  }
 
   ////////////////////////////////////////
   /// Access

@@ -186,7 +186,7 @@ int main() {
   hash_params.weight_upper_bound = 255;
 
   Map voxel_map(hash_params);
-  Mapper mapper(&voxel_map);
+  Mapper mapper;
   //mapper.debugHash();
   /// Only to alloc cuda memory, suppose its ok
 
@@ -254,12 +254,13 @@ int main() {
 
     sensor.process(depth, color);
     T = wTc[0].getInverse() * wTc[i];
+    sensor.set_transform(T);
     //T = T.getInverse();
 
-    mapper.integrate(T, sensor.getSensorData(), sensor.getSensorParams(), NULL);
+    mapper.integrate(&voxel_map, &sensor, NULL);
 
     float4x4 I; I.setIdentity();
-    ray_caster.render(voxel_map.hash_table(), voxel_map.hash_params(), sensor.getSensorData(), T.getInverse());
+    ray_caster.render(voxel_map.hash_table(), voxel_map.hash_params(), T.getInverse());
     //depthToHSV(cuda_hsv, ray_caster.getRayCasterData().d_depth, 640, 480, 0.5f, 3.5f);
     //checkCudaFloat4Memory(cuda_hsv);
     checkCudaFloat4Memory(ray_caster.getRayCasterData().d_normals);
@@ -273,7 +274,7 @@ int main() {
 
   checkCudaErrors(cudaFree(cuda_hsv));
   //cv::waitKey(-1);
-  mapper.debugHash();
+  voxel_map.debugHash();
   /// seems ok
   /// output blocks seems correct
 

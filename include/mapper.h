@@ -11,38 +11,28 @@
 #include "hash_param.h"
 #include "hash_table.h"
 #include "map.h"
-#include "sensor_data.h"
-#include "sensor_param.h"
+#include "sensor.h"
 
 /// ! FUSION PART !
-extern void integrateDepthMapCUDA(HashTable& hash_table, const HashParams& hash_params, const SensorData& sensor_data, const SensorParams& depthCameraParams);
+extern void integrateDepthMapCUDA(HashTable& hash_table, const HashParams& hash_params,
+                                  const SensorData& sensor_data, const SensorParams& sensor_params,
+                                  float4x4 c_T_w);
 extern void bindInputDepthColorTextures(const SensorData& sensor_data);
 
 /// CUDA / C++ shared class
 class Mapper {
 public:
-  Mapper(Map *voxel_map);
+  Mapper();
   ~Mapper();
-
 
   /// Set input (image)
   void bindDepthCameraTextures(const SensorData& sensor_data);
 
   /// SDF fusion
-  void integrate(const float4x4& lastRigidTransform, const SensorData& sensor_data,
-                 const SensorParams& depthCameraParams, unsigned int* d_bitMask);
-
-  /// Set pose
-  void setLastRigidTransform(const float4x4& lastRigidTransform);
-
-  //! debug only!
-  unsigned int getHeapFreeCount();
-  void debugHash();
+  void integrate(Map* map, Sensor *sensor, unsigned int* d_bitMask);
 
 private:
-  void integrateDepthMap(const SensorData& sensor_data, const SensorParams& depthCameraParams);
-
-  Map *map_;
+  void integrateDepthMap(Map* map, Sensor* sensor);
 };
 
 #endif //MRF_VH_HASH_TABLE_MANAGER_H

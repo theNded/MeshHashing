@@ -6,14 +6,26 @@
 #define VOXEL_HASHING_MAP_H
 
 #include "hash_table.h"
+#include "sensor.h"
 #include "sensor_data.h"
 
 /// CUDA functions
-extern void resetCUDA(HashTable& hash_table, const HashParams& hash_params);
-extern void resetHashBucketMutexCUDA(HashTable& hash_table, const HashParams& hash_params);
-extern void allocCUDA(HashTable& hash_table, const HashParams& hash_params, const SensorData& sensor_data, const SensorParams& depthCameraParams, const unsigned int* d_bitMask);
+extern void resetCUDA(HashTable& hash_table,
+                      const HashParams& hash_params);
 
-extern unsigned int compactifyHashAllInOneCUDA(HashTable& hash_table, const HashParams& hash_params);
+extern void resetHashBucketMutexCUDA(HashTable& hash_table,
+                                     const HashParams& hash_params);
+
+extern void allocCUDA(HashTable& hash_table,
+                      const HashParams& hash_params,
+                      const SensorData& sensor_data,
+                      const SensorParams& sensor_params,
+                      const float4x4& w_T_c,
+                      const unsigned int* d_bitMask);
+
+extern unsigned int compactifyHashAllInOneCUDA(HashTable& hash_table,
+                                               const HashParams& hash_params,
+                                               float4x4 c_T_w);
 
 /// Garbage collection
 extern void starveVoxelsKernelCUDA(HashTable& hash_table, const HashParams& hash_params);
@@ -32,9 +44,8 @@ public:
   ~Map();
   void Reset();
 
-  void AllocBlocks(const SensorData &sensor_data,
-                   const SensorParams& sensor_params);
-  void GenerateCompressedHashEntries();
+  void AllocBlocks(Sensor* sensor);
+  void GenerateCompressedHashEntries(float4x4 c_T_w);
   void RecycleInvalidBlocks();
 
   HashTable &hash_table() {
@@ -43,6 +54,12 @@ public:
   HashParams &hash_params() {
     return hash_params_;
   }
+
+
+//! debug only!
+  unsigned int getHeapFreeCount();
+  void debugHash();
+
 };
 
 

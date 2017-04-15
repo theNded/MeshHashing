@@ -151,8 +151,8 @@ static inline float DenormalizeDepth(float z) {
 }
 
 __device__
-static inline bool IsInCameraFrustumApprox(const float4x4& viewMatrixInverse, const float3& pos) {
-  float3 p_camera = viewMatrixInverse * pos;
+static inline bool IsInCameraFrustumApprox(const float4x4& c_T_w, const float3& pos) {
+  float3 p_camera = c_T_w * pos;
   float2 uv = CameraProjectToImagef(p_camera);
   float3 normalized_p = make_float3(
           (2.0f*uv.x - (kSensorParams.width- 1.0f))/(kSensorParams.width- 1.0f),
@@ -163,6 +163,20 @@ static inline bool IsInCameraFrustumApprox(const float4x4& viewMatrixInverse, co
   return !(normalized_p.x < -1.0f || normalized_p.x > 1.0f
            || normalized_p.y < -1.0f || normalized_p.y > 1.0f
            || normalized_p.z < 0.0f || normalized_p.z > 1.0f);
+}
+
+//! returns the truncation of the SDF for a given distance value
+__device__
+static inline float truncate_distance(float z) {
+  return kHashParams.truncation_distance
+         + kHashParams.truncation_distance_scale * z;
+}
+
+// TODO(wei): a better implementation?
+__device__
+static inline bool IsBlockInCameraFrustum(float4x4 c_T_w, const int3& block_pos) {
+  float3 world_pos = VoxelToWorld(BlockToVoxel(block_pos)) + kHashParams.voxel_size * 0.5f * (SDF_BLOCK_SIZE - 1.0f);
+  return IsInCameraFrustumApprox(c_T_w, world_pos);
 }
 
 #endif //VOXEL_HASHING_POSITION_CONVERTER_H

@@ -8,7 +8,7 @@
 #define T_PER_BLOCK 8
 #define NUM_GROUPS_X 1024
 
-__global__ void renderKernel(const HashTable hash_table, const RayCasterData rayCastData, const SensorData cameraData) {
+__global__ void renderKernel(const HashTable hash_table, const RayCasterData rayCastData) {
   const unsigned int x = blockIdx.x*blockDim.x + threadIdx.x;
   const unsigned int y = blockIdx.y*blockDim.y + threadIdx.y;
 
@@ -46,17 +46,17 @@ __global__ void renderKernel(const HashTable hash_table, const RayCasterData ray
     //	printf("ERROR (%d,%d): [ %f, %f ]\n", x, y, minInterval, maxInterval);
     //}
 
-    rayCastData.traverseCoarseGridSimpleSampleAll(hash_table, cameraData, worldCamPos, worldDir, camDir, make_int3(x,y,1), minInterval, maxInterval);
+    rayCastData.traverseCoarseGridSimpleSampleAll(hash_table, worldCamPos, worldDir, camDir, make_int3(x,y,1), minInterval, maxInterval);
   }
 }
 
 void renderCS(const HashTable        &hash_table,   const RayCasterData   &rayCastData,
-              const SensorData &cameraData, const RayCastParams &rayCastParams) {
+              const RayCastParams &rayCastParams) {
 
   const dim3 gridSize((rayCastParams.m_width + T_PER_BLOCK - 1)/T_PER_BLOCK, (rayCastParams.m_height + T_PER_BLOCK - 1)/T_PER_BLOCK);
   const dim3 blockSize(T_PER_BLOCK, T_PER_BLOCK);
 
-  renderKernel<<<gridSize, blockSize>>>(hash_table, rayCastData, cameraData);
+  renderKernel<<<gridSize, blockSize>>>(hash_table, rayCastData);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }

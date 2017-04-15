@@ -67,8 +67,6 @@ struct SensorData {
     return kSensorParams;
   }
 
-
-
   /// Raw data
   float*		d_depthData;
   float4*		d_colorData;

@@ -14,7 +14,7 @@ void bindInputDepthColorTextures(const SensorData& sensor_data) {
 }
 
 
-__global__ void integrateDepthMapKernel(HashTable hash_table, SensorData cameraData) {
+__global__ void integrateDepthMapKernel(HashTable hash_table, SensorData cameraData, float4x4 c_T_w) {
   const HashParams& hash_params = kHashParams;
   const SensorParams& cameraParams = kSensorParams;
 
@@ -31,7 +31,7 @@ __global__ void integrateDepthMapKernel(HashTable hash_table, SensorData cameraD
   int3 pi = pi_base + make_int3(IdxToVoxelLocalPos(i));
   float3 pf = VoxelToWorld(pi);
 
-  pf = hash_params.m_rigidTransformInverse * pf;
+  pf = c_T_w * pf;
   uint2 screenPos = make_uint2(CameraProjectToImagei(pf));
 
 
@@ -52,7 +52,7 @@ __global__ void integrateDepthMapKernel(HashTable hash_table, SensorData cameraD
         float depthZeroOne = NormalizeDepth(depth);
 
         float sdf = depth - pf.z;
-        float truncation = hash_table.getTruncation(depth);
+        float truncation = truncate_distance(depth);
         if (sdf > -truncation) // && depthZeroOne >= 0.0f && depthZeroOne <= 1.0f) //check if in truncation range should already be made in depth map computation
         {
           if (sdf >= 0.0f) {
@@ -97,14 +97,15 @@ __global__ void integrateDepthMapKernel(HashTable hash_table, SensorData cameraD
 }
 
 
-void integrateDepthMapCUDA(HashTable& hash_table, const HashParams& hash_params, const SensorData& sensor_data, const SensorParams& depthCameraParams)
-{
+void integrateDepthMapCUDA(HashTable& hash_table, const HashParams& hash_params,
+                           const SensorData& sensor_data, const SensorParams& depthCameraParams,
+                           float4x4 c_T_w) {
   const unsigned int threadsPerBlock = SDF_BLOCK_SIZE*SDF_BLOCK_SIZE*SDF_BLOCK_SIZE;
   const dim3 gridSize(hash_params.occupied_block_count, 1);
   const dim3 blockSize(threadsPerBlock, 1);
 
   if (hash_params.occupied_block_count > 0) {	//this guard is important if there is no depth in the current frame (i.e., no blocks were allocated)
-    integrateDepthMapKernel << <gridSize, blockSize >> >(hash_table, sensor_data);
+    integrateDepthMapKernel << <gridSize, blockSize >> >(hash_table, sensor_data, c_T_w);
   }
 #ifdef _DEBUG
   cutilSafeCall(cudaDeviceSynchronize());

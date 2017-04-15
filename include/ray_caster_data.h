@@ -159,8 +159,7 @@ struct RayCasterData {
   }
 
   __device__
-  void traverseCoarseGridSimpleSampleAll(const HashTable& hash, const SensorData& cameraData,
-   const float3& worldCamPos, const float3& worldDir, const float3& camDir, const int3& dTid, float minInterval, float maxInterval) const {
+  void traverseCoarseGridSimpleSampleAll(const HashTable& hash, const float3& worldCamPos, const float3& worldDir, const float3& camDir, const int3& dTid, float minInterval, float maxInterval) const {
     int x = dTid.x, y = dTid.y;
     bool flag = (x == 589 && y == 477);
 

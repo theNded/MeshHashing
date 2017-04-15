@@ -146,7 +146,8 @@ bool isSDFBlockStreamedOut(const int3& sdfBlock, const HashTable& hash_table, co
   return ((d_bitMask[index/nBitsInT] & (0x1 << (index%nBitsInT))) != 0x0);
 }
 
-__global__ void allocKernel(HashTable hash_table, SensorData cameraData, const unsigned int* d_bitMask)
+__global__ void allocKernel(HashTable hash_table, SensorData cameraData,
+                            float4x4 w_T_c, const unsigned int* d_bitMask)
 {
   const HashParams& hash_params = kHashParams;
   const SensorParams& cameraParams = kSensorParams;
@@ -164,15 +165,15 @@ __global__ void allocKernel(HashTable hash_table, SensorData cameraData, const u
 
     if (d >= hash_params.sdf_upper_bound) return;
 
-    float t = hash_table.getTruncation(d);
+    float t = truncate_distance(d);
     float minDepth = min(hash_params.sdf_upper_bound, d-t);
     float maxDepth = min(hash_params.sdf_upper_bound, d+t);
     if (minDepth >= maxDepth) return;
 
     float3 rayMin = ImageReprojectToCamera(x, y, minDepth);
-    rayMin = hash_params.m_rigidTransform * rayMin;
+    rayMin = w_T_c * rayMin;
     float3 rayMax = ImageReprojectToCamera(x, y, maxDepth);
-    rayMax = hash_params.m_rigidTransform * rayMax;
+    rayMax = w_T_c * rayMax;
 
 
     float3 rayDir = normalize(rayMax - rayMin);
@@ -207,7 +208,7 @@ __global__ void allocKernel(HashTable hash_table, SensorData cameraData, const u
     while(iter < g_MaxLoopIterCount) {
 
       //check if it's in the frustum and not checked out
-      if (hash_table.IsBlockInCameraFrustum(idCurrentVoxel)) {
+      if (IsBlockInCameraFrustum(w_T_c.getInverse(), idCurrentVoxel)) {
         /// Disable streaming at current
         // && !isSDFBlockStreamedOut(idCurrentVoxel, hash_table, d_bitMask)) {
         hash_table.AllocBlock(idCurrentVoxel);
@@ -235,13 +236,15 @@ __global__ void allocKernel(HashTable hash_table, SensorData cameraData, const u
   }
 }
 
-void allocCUDA(HashTable& hash_table, const HashParams& hash_params, const SensorData& sensor_data, const SensorParams& depthCameraParams, const unsigned int* d_bitMask)
-{
+void allocCUDA(HashTable& hash_table, const HashParams& hash_params,
+               const SensorData& sensor_data, const SensorParams& depthCameraParams,
+               const float4x4& w_T_c,
+               const unsigned int* d_bitMask) {
 
   const dim3 gridSize((depthCameraParams.width + T_PER_BLOCK - 1)/T_PER_BLOCK, (depthCameraParams.height + T_PER_BLOCK - 1)/T_PER_BLOCK);
   const dim3 blockSize(T_PER_BLOCK, T_PER_BLOCK);
 
-  allocKernel<<<gridSize, blockSize>>>(hash_table, sensor_data, d_bitMask);
+  allocKernel<<<gridSize, blockSize>>>(hash_table, sensor_data, w_T_c, d_bitMask);
 
 #ifdef _DEBUG
   cutilSafeCall(cudaDeviceSynchronize());
@@ -249,40 +252,9 @@ void allocCUDA(HashTable& hash_table, const HashParams& hash_params, const Senso
 #endif
 }
 
-
-
-__global__ void fillDecisionArrayKernel(HashTable hash_table, SensorData sensor_data)
-{
-  const HashParams& hash_params = kHashParams;
-  const unsigned int idx = blockIdx.x*blockDim.x + threadIdx.x;
-
-  if (idx < hash_params.bucket_count * HASH_BUCKET_SIZE) {
-    hash_table.block_remove_flags[idx] = 0;
-    if (hash_table.hash_entries[idx].ptr != FREE_ENTRY) {
-      if (hash_table.IsBlockInCameraFrustum(hash_table.hash_entries[idx].pos)) {
-        hash_table.block_remove_flags[idx] = 1;	//yes
-      }
-    }
-  }
-}
-
-void fillDecisionArrayCUDA(HashTable& hash_table, const HashParams& hash_params, const SensorData& sensor_data)
-{
-  const dim3 gridSize((HASH_BUCKET_SIZE * hash_params.bucket_count + (T_PER_BLOCK*T_PER_BLOCK) - 1)/(T_PER_BLOCK*T_PER_BLOCK), 1);
-  const dim3 blockSize((T_PER_BLOCK*T_PER_BLOCK), 1);
-
-  fillDecisionArrayKernel<<<gridSize, blockSize>>>(hash_table, sensor_data);
-
-#ifdef _DEBUG
-  cutilSafeCall(cudaDeviceSynchronize());
-	cutilCheckMsg(__FUNCTION__);
-#endif
-
-}
-
 #define COMPACTIFY_HASH_THREADS_PER_BLOCK 256
 //#define COMPACTIFY_HASH_SIMPLE
-__global__ void compactifyHashAllInOneKernel(HashTable hash_table)
+__global__ void compactifyHashAllInOneKernel(HashTable hash_table, float4x4 c_T_w)
 {
   const HashParams& hash_params = kHashParams;
   const unsigned int idx = blockIdx.x*blockDim.x + threadIdx.x;
@@ -304,7 +276,7 @@ __global__ void compactifyHashAllInOneKernel(HashTable hash_table)
   int addrLocal = -1;
   if (idx < hash_params.bucket_count * HASH_BUCKET_SIZE) {
     if (hash_table.hash_entries[idx].ptr != FREE_ENTRY) {
-      if (hash_table.IsBlockInCameraFrustum(hash_table.hash_entries[idx].pos))
+      if (IsBlockInCameraFrustum(c_T_w, hash_table.hash_entries[idx].pos))
       {
         addrLocal = atomicAdd(&localCounter, 1);
       }
@@ -326,14 +298,14 @@ __global__ void compactifyHashAllInOneKernel(HashTable hash_table)
 #endif
 }
 
-unsigned int compactifyHashAllInOneCUDA(HashTable& hash_table, const HashParams& hash_params)
+unsigned int compactifyHashAllInOneCUDA(HashTable& hash_table, const HashParams& hash_params, float4x4 c_T_w)
 {
   const unsigned int threadsPerBlock = COMPACTIFY_HASH_THREADS_PER_BLOCK;
   const dim3 gridSize((HASH_BUCKET_SIZE * hash_params.bucket_count + threadsPerBlock - 1) / threadsPerBlock, 1);
   const dim3 blockSize(threadsPerBlock, 1);
 
   checkCudaErrors(cudaMemset(hash_table.compacted_hash_entry_counter, 0, sizeof(int)));
-  compactifyHashAllInOneKernel << <gridSize, blockSize >> >(hash_table);
+  compactifyHashAllInOneKernel << <gridSize, blockSize >> >(hash_table, c_T_w);
   unsigned int res = 0;
   checkCudaErrors(cudaMemcpy(&res, hash_table.compacted_hash_entry_counter, sizeof(unsigned int), cudaMemcpyDeviceToHost));
 
@@ -448,7 +420,7 @@ __global__ void garbageCollectIdentifyKernel(HashTable hash_table) {
     float minSDF = shared_MinSDF[threadIdx.x];
     uint maxWeight = shared_MaxWeight[threadIdx.x];
 
-    float t = hash_table.getTruncation(kSensorParams.max_depth_range);	//MATTHIAS TODO check whether this is a reasonable metric
+    float t = truncate_distance(kSensorParams.max_depth_range);	//MATTHIAS TODO check whether this is a reasonable metric
 
     if (minSDF >= t || maxWeight == 0) {
       hash_table.block_remove_flags[hashIdx] = 1;

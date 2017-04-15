@@ -25,13 +25,13 @@ void RayCaster::destroy(void) {
 
 /// Major function, extract surface and normal from the volumes
 void RayCaster::render(const HashTable& hash_table, const HashParams& hash_params,
-                            const SensorData& cameraData, const float4x4& lastRigidTransform) {
+                       const float4x4& lastRigidTransform) {
 
   m_params.m_viewMatrix = lastRigidTransform;
   m_params.m_viewMatrixInverse = m_params.m_viewMatrix.getInverse();
   m_data.updateParams(m_params);
 
-  renderCS(hash_table, m_data, cameraData, m_params);
+  renderCS(hash_table, m_data, m_params);
 
   //convertToCameraSpace(cameraData);
   //if (!m_params.m_useGradients) {
