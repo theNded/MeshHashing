@@ -21,41 +21,25 @@ void depthToHSV(float4* d_output, float* d_input,
                 unsigned int width, unsigned int height,
                 float minDepth, float maxDepth);
 
-Sensor::Sensor() {
-  m_bFilterDepthValues = false;
-  m_fBilateralFilterSigmaD = 1.0f;
-  m_fBilateralFilterSigmaR = 1.0f;
-
-  m_bFilterIntensityValues = false;
-  m_fBilateralFilterSigmaDIntensity = 1.0f;
-  m_fBilateralFilterSigmaRIntensity = 1.0f;
+Sensor::Sensor(SensorParams &sensor_params) {
 
   d_depthHSV = NULL;
+
+  const unsigned int bufferDimDepth = sensor_params.height * sensor_params.width;
+  checkCudaErrors(cudaMalloc(&d_depthHSV, sizeof(float4)*bufferDimDepth));
+
+  /// Parameter settings
+  sensor_params_ = sensor_params; // Is it copy constructing?
+  sensor_data_.alloc(sensor_params_);
 }
 
 Sensor::~Sensor() {
-  Free();
-}
-
-void Sensor::Free() {
   checkCudaErrors(cudaFree(d_depthHSV));
 
   sensor_data_.Free();
 }
 
-int Sensor::alloc(unsigned int width, unsigned int height, SensorParams &params) {
-
-  const unsigned int bufferDimDepth = width * height;
-  checkCudaErrors(cudaMalloc(&d_depthHSV, sizeof(float4)*bufferDimDepth));
-
-  /// Parameter settings
-  sensor_params_ = params; // Is it copy constructing?
-  sensor_data_.alloc(sensor_params_);
-
-  return 0;
-}
-
-int Sensor::process(cv::Mat &depth, cv::Mat &color) {
+int Sensor::Process(cv::Mat &depth, cv::Mat &color) {
   /// Distortion is not yet dealt with yet
   /// Disable all filter at current
 
@@ -84,19 +68,6 @@ int Sensor::process(cv::Mat &depth, cv::Mat &color) {
                                     cudaMemcpyDeviceToDevice));
 
   return 0;
-}
-
-//! enables bilateral filtering of the depth value
-void Sensor::setFiterDepthValues(bool b, float sigmaD, float sigmaR) {
-  m_bFilterDepthValues = b;
-  m_fBilateralFilterSigmaD = sigmaD;
-  m_fBilateralFilterSigmaR = sigmaR;
-}
-
-void Sensor::setFiterIntensityValues(bool b, float sigmaD, float sigmaR) {
-  m_bFilterIntensityValues = b;
-  m_fBilateralFilterSigmaDIntensity = sigmaD;
-  m_fBilateralFilterSigmaRIntensity = sigmaR;
 }
 
 unsigned int Sensor::getDepthWidth() const {

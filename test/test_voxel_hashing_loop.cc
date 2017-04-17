@@ -208,8 +208,7 @@ int main() {
   sensor_params.height = 480;
   sensor_params.width = 640;
 
-  Sensor sensor;
-  sensor.alloc(640, 480, sensor_params);
+  Sensor sensor(sensor_params);
 
   float4x4 T; T.setIdentity();
   float4x4 K; K.setIdentity();
@@ -234,7 +233,7 @@ int main() {
   bool m_useGradients = true;
 
   RayCaster ray_caster(ray_cast_params);
-  mapper.bindDepthCameraTextures(sensor.getSensorData());
+  mapper.BindSensorDataToTexture(sensor.getSensorData());
 
   /// Process
   float4 *cuda_hsv;
@@ -252,14 +251,13 @@ int main() {
     //cv::flip(color, color, 2);
     cv::cvtColor(color, color, CV_BGR2BGRA);
 
-    sensor.process(depth, color);
+    sensor.Process(depth, color);
     T = wTc[0].getInverse() * wTc[i];
     sensor.set_transform(T);
     //T = T.getInverse();
 
-    mapper.integrate(&voxel_map, &sensor, NULL);
+    mapper.Integrate(&voxel_map, &sensor, NULL);
 
-    float4x4 I; I.setIdentity();
     ray_caster.render(voxel_map.hash_table(), voxel_map.hash_params(), T.getInverse());
     //depthToHSV(cuda_hsv, ray_caster.getRayCasterData().d_depth, 640, 480, 0.5f, 3.5f);
     //checkCudaFloat4Memory(cuda_hsv);

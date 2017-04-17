@@ -156,7 +156,7 @@ int main() {
   bool m_useGradients = true;
 
   RayCaster ray_caster(ray_cast_params);
-  mapper.bindDepthCameraTextures(sensor.getSensorData());
+  mapper.BindSensorDataToTexture(sensor.getSensorData());
 
   /// Process
   cv::Mat depth = cv::imread(depth_img_list[0], -1);
@@ -172,9 +172,9 @@ int main() {
   /// input gpu data OK
 
   LOG(INFO) << "Integrate";
-  mapper.integrate(T, sensor.getSensorData(), sensor.getSensorParams(), NULL);
-  mapper.integrate(T, sensor.getSensorData(), sensor.getSensorParams(), NULL);
-  mapper.integrate(T, sensor.getSensorData(), sensor.getSensorParams(), NULL);
+  mapper.Integrate(T, sensor.getSensorData(), sensor.getSensorParams(), NULL);
+  mapper.Integrate(T, sensor.getSensorData(), sensor.getSensorParams(), NULL);
+  mapper.Integrate(T, sensor.getSensorData(), sensor.getSensorParams(), NULL);
 
   //mapper.debugHash();
   /// seems ok

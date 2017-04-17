@@ -12,11 +12,8 @@
 /// At first get rid of CUDARGBDAdaptor and RGBDSensor, use it directly
 class Sensor {
 public:
-  Sensor();
+  Sensor(SensorParams &params);
   ~Sensor();
-
-  void Free();
-  int alloc(unsigned int width, unsigned int height, SensorParams &params);
 
   void set_transform(float4x4 w_T_c) {
     w_T_c_ = w_T_c;
@@ -32,11 +29,7 @@ public:
   }
 
   /// Get data from CUDARGBDAdapter, which reads from RGBDSensor
-  int process(cv::Mat &depth, cv::Mat &color);
-
-  //! enables bilateral filtering of the depth value
-  void setFiterDepthValues(bool b = true, float sigmaD = 1.0f, float sigmaR = 1.0f);
-  void setFiterIntensityValues(bool b = true, float sigmaD = 1.0f, float sigmaR = 1.0f);
+  int Process(cv::Mat &depth, cv::Mat &color);
 
   unsigned int getDepthWidth() const;
   unsigned int getDepthHeight() const;
@@ -63,16 +56,6 @@ private:
 
   float4x4      w_T_c_; // camera -> world
   float4x4      c_T_w_;
-
-  /// filters the raw data
-  /// Check out this later
-  bool  m_bFilterDepthValues;
-  float m_fBilateralFilterSigmaD;
-  float m_fBilateralFilterSigmaR;
-
-  bool  m_bFilterIntensityValues;
-  float m_fBilateralFilterSigmaDIntensity;
-  float m_fBilateralFilterSigmaRIntensity;
 
   //! hsv depth for visualization
   float4* d_depthHSV;

@@ -14,10 +14,10 @@
 #include "sensor.h"
 
 /// ! FUSION PART !
-extern void integrateDepthMapCUDA(HashTable& hash_table, const HashParams& hash_params,
+extern void IntegrateCudaHost(HashTable& hash_table, const HashParams& hash_params,
                                   const SensorData& sensor_data, const SensorParams& sensor_params,
                                   float4x4 c_T_w);
-extern void bindInputDepthColorTextures(const SensorData& sensor_data);
+extern void BindSensorDataToTextureCudaHost(const SensorData& sensor_data);
 
 /// CUDA / C++ shared class
 class Mapper {
@@ -26,13 +26,13 @@ public:
   ~Mapper();
 
   /// Set input (image)
-  void bindDepthCameraTextures(const SensorData& sensor_data);
+  void BindSensorDataToTexture(const SensorData& sensor_data);
 
   /// SDF fusion
-  void integrate(Map* map, Sensor *sensor, unsigned int* d_bitMask);
+  void Integrate(Map* map, Sensor *sensor, unsigned int* d_bitMask);
 
 private:
-  void integrateDepthMap(Map* map, Sensor* sensor);
+  void IntegrateDepthMap(Map* map, Sensor* sensor);
 };
 
 #endif //MRF_VH_HASH_TABLE_MANAGER_H

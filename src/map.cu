@@ -14,7 +14,33 @@
 /// Easier interpolation
 extern texture<float, cudaTextureType2D, cudaReadModeElementType> depthTextureRef;
 extern texture<float4, cudaTextureType2D, cudaReadModeElementType> colorTextureRef;
-__global__ void resetHeapKernel(HashTable hash_table) {
+
+//////////
+/// Reset cuda memory
+__global__
+void ResetBucketMutexesKernel(HashTable hash_table)
+{
+  const HashParams& hash_params = kHashParams;
+  const unsigned int idx = blockIdx.x*blockDim.x + threadIdx.x;
+  if (idx < hash_params.bucket_count) {
+    hash_table.bucket_mutexes[idx] = FREE_ENTRY;
+  }
+}
+
+__host__
+void ResetBucketMutexesCudaHost(HashTable& hash_table, const HashParams& hash_params)
+{
+  const dim3 gridSize((hash_params.bucket_count + (T_PER_BLOCK*T_PER_BLOCK) - 1)/(T_PER_BLOCK*T_PER_BLOCK), 1);
+  const dim3 blockSize((T_PER_BLOCK*T_PER_BLOCK), 1);
+
+  ResetBucketMutexesKernel<<<gridSize, blockSize>>>(hash_table);
+
+  checkCudaErrors(cudaDeviceSynchronize());
+  checkCudaErrors(cudaGetLastError());
+}
+
+__global__
+void ResetHeapKernel(HashTable hash_table) {
   const HashParams& hash_params = kHashParams;
   unsigned int idx = blockIdx.x*blockDim.x + threadIdx.x;
 
@@ -33,7 +59,8 @@ __global__ void resetHeapKernel(HashTable hash_table) {
   }
 }
 
-__global__ void resetHashKernel(HashTable hash_table)
+__global__
+void ResetEntriesKernel(HashTable hash_table)
 {
   const HashParams& hash_params = kHashParams;
   const unsigned int idx = blockIdx.x*blockDim.x + threadIdx.x;
@@ -43,31 +70,16 @@ __global__ void resetHashKernel(HashTable hash_table)
   }
 }
 
-
-__global__ void resetHashBucketMutexKernel(HashTable hash_table)
-{
-  const HashParams& hash_params = kHashParams;
-  const unsigned int idx = blockIdx.x*blockDim.x + threadIdx.x;
-  if (idx < hash_params.bucket_count) {
-    hash_table.bucket_mutexes[idx] = FREE_ENTRY;
-  }
-}
-
-void resetCUDA(HashTable& hash_table, const HashParams& hash_params)
-{
+__host__
+void ResetCudaHost(HashTable& hash_table, const HashParams& hash_params) {
   {
     //resetting the heap and SDF blocks
     const dim3 gridSize((hash_params.block_count + (T_PER_BLOCK*T_PER_BLOCK) - 1)/(T_PER_BLOCK*T_PER_BLOCK), 1);
     const dim3 blockSize((T_PER_BLOCK*T_PER_BLOCK), 1);
 
-    resetHeapKernel<<<gridSize, blockSize>>>(hash_table);
-
-
-#ifdef _DEBUG
-    cutilSafeCall(cudaDeviceSynchronize());
-			cutilCheckMsg(__FUNCTION__);
-#endif
-
+    ResetHeapKernel<<<gridSize, blockSize>>>(hash_table);
+    checkCudaErrors(cudaDeviceSynchronize());
+    checkCudaErrors(cudaGetLastError());
   }
 
   {
@@ -75,12 +87,9 @@ void resetCUDA(HashTable& hash_table, const HashParams& hash_params)
     const dim3 gridSize((HASH_BUCKET_SIZE * hash_params.bucket_count + (T_PER_BLOCK*T_PER_BLOCK) - 1)/(T_PER_BLOCK*T_PER_BLOCK), 1);
     const dim3 blockSize((T_PER_BLOCK*T_PER_BLOCK), 1);
 
-    resetHashKernel<<<gridSize, blockSize>>>(hash_table);
-
-#ifdef _DEBUG
-    cutilSafeCall(cudaDeviceSynchronize());
-			cutilCheckMsg(__FUNCTION__);
-#endif
+    ResetEntriesKernel<<<gridSize, blockSize>>>(hash_table);
+    checkCudaErrors(cudaDeviceSynchronize());
+    checkCudaErrors(cudaGetLastError());
   }
 
   {
@@ -88,66 +97,17 @@ void resetCUDA(HashTable& hash_table, const HashParams& hash_params)
     const dim3 gridSize((hash_params.bucket_count + (T_PER_BLOCK*T_PER_BLOCK) - 1)/(T_PER_BLOCK*T_PER_BLOCK), 1);
     const dim3 blockSize((T_PER_BLOCK*T_PER_BLOCK), 1);
 
-    resetHashBucketMutexKernel<<<gridSize, blockSize>>>(hash_table);
-
-#ifdef _DEBUG
-    cutilSafeCall(cudaDeviceSynchronize());
-			cutilCheckMsg(__FUNCTION__);
-#endif
+    ResetBucketMutexesKernel<<<gridSize, blockSize>>>(hash_table);
+    checkCudaErrors(cudaDeviceSynchronize());
+    checkCudaErrors(cudaGetLastError());
   }
 }
 
-void resetHashBucketMutexCUDA(HashTable& hash_table, const HashParams& hash_params)
-{
-  const dim3 gridSize((hash_params.bucket_count + (T_PER_BLOCK*T_PER_BLOCK) - 1)/(T_PER_BLOCK*T_PER_BLOCK), 1);
-  const dim3 blockSize((T_PER_BLOCK*T_PER_BLOCK), 1);
-
-  resetHashBucketMutexKernel<<<gridSize, blockSize>>>(hash_table);
-
-#ifdef _DEBUG
-  cutilSafeCall(cudaDeviceSynchronize());
-	cutilCheckMsg(__FUNCTION__);
-#endif
-}
-
-
-__device__
-unsigned int linearizeChunkPos(const int3& chunkPos)
-{
-  int3 p = chunkPos-kHashParams.m_streamingMinGridPos;
-  return  p.z * kHashParams.m_streamingGridDimensions.x * kHashParams.m_streamingGridDimensions.y +
-          p.y * kHashParams.m_streamingGridDimensions.x +
-          p.x;
-}
-
-__device__
-int3 worldToChunks(const float3& posWorld)
-{
-  float3 p;
-  p.x = posWorld.x/kHashParams.m_streamingVoxelExtents.x;
-  p.y = posWorld.y/kHashParams.m_streamingVoxelExtents.y;
-  p.z = posWorld.z/kHashParams.m_streamingVoxelExtents.z;
-
-  float3 s;
-  s.x = (float)sign(p.x);
-  s.y = (float)sign(p.y);
-  s.z = (float)sign(p.z);
-
-  return make_int3(p+s*0.5f);
-}
-
-__device__
-bool isSDFBlockStreamedOut(const int3& sdfBlock, const HashTable& hash_table, const unsigned int* d_bitMask)	//TODO MATTHIAS (-> move to HashTable)
-{
-  float3 posWorld = VoxelToWorld(BlockToVoxel(sdfBlock)); // sdfBlock is assigned to chunk by the bottom right sample pos
-
-  uint index = linearizeChunkPos(worldToChunks(posWorld));
-  uint nBitsInT = 32;
-  return ((d_bitMask[index/nBitsInT] & (0x1 << (index%nBitsInT))) != 0x0);
-}
-
-__global__ void allocKernel(HashTable hash_table, SensorData cameraData,
-                            float4x4 w_T_c, const unsigned int* d_bitMask)
+//////////
+/// Alloc blocks in the frustum
+__global__
+void AllocBlocksKernel(HashTable hash_table, SensorData cameraData,
+                                  float4x4 w_T_c, const unsigned int* d_bitMask)
 {
   const HashParams& hash_params = kHashParams;
   const SensorParams& cameraParams = kSensorParams;
@@ -236,7 +196,8 @@ __global__ void allocKernel(HashTable hash_table, SensorData cameraData,
   }
 }
 
-void allocCUDA(HashTable& hash_table, const HashParams& hash_params,
+__host__
+void AllocBlocksCudaHost(HashTable& hash_table, const HashParams& hash_params,
                const SensorData& sensor_data, const SensorParams& depthCameraParams,
                const float4x4& w_T_c,
                const unsigned int* d_bitMask) {
@@ -244,7 +205,7 @@ void allocCUDA(HashTable& hash_table, const HashParams& hash_params,
   const dim3 gridSize((depthCameraParams.width + T_PER_BLOCK - 1)/T_PER_BLOCK, (depthCameraParams.height + T_PER_BLOCK - 1)/T_PER_BLOCK);
   const dim3 blockSize(T_PER_BLOCK, T_PER_BLOCK);
 
-  allocKernel<<<gridSize, blockSize>>>(hash_table, sensor_data, w_T_c, d_bitMask);
+  AllocBlocksKernel<<<gridSize, blockSize>>>(hash_table, sensor_data, w_T_c, d_bitMask);
 
 #ifdef _DEBUG
   cutilSafeCall(cudaDeviceSynchronize());
@@ -252,23 +213,14 @@ void allocCUDA(HashTable& hash_table, const HashParams& hash_params,
 #endif
 }
 
+//////////
+/// Compress hash entries
 #define COMPACTIFY_HASH_THREADS_PER_BLOCK 256
-//#define COMPACTIFY_HASH_SIMPLE
-__global__ void compactifyHashAllInOneKernel(HashTable hash_table, float4x4 c_T_w)
-{
+__global__
+void GenerateCompressedHashEntriesKernel(HashTable hash_table, float4x4 c_T_w) {
   const HashParams& hash_params = kHashParams;
   const unsigned int idx = blockIdx.x*blockDim.x + threadIdx.x;
-#ifdef COMPACTIFY_HASH_SIMPLE
-  if (idx < hash_params.bucket_count * HASH_BUCKET_SIZE) {
-		if (hash_table.hash_entries[idx].ptr != FREE_ENTRY) {
-			if (hash_table.IsBlockInCameraFrustum(hash_table.hash_entries[idx].pos))
-			{
-				int addr = atomicAdd(hash_table.compacted_hash_entry_counter, 1);
-				hash_table.compacted_hash_entries[addr] = hash_table.hash_entries[idx];
-			}
-		}
-	}
-#else
+
   __shared__ int localCounter;
   if (threadIdx.x == 0) localCounter = 0;
   __syncthreads();
@@ -295,62 +247,30 @@ __global__ void compactifyHashAllInOneKernel(HashTable hash_table, float4x4 c_T_
     const unsigned int addr = addrGlobal + addrLocal;
     hash_table.compacted_hash_entries[addr] = hash_table.hash_entries[idx];
   }
-#endif
 }
 
-unsigned int compactifyHashAllInOneCUDA(HashTable& hash_table, const HashParams& hash_params, float4x4 c_T_w)
-{
+unsigned int GenerateCompressedHashEntriesCudaHost(HashTable& hash_table, const HashParams& hash_params,
+                                                   float4x4 c_T_w) {
   const unsigned int threadsPerBlock = COMPACTIFY_HASH_THREADS_PER_BLOCK;
   const dim3 gridSize((HASH_BUCKET_SIZE * hash_params.bucket_count + threadsPerBlock - 1) / threadsPerBlock, 1);
   const dim3 blockSize(threadsPerBlock, 1);
 
   checkCudaErrors(cudaMemset(hash_table.compacted_hash_entry_counter, 0, sizeof(int)));
-  compactifyHashAllInOneKernel << <gridSize, blockSize >> >(hash_table, c_T_w);
-  unsigned int res = 0;
-  checkCudaErrors(cudaMemcpy(&res, hash_table.compacted_hash_entry_counter, sizeof(unsigned int), cudaMemcpyDeviceToHost));
+  GenerateCompressedHashEntriesKernel << <gridSize, blockSize >> >(hash_table, c_T_w);
+  checkCudaErrors(cudaDeviceSynchronize());
+  checkCudaErrors(cudaGetLastError());
 
-#ifdef _DEBUG
-  cutilSafeCall(cudaDeviceSynchronize());
-	cutilCheckMsg(__FUNCTION__);
-#endif
+  unsigned int res = 0;
+  checkCudaErrors(cudaMemcpy(&res, hash_table.compacted_hash_entry_counter, sizeof(unsigned int),
+                             cudaMemcpyDeviceToHost));
+
   return res;
 }
 
-inline __device__ float4 bilinearFilterColor(const float2& screenPos) {
-  const SensorParams& cameraParams = kSensorParams;
-  const int imageWidth = cameraParams.width;
-  const int imageHeight = cameraParams.height;
-  const int2 p00 = make_int2(screenPos.x+0.5f, screenPos.y+0.5f);
-  const int2 dir = sign(make_float2(screenPos.x - p00.x, screenPos.y - p00.y));
-
-  const int2 p01 = p00 + make_int2(0.0f, dir.y);
-  const int2 p10 = p00 + make_int2(dir.x, 0.0f);
-  const int2 p11 = p00 + make_int2(dir.x, dir.y);
-
-  const float alpha = (screenPos.x - p00.x)*dir.x;
-  const float beta  = (screenPos.y - p00.y)*dir.y;
-
-  float4 s0 = make_float4(0.0f, 0.0f, 0.0f, 0.0f); float w0 = 0.0f;
-  if(p00.x >= 0 && p00.x < imageWidth && p00.y >= 0 && p00.y < imageHeight) { float4 v00 = tex2D(colorTextureRef, p00.x, p00.y); if(v00.x != MINF) { s0 += (1.0f-alpha)*v00; w0 += (1.0f-alpha); } }
-  if(p10.x >= 0 && p10.x < imageWidth && p10.y >= 0 && p10.y < imageHeight) { float4 v10 = tex2D(colorTextureRef, p10.x, p10.y); if(v10.x != MINF) { s0 +=		 alpha *v10; w0 +=		 alpha ; } }
-
-  float4 s1 = make_float4(0.0f, 0.0f, 0.0f, 0.0f); float w1 = 0.0f;
-  if(p01.x >= 0 && p01.x < imageWidth && p01.y >= 0 && p01.y < imageHeight) { float4 v01 = tex2D(colorTextureRef, p01.x, p01.y); if(v01.x != MINF) { s1 += (1.0f-alpha)*v01; w1 += (1.0f-alpha);} }
-  if(p11.x >= 0 && p11.x < imageWidth && p11.y >= 0 && p11.y < imageHeight) { float4 v11 = tex2D(colorTextureRef, p11.x, p11.y); if(v11.x != MINF) { s1 +=		 alpha *v11; w1 +=		 alpha ;} }
-
-  const float4 p0 = s0/w0;
-  const float4 p1 = s1/w1;
-
-  float4 ss = make_float4(0.0f, 0.0f, 0.0f, 0.0f); float ww = 0.0f;
-  if(w0 > 0.0f) { ss += (1.0f-beta)*p0; ww += (1.0f-beta); }
-  if(w1 > 0.0f) { ss +=		beta *p1; ww +=		  beta ; }
-
-  if(ww > 0.0f) return ss/ww;
-  else		  return make_float4(MINF, MINF, MINF, MINF);
-}
-
-
-__global__ void starveVoxelsKernel(HashTable hash_table) {
+//////////
+/// Starve voxels (to determine outliers)
+__global__
+void StarveOccupiedVoxelsKernel(HashTable hash_table) {
 
   const uint idx = blockIdx.x;
   const HashEntry& entry = hash_table.compacted_hash_entries[idx];
@@ -361,27 +281,25 @@ __global__ void starveVoxelsKernel(HashTable hash_table) {
   hash_table.blocks[entry.ptr + threadIdx.x].weight = weight;
 }
 
-void starveVoxelsKernelCUDA(HashTable& hash_table, const HashParams& hash_params)
-{
+void StarveOccupiedVoxelsCudaHost(HashTable& hash_table, const HashParams& hash_params) {
   const unsigned int threadsPerBlock = SDF_BLOCK_SIZE*SDF_BLOCK_SIZE*SDF_BLOCK_SIZE;
   const dim3 gridSize(hash_params.occupied_block_count, 1);
   const dim3 blockSize(threadsPerBlock, 1);
 
   if (hash_params.occupied_block_count > 0) {
-    starveVoxelsKernel << <gridSize, blockSize >> >(hash_table);
+    StarveOccupiedVoxelsKernel << <gridSize, blockSize >> >(hash_table);
+    checkCudaErrors(cudaDeviceSynchronize());
+    checkCudaErrors(cudaGetLastError());
   }
-#ifdef _DEBUG
-  cutilSafeCall(cudaDeviceSynchronize());
-	cutilCheckMsg(__FUNCTION__);
-#endif
 }
 
-
+//////////
+/// Outlier blocks recycling
 __shared__ float	shared_MinSDF[SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE / 2];
 __shared__ uint		shared_MaxWeight[SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE / 2];
 
-
-__global__ void garbageCollectIdentifyKernel(HashTable hash_table) {
+__global__
+void CollectInvalidBlockInfoKernel(HashTable hash_table) {
 
   const unsigned int hashIdx = blockIdx.x;
   const HashEntry& entry = hash_table.compacted_hash_entries[hashIdx];
@@ -430,23 +348,22 @@ __global__ void garbageCollectIdentifyKernel(HashTable hash_table) {
   }
 }
 
-void garbageCollectIdentifyCUDA(HashTable& hash_table, const HashParams& hash_params) {
+void CollectInvalidBlockInfoCudaHost(HashTable& hash_table, const HashParams& hash_params) {
 
   const unsigned int threadsPerBlock = SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE / 2;
   const dim3 gridSize(hash_params.occupied_block_count, 1);
   const dim3 blockSize(threadsPerBlock, 1);
 
   if (hash_params.occupied_block_count > 0) {
-    garbageCollectIdentifyKernel << <gridSize, blockSize >> >(hash_table);
+    CollectInvalidBlockInfoKernel << <gridSize, blockSize >> >(hash_table);
+    checkCudaErrors(cudaDeviceSynchronize());
+    checkCudaErrors(cudaGetLastError());
   }
-#ifdef _DEBUG
-  cutilSafeCall(cudaDeviceSynchronize());
-	cutilCheckMsg(__FUNCTION__);
-#endif
 }
 
 
-__global__ void garbageCollectFreeKernel(HashTable hash_table) {
+__global__
+void RecycleInvalidBlockKernel(HashTable hash_table) {
 
   //const uint hashIdx = blockIdx.x;
   const uint hashIdx = blockIdx.x*blockDim.x + threadIdx.x;
@@ -468,15 +385,14 @@ __global__ void garbageCollectFreeKernel(HashTable hash_table) {
   }
 }
 
-
-void garbageCollectFreeCUDA(HashTable& hash_table, const HashParams& hash_params) {
+void RecycleInvalidBlockCudaHost(HashTable& hash_table, const HashParams& hash_params) {
 
   const unsigned int threadsPerBlock = T_PER_BLOCK*T_PER_BLOCK;
   const dim3 gridSize((hash_params.occupied_block_count + threadsPerBlock - 1) / threadsPerBlock, 1);
   const dim3 blockSize(threadsPerBlock, 1);
 
   if (hash_params.occupied_block_count > 0) {
-    garbageCollectFreeKernel << <gridSize, blockSize >> >(hash_table);
+    RecycleInvalidBlockKernel << <gridSize, blockSize >> >(hash_table);
   }
 #ifdef _DEBUG
   cutilSafeCall(cudaDeviceSynchronize());
@@ -484,3 +400,39 @@ void garbageCollectFreeCUDA(HashTable& hash_table, const HashParams& hash_params
 #endif
 }
 
+//////////////////////
+/// For streaming usage
+__device__
+unsigned int linearizeChunkPos(const int3& chunkPos)
+{
+  int3 p = chunkPos-kHashParams.m_streamingMinGridPos;
+  return  p.z * kHashParams.m_streamingGridDimensions.x * kHashParams.m_streamingGridDimensions.y +
+          p.y * kHashParams.m_streamingGridDimensions.x +
+          p.x;
+}
+
+__device__
+int3 worldToChunks(const float3& posWorld)
+{
+  float3 p;
+  p.x = posWorld.x/kHashParams.m_streamingVoxelExtents.x;
+  p.y = posWorld.y/kHashParams.m_streamingVoxelExtents.y;
+  p.z = posWorld.z/kHashParams.m_streamingVoxelExtents.z;
+
+  float3 s;
+  s.x = (float)sign(p.x);
+  s.y = (float)sign(p.y);
+  s.z = (float)sign(p.z);
+
+  return make_int3(p+s*0.5f);
+}
+
+__device__
+bool isSDFBlockStreamedOut(const int3& sdfBlock, const HashTable& hash_table, const unsigned int* d_bitMask)	//TODO MATTHIAS (-> move to HashTable)
+{
+  float3 posWorld = VoxelToWorld(BlockToVoxel(sdfBlock)); // sdfBlock is assigned to chunk by the bottom right sample pos
+
+  uint index = linearizeChunkPos(worldToChunks(posWorld));
+  uint nBitsInT = 32;
+  return ((d_bitMask[index/nBitsInT] & (0x1 << (index%nBitsInT))) != 0x0);
+}

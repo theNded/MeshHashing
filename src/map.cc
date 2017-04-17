@@ -24,38 +24,40 @@ void Map::Reset() {
   hash_params_.occupied_block_count = 0;
 
   hash_table_.updateParams(hash_params_);
-  resetCUDA(hash_table_, hash_params_);
+  ResetCudaHost(hash_table_, hash_params_);
 }
 
 void Map::AllocBlocks(Sensor* sensor) {
-  resetHashBucketMutexCUDA(hash_table_, hash_params_);
+  ResetBucketMutexesCudaHost(hash_table_, hash_params_);
   // TODO(wei): add bit_mask
-  allocCUDA(hash_table_, hash_params_,
+  AllocBlocksCudaHost(hash_table_, hash_params_,
             sensor->getSensorData(), sensor->getSensorParams(),
             sensor->w_T_c(),
             NULL);
-  // TODO(wei): change it here
 }
 
 void Map::GenerateCompressedHashEntries(float4x4 c_T_w) {
-  hash_params_.occupied_block_count = compactifyHashAllInOneCUDA(hash_table_, hash_params_, c_T_w);
+  hash_params_.occupied_block_count = GenerateCompressedHashEntriesCudaHost(hash_table_, hash_params_, c_T_w);
   //this version uses atomics over prefix sums, which has a much better performance
   std::cout << "Occupied Blocks: " << hash_params_.occupied_block_count << std::endl;
-  hash_table_.updateParams(hash_params_);  //make sure numOccupiedBlocks is updated on the GPU
+  //make sure numOccupiedBlocks is updated on the GPU
+  hash_table_.updateParams(hash_params_);
 }
 
 void Map::RecycleInvalidBlocks() {
-  bool garbage_collect = true;         /// false
+  bool kRecycle = true;         /// false
   int garbage_collect_starve = 15;      /// 15
-  if (garbage_collect) {
+  if (kRecycle) {
 
-    if (integrated_frame_count_ > 0 && integrated_frame_count_ % garbage_collect_starve == 0) {
-      starveVoxelsKernelCUDA(hash_table_, hash_params_);
+    if (integrated_frame_count_ > 0
+        && integrated_frame_count_ % garbage_collect_starve == 0) {
+      StarveOccupiedVoxelsCudaHost(hash_table_, hash_params_);
     }
 
-    garbageCollectIdentifyCUDA(hash_table_, hash_params_);
-    resetHashBucketMutexCUDA(hash_table_, hash_params_);  //needed if linked lists are enabled -> for memeory deletion
-    garbageCollectFreeCUDA(hash_table_, hash_params_);
+    CollectInvalidBlockInfoCudaHost(hash_table_, hash_params_);
+    ResetBucketMutexesCudaHost(hash_table_, hash_params_);
+    //needed if linked lists are enabled -> for memeory deletion
+    RecycleInvalidBlockCudaHost(hash_table_, hash_params_);
   }
 }
 
@@ -68,7 +70,6 @@ unsigned int Map::getHeapFreeCount() {
   return count + 1;  //there is one more free than the address suggests (0 would be also a valid address)
 }
 
-//! debug only!
 void Map::debugHash() {
   HashEntry *hashCPU = new HashEntry[hash_params_.bucket_size * hash_params_.bucket_count];
   HashEntry *hashCompCPU = new HashEntry[hash_params_.occupied_block_count];

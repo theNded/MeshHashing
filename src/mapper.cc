@@ -12,15 +12,15 @@
 Mapper::Mapper() {}
 Mapper::~Mapper() {}
 
-void Mapper::bindDepthCameraTextures(const SensorData &sensor_data) {
-  bindInputDepthColorTextures(sensor_data);
+void Mapper::BindSensorDataToTexture(const SensorData &sensor_data) {
+  BindSensorDataToTextureCudaHost(sensor_data);
 }
 
-void Mapper::integrate(Map *map, Sensor* sensor,
+void Mapper::Integrate(Map *map, Sensor* sensor,
                        unsigned int *d_bitMask) {
 
   //make the rigid transform available on the GPU
-  map->hash_table().updateParams(map->hash_params());
+  //map->hash_table().updateParams(map->hash_params());
   /// seems OK
 
   //allocate all hash blocks which are corresponding to depth map entries
@@ -33,7 +33,7 @@ void Mapper::integrate(Map *map, Sensor* sensor,
   /// seems OK, supported by MATLAB scatter3
 
   //volumetrically integrate the depth data into the depth SDFBlocks
-  integrateDepthMap(map, sensor);
+  IntegrateDepthMap(map, sensor);
   /// cuda kernel launching ok
   /// seems ok according to CUDA output
 
@@ -42,7 +42,8 @@ void Mapper::integrate(Map *map, Sensor* sensor,
   map->integrated_frame_count_++;
 }
 
-void Mapper::integrateDepthMap(Map *map, Sensor *sensor) {
-  integrateDepthMapCUDA(map->hash_table(), map->hash_params(), sensor->getSensorData(), sensor->getSensorParams(),
+void Mapper::IntegrateDepthMap(Map *map, Sensor *sensor) {
+  IntegrateCudaHost(map->hash_table(), map->hash_params(),
+                        sensor->getSensorData(), sensor->getSensorParams(),
                         sensor->c_T_w());
 }

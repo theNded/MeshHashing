@@ -4,26 +4,27 @@
 #include "hash_table.h"
 #include "sensor_data.h"
 
+//////////
+/// Bind texture
 texture<float, cudaTextureType2D, cudaReadModeElementType> depthTextureRef;
 texture<float4, cudaTextureType2D, cudaReadModeElementType> colorTextureRef;
-void bindInputDepthColorTextures(const SensorData& sensor_data) {
+__host__
+void BindSensorDataToTextureCudaHost(const SensorData& sensor_data) {
   checkCudaErrors(cudaBindTextureToArray(depthTextureRef, sensor_data.d_depthArray, sensor_data.h_depthChannelDesc));
   checkCudaErrors(cudaBindTextureToArray(colorTextureRef, sensor_data.d_colorArray, sensor_data.h_colorChannelDesc));
   depthTextureRef.filterMode = cudaFilterModePoint;
   colorTextureRef.filterMode = cudaFilterModePoint;
 }
 
-
-__global__ void integrateDepthMapKernel(HashTable hash_table, SensorData cameraData, float4x4 c_T_w) {
+//////////
+/// Integrate depth map
+__global__
+void IntegrateCudaKernel(HashTable hash_table, SensorData cameraData, float4x4 c_T_w) {
   const HashParams& hash_params = kHashParams;
   const SensorParams& cameraParams = kSensorParams;
 
   //TODO check if we should load this in shared memory
   const HashEntry& entry = hash_table.compacted_hash_entries[blockIdx.x];
-  //if (entry.ptr == FREE_ENTRY) {
-  //	printf("invliad integrate");
-  //	return; //should never happen since we did the compactification before
-  //}
 
   int3 pi_base = BlockToVoxel(entry.pos);
 
@@ -96,19 +97,18 @@ __global__ void integrateDepthMapKernel(HashTable hash_table, SensorData cameraD
   }
 }
 
-
-void integrateDepthMapCUDA(HashTable& hash_table, const HashParams& hash_params,
-                           const SensorData& sensor_data, const SensorParams& depthCameraParams,
-                           float4x4 c_T_w) {
+__host__
+void IntegrateCudaHost(HashTable& hash_table, const HashParams& hash_params,
+                       const SensorData& sensor_data, const SensorParams& depthCameraParams,
+                       float4x4 c_T_w) {
   const unsigned int threadsPerBlock = SDF_BLOCK_SIZE*SDF_BLOCK_SIZE*SDF_BLOCK_SIZE;
   const dim3 gridSize(hash_params.occupied_block_count, 1);
   const dim3 blockSize(threadsPerBlock, 1);
 
   if (hash_params.occupied_block_count > 0) {	//this guard is important if there is no depth in the current frame (i.e., no blocks were allocated)
-    integrateDepthMapKernel << <gridSize, blockSize >> >(hash_table, sensor_data, c_T_w);
+    IntegrateCudaKernel << <gridSize, blockSize >> >(hash_table, sensor_data, c_T_w);
   }
-#ifdef _DEBUG
-  cutilSafeCall(cudaDeviceSynchronize());
-	cutilCheckMsg(__FUNCTION__);
-#endif
+  checkCudaErrors(cudaDeviceSynchronize());
+  checkCudaErrors(cudaGetLastError());
 }
+

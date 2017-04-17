@@ -103,22 +103,22 @@ inline int WorldPosToIdx(const float3& world_pos) {
 /// Between the Camera coordinate system and the image plane
 /// Projection
 __device__
-static inline float2 CameraProjectToImagef(const float3& pos)	{
+static inline float2 CameraProjectToImagef(const float3& camera_pos)	{
   return make_float2(
-          pos.x*kSensorParams.fx/pos.z + kSensorParams.cx,
-          pos.y*kSensorParams.fy/pos.z + kSensorParams.cy);
+          camera_pos.x * kSensorParams.fx / camera_pos.z + kSensorParams.cx,
+          camera_pos.y * kSensorParams.fy / camera_pos.z + kSensorParams.cy);
 }
 
 __device__
-static inline int2 CameraProjectToImagei(const float3& pos)	{
-  float2 pImage = CameraProjectToImagef(pos);
-  return make_int2(pImage + make_float2(0.5f, 0.5f));
+static inline int2 CameraProjectToImagei(const float3& camera_pos)	{
+  float2 uv = CameraProjectToImagef(camera_pos);
+  return make_int2(uv + make_float2(0.5f, 0.5f));
 }
 
 __device__
-static inline uint2 CameraProjectToImageui(const float3& pos)	{
-  int2 p = CameraProjectToImagei(pos);
-  return make_uint2(p.x, p.y);
+static inline uint2 CameraProjectToImageui(const float3& camera_pos)	{
+  int2 uv = CameraProjectToImagei(camera_pos);
+  return make_uint2(uv.x, uv.y);
 }
 
 /// R^3 -> [0, 1]^3
@@ -151,13 +151,13 @@ static inline float DenormalizeDepth(float z) {
 }
 
 __device__
-static inline bool IsInCameraFrustumApprox(const float4x4& c_T_w, const float3& pos) {
-  float3 p_camera = c_T_w * pos;
-  float2 uv = CameraProjectToImagef(p_camera);
+static inline bool IsInCameraFrustumApprox(const float4x4& c_T_w, const float3& world_pos) {
+  float3 camera_pos = c_T_w * world_pos;
+  float2 uv = CameraProjectToImagef(camera_pos);
   float3 normalized_p = make_float3(
           (2.0f*uv.x - (kSensorParams.width- 1.0f))/(kSensorParams.width- 1.0f),
           ((kSensorParams.height-1.0f) - 2.0f*uv.y)/(kSensorParams.height-1.0f),
-          NormalizeDepth(p_camera.z));
+          NormalizeDepth(camera_pos.z));
 
   normalized_p *= 0.95;
   return !(normalized_p.x < -1.0f || normalized_p.x > 1.0f

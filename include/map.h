@@ -10,27 +10,26 @@
 #include "sensor_data.h"
 
 /// CUDA functions
-extern void resetCUDA(HashTable& hash_table,
-                      const HashParams& hash_params);
-
-extern void resetHashBucketMutexCUDA(HashTable& hash_table,
-                                     const HashParams& hash_params);
-
-extern void allocCUDA(HashTable& hash_table,
-                      const HashParams& hash_params,
-                      const SensorData& sensor_data,
-                      const SensorParams& sensor_params,
-                      const float4x4& w_T_c,
-                      const unsigned int* d_bitMask);
-
-extern unsigned int compactifyHashAllInOneCUDA(HashTable& hash_table,
-                                               const HashParams& hash_params,
-                                               float4x4 c_T_w);
+extern void ResetCudaHost(HashTable& hash_table,
+                          const HashParams& hash_params);
+extern void ResetBucketMutexesCudaHost(HashTable& hash_table,
+                                       const HashParams& hash_params);
+extern void AllocBlocksCudaHost(
+        HashTable& hash_table,
+        const HashParams& hash_params,
+        const SensorData& sensor_data,
+        const SensorParams& sensor_params,
+        const float4x4& w_T_c,
+        const unsigned int* d_bitMask);
+extern unsigned int GenerateCompressedHashEntriesCudaHost(
+        HashTable& hash_table,
+        const HashParams& hash_params,
+        float4x4 c_T_w);
 
 /// Garbage collection
-extern void starveVoxelsKernelCUDA(HashTable& hash_table, const HashParams& hash_params);
-extern void garbageCollectIdentifyCUDA(HashTable& hash_table, const HashParams& hash_params);
-extern void garbageCollectFreeCUDA(HashTable& hash_table, const HashParams& hash_params);
+extern void StarveOccupiedVoxelsCudaHost(HashTable& hash_table, const HashParams& hash_params);
+extern void CollectInvalidBlockInfoCudaHost(HashTable& hash_table, const HashParams& hash_params);
+extern void RecycleInvalidBlockCudaHost(HashTable& hash_table, const HashParams& hash_params);
 
 class Map {
 private:
