@@ -24,8 +24,8 @@
 #include "sensor_data.h"
 
 /// constant.cu
-extern void SetConstantHashParams(const HashParams &params);
 extern __constant__ HashParams kHashParams;
+extern void SetConstantHashParams(const HashParams& hash_params);
 
 // TODO(wei): make a templated class to adapt to more types
 struct HashTable {
@@ -39,7 +39,7 @@ struct HashTable {
   HashEntry *hash_entries;                 /// hash entries that stores pointers to sdf blocks
   HashEntry *compacted_hash_entries;       /// allocated for parallel computation
   int       *compacted_hash_entry_counter; /// atomic counter to add compacted entries atomically
-
+                                           /// == occupied_block_count
   /// Misc
   int       *bucket_mutexes;     /// binary flag per hash bucket; used for allocation to atomically lock a bucket
   bool       is_on_gpu;          /// the class be be used on both cpu and gpu
@@ -47,13 +47,6 @@ struct HashTable {
   ///////////////
   // Host part //
   ///////////////
-  __host__
-  void updateParams(const HashParams &params) {
-    if (is_on_gpu) {
-      SetConstantHashParams(params);
-    }
-  }
-
   __device__ __host__
   HashTable() {
     heap = NULL;
@@ -95,8 +88,6 @@ struct HashTable {
 
       bucket_mutexes = new int[params.bucket_count];
     }
-
-    updateParams(params);
   }
 
   __host__
@@ -178,11 +169,6 @@ struct HashTable {
   // Device part //
   /////////////////
 #ifdef __CUDACC__
-  __device__
-  const HashParams& params() const {
-    return kHashParams;
-  }
-
   /// There are 3 kinds of positions (pos)
   /// 1. world pos, unit: meter
   /// 2. voxel pos, unit: voxel (typically 0.004m)
@@ -201,20 +187,18 @@ struct HashTable {
   }
 
   __device__
-  void combineVoxel(const Voxel &in, const Voxel& update, Voxel &out) const {
+  void UpdateVoxel(Voxel &in, const Voxel& update) const {
     float3 c_in     = make_float3(in.color.x, in.color.y, in.color.z);
     float3 c_update = make_float3(update.color.x, update.color.y, update.color.z);
-
     float3 c_out = 0.5f * c_in + 0.5f * c_update;
 
-    out.color = make_uchar3(c_out.x + 0.5f, c_out.y + 0.5f, c_out.z + 0.5f);
-    out.sdf = (in.sdf * (float)in.weight + update.sdf * (float)update.weight)
+    uchar3 color = make_uchar3(c_out.x + 0.5f, c_out.y + 0.5f, c_out.z + 0.5f);
+
+    in.color.x = color.x, in.color.y = color.y, in.color.z = color.z;
+    in.sdf = (in.sdf * (float)in.weight + update.sdf * (float)update.weight)
             / ((float)in.weight + (float)update.weight);
-    out.weight = min(kHashParams.weight_upper_bound, (uint)in.weight + (uint)update.weight);
+    in.weight = min(kHashParams.weight_upper_bound, (uint)in.weight + (uint)update.weight);
   }
-
-
-
 
   ////////////////////////////////////////
   /// Access

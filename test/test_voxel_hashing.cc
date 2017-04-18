@@ -144,16 +144,16 @@ int main() {
   RayCasterParams ray_cast_params;
   ray_cast_params.c_T_w_ = T;
   ray_cast_params.w_T_c_ = T.getInverse();
-  ray_cast_params.m_intrinsics = K;
-  ray_cast_params.m_intrinsicsInverse = K.getInverse();
-  ray_cast_params.m_width = 640;
-  ray_cast_params.m_height = 480;
-  ray_cast_params.m_minDepth = 0.5f;
-  ray_cast_params.m_maxDepth = 5.0f;
-  ray_cast_params.m_rayIncrement = 0.8f * hash_params.truncation_distance;
-  ray_cast_params.m_thresSampleDist = 50.5f * ray_cast_params.m_rayIncrement;
-  ray_cast_params.m_thresDist = 50.0f * ray_cast_params.m_rayIncrement;
-  bool m_useGradients = true;
+  ray_cast_params.intrinsics = K;
+  ray_cast_params.intrinsics_inverse = K.getInverse();
+  ray_cast_params.width = 640;
+  ray_cast_params.height = 480;
+  ray_cast_params.min_raycast_depth = 0.5f;
+  ray_cast_params.max_raycast_depth = 5.0f;
+  ray_cast_params.raycast_step = 0.8f * hash_params.truncation_distance;
+  ray_cast_params.sample_sdf_threshold = 50.5f * ray_cast_params.raycast_step;
+  ray_cast_params.sdf_threshold = 50.0f * ray_cast_params.raycast_step;
+  bool enable_gradients = true;
 
   RayCaster ray_caster(ray_cast_params);
   mapper.BindSensorDataToTexture(sensor.getSensorData());

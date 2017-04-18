@@ -9,6 +9,21 @@
 #include "sensor_data.h"
 #include "sensor_param.h"
 
+extern void DepthCpuToGpuCudaHost(
+        float* d_output, short* d_input,
+        unsigned int width, unsigned int height,
+        float minDepth, float maxDepth
+);
+extern void ColorCpuToGpuCudaHost(
+        float4* d_output, unsigned char* d_input,
+        unsigned int width, unsigned int height
+);
+extern void DepthToRGBCudaHost(
+        float4* d_output, float* d_input,
+        unsigned int width, unsigned int height,
+        float minDepth, float maxDepth
+);
+
 /// At first get rid of CUDARGBDAdaptor and RGBDSensor, use it directly
 class Sensor {
 public:
@@ -47,7 +62,7 @@ public:
   }
 
   //! computes and returns the depth map in hsv
-  float4* getAndComputeDepthHSV() const;
+  float4* ColorizeDepthImage() const;
 
 private:
   /// sensor data
@@ -58,7 +73,7 @@ private:
   float4x4      c_T_w_;
 
   //! hsv depth for visualization
-  float4* depth_image_HSV;
+  float4* colored_depth_image_;
 };
 
 

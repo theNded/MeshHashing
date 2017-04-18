@@ -17,11 +17,11 @@
 
 /// constant.cu
 extern __constant__ RayCasterParams kRayCasterParams;
-extern void SetConstantRayCasterParams(const RayCasterParams &params);
+extern void SetConstantRayCasterParams(const RayCasterParams &ray_caster_params);
 
-struct RayCastSample {
+struct RayCasterSample {
   float sdf;
-  float alpha;
+  float t;
   uint weight;
 };
 
@@ -40,10 +40,10 @@ struct RayCasterData {
 
   __host__
   void Alloc(const RayCasterParams &params) {
-    checkCudaErrors(cudaMalloc(&depth_image_, sizeof(float) * params.m_width * params.m_height));
-    checkCudaErrors(cudaMalloc(&vertex_image_, sizeof(float4) * params.m_width * params.m_height));
-    checkCudaErrors(cudaMalloc(&normal_image_, sizeof(float4) * params.m_width * params.m_height));
-    checkCudaErrors(cudaMalloc(&color_image_, sizeof(float4) * params.m_width * params.m_height));
+    checkCudaErrors(cudaMalloc(&depth_image_, sizeof(float) * params.width * params.height));
+    checkCudaErrors(cudaMalloc(&vertex_image_, sizeof(float4) * params.width * params.height));
+    checkCudaErrors(cudaMalloc(&normal_image_, sizeof(float4) * params.width * params.height));
+    checkCudaErrors(cudaMalloc(&color_image_, sizeof(float4) * params.width * params.height));
   }
 
   __host__

@@ -184,9 +184,9 @@ int main() {
   hash_params.truncation_distance = 0.02;
   hash_params.weight_sample = 10;
   hash_params.weight_upper_bound = 255;
-
+  SetConstantHashParams(hash_params);
   Map voxel_map(hash_params);
-  Mapper mapper;
+
   //mapper.debugHash();
   /// Only to alloc cuda memory, suppose its ok
 
@@ -207,12 +207,11 @@ int main() {
   sensor_params.max_depth_range = 5.0f;
   sensor_params.height = 480;
   sensor_params.width = 640;
-
   SetConstantSensorParams(sensor_params);
   Sensor sensor(sensor_params);
 
-  float4x4 T; T.setIdentity();
-  float4x4 K; K.setIdentity();
+  float4x4 T;
+  float4x4 K;
   K.m11 = sensor_params.fx;
   K.m13 = sensor_params.cx;
   K.m22 = sensor_params.fy;
@@ -220,25 +219,24 @@ int main() {
 
   /// Ray Caster
   RayCasterParams ray_cast_params;
-  ray_cast_params.m_intrinsics = K;
-  ray_cast_params.m_intrinsicsInverse = K.getInverse();
-  ray_cast_params.m_width = 640;
-  ray_cast_params.m_height = 480;
-  ray_cast_params.m_minDepth = 0.5f;
-  ray_cast_params.m_maxDepth = 5.5f;
-  ray_cast_params.m_rayIncrement = 0.8f * hash_params.truncation_distance;
-  ray_cast_params.m_thresSampleDist = 50.5f * ray_cast_params.m_rayIncrement;
-  ray_cast_params.m_thresDist = 50.0f * ray_cast_params.m_rayIncrement;
-  bool m_useGradients = true;
-
+  ray_cast_params.intrinsics = K;
+  ray_cast_params.intrinsics_inverse = K.getInverse();
+  ray_cast_params.width = 640;
+  ray_cast_params.height = 480;
+  ray_cast_params.min_raycast_depth = 0.5f;
+  ray_cast_params.max_raycast_depth = 5.5f;
+  ray_cast_params.raycast_step = 0.8f * hash_params.truncation_distance;
+  ray_cast_params.sample_sdf_threshold = 50.5f * ray_cast_params.raycast_step;
+  ray_cast_params.sdf_threshold = 50.0f * ray_cast_params.raycast_step;
   SetConstantRayCasterParams(ray_cast_params);
   RayCaster ray_caster(ray_cast_params);
+
+  Mapper mapper;
   mapper.BindSensorDataToTexture(sensor.getSensorData());
 
   /// Process
   float4 *cuda_hsv;
   checkCudaErrors(cudaMalloc(&cuda_hsv, sizeof(float4) * 640 * 480));
-
 
   //cv::VideoWriter writer("icl-vh.avi", CV_FOURCC('X','V','I','D'), 30, cv::Size(640, 480));
   std::chrono::time_point<std::chrono::system_clock> start, end;

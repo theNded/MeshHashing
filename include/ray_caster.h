@@ -13,9 +13,11 @@
 #include "sensor_data.h"
 
 /// CUDA functions
-extern void CastCudaHost(const HashTable& hash_table, const RayCasterData &rayCastData,
-                         const RayCasterParams &rayCastParams,
-                         const float4x4& c_T_w, const float4x4& w_T_c);
+extern void CastCudaHost(
+        const HashTable& hash_table, const RayCasterData &rayCastData,
+        const RayCasterParams &rayCastParams,
+        const float4x4& c_T_w, const float4x4& w_T_c
+);
 
 class RayCaster {
 public:

@@ -21,27 +21,14 @@ Map::~Map() {
 
 void Map::Reset() {
   integrated_frame_count_ = 0;
-  hash_params_.occupied_block_count = 0;
-
-  hash_table_.updateParams(hash_params_);
+  occupied_block_count_ = 0;
   ResetCudaHost(hash_table_, hash_params_);
 }
 
-void Map::AllocBlocks(Sensor* sensor) {
-  ResetBucketMutexesCudaHost(hash_table_, hash_params_);
-  // TODO(wei): add bit_mask
-  AllocBlocksCudaHost(hash_table_, hash_params_,
-            sensor->getSensorData(), sensor->getSensorParams(),
-            sensor->w_T_c(),
-            NULL);
-}
-
 void Map::GenerateCompressedHashEntries(float4x4 c_T_w) {
-  hash_params_.occupied_block_count = GenerateCompressedHashEntriesCudaHost(hash_table_, hash_params_, c_T_w);
+  occupied_block_count_ = GenerateCompressedHashEntriesCudaHost(hash_table_, hash_params_, c_T_w);
   //this version uses atomics over prefix sums, which has a much better performance
-  std::cout << "Occupied Blocks: " << hash_params_.occupied_block_count << std::endl;
-  //make sure numOccupiedBlocks is updated on the GPU
-  hash_table_.updateParams(hash_params_);
+  std::cout << "Occupied Blocks: " << occupied_block_count_ << std::endl;
 }
 
 void Map::RecycleInvalidBlocks() {
@@ -72,7 +59,7 @@ unsigned int Map::getHeapFreeCount() {
 
 void Map::debugHash() {
   HashEntry *hashCPU = new HashEntry[hash_params_.bucket_size * hash_params_.bucket_count];
-  HashEntry *hashCompCPU = new HashEntry[hash_params_.occupied_block_count];
+  HashEntry *hashCompCPU = new HashEntry[occupied_block_count_];
   Voxel *voxelCPU = new Voxel[hash_params_.block_count * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE];
   unsigned int *heapCPU = new unsigned int[hash_params_.block_count];
   unsigned int heapCounterCPU;
@@ -84,7 +71,7 @@ void Map::debugHash() {
   checkCudaErrors(cudaMemcpy(hashCPU, hash_table_.hash_entries,
                              sizeof(HashEntry) * hash_params_.bucket_size * hash_params_.bucket_count, cudaMemcpyDeviceToHost));
   checkCudaErrors(cudaMemcpy(hashCompCPU, hash_table_.compacted_hash_entries,
-                             sizeof(HashEntry) * hash_params_.occupied_block_count, cudaMemcpyDeviceToHost));
+                             sizeof(HashEntry) * occupied_block_count_, cudaMemcpyDeviceToHost));
   checkCudaErrors(cudaMemcpy(voxelCPU, hash_table_.blocks,
                              sizeof(Voxel) * hash_params_.block_count * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE,
                              cudaMemcpyDeviceToHost));
@@ -186,7 +173,7 @@ void Map::debugHash() {
   std::cout << "minOne: " << numMinusOne << std::endl;
   std::cout << "numOccupied: " << numOccupied << "\t numFree: " << getHeapFreeCount() << std::endl;
   std::cout << "numOccupied + free: " << numOccupied + getHeapFreeCount() << std::endl;
-  std::cout << "numInFrustum: " << hash_params_.occupied_block_count << std::endl;
+  std::cout << "numInFrustum: " << occupied_block_count_ << std::endl;
 
   delete [] hashCPU;
   delete [] hashCompCPU;

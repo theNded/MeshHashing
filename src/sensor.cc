@@ -11,22 +11,12 @@
 #include <helper_cuda.h>
 #include <matrix.h>
 
-/// extern in cuda
-void DepthCpuToGpuCudaHost(float* d_output, short* d_input,
-                           unsigned int width, unsigned int height,
-                           float minDepth, float maxDepth);
-void ColorCpuToGpuCudaHost(float4* d_output, unsigned char* d_input,
-                           unsigned int width, unsigned int height);
-void DepthToRGBCudaHost(float4* d_output, float* d_input,
-                unsigned int width, unsigned int height,
-                float minDepth, float maxDepth);
-
 Sensor::Sensor(SensorParams &sensor_params) {
 
-  depth_image_HSV = NULL;
+  colored_depth_image_ = NULL;
 
   const unsigned int bufferDimDepth = sensor_params.height * sensor_params.width;
-  checkCudaErrors(cudaMalloc(&depth_image_HSV, sizeof(float4)*bufferDimDepth));
+  checkCudaErrors(cudaMalloc(&colored_depth_image_, sizeof(float4)*bufferDimDepth));
 
   /// Parameter settings
   sensor_params_ = sensor_params; // Is it copy constructing?
@@ -34,7 +24,7 @@ Sensor::Sensor(SensorParams &sensor_params) {
 }
 
 Sensor::~Sensor() {
-  checkCudaErrors(cudaFree(depth_image_HSV));
+  checkCudaErrors(cudaFree(colored_depth_image_));
 
   sensor_data_.Free();
 }
@@ -83,9 +73,9 @@ unsigned int Sensor::getColorHeight() const {
   return sensor_params_.width;
 }
 
-float4* Sensor::getAndComputeDepthHSV() const {
-  DepthToRGBCudaHost(depth_image_HSV, sensor_data_.depth_image_, getDepthWidth(), getDepthHeight(),
+float4* Sensor::ColorizeDepthImage() const {
+  DepthToRGBCudaHost(colored_depth_image_, sensor_data_.depth_image_, getDepthWidth(), getDepthHeight(),
              sensor_params_.min_depth_range,
              sensor_params_.max_depth_range);
-  return depth_image_HSV;
+  return colored_depth_image_;
 }

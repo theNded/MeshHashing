@@ -116,8 +116,8 @@ float3 DepthToRGB(float depth, float depthMin, float depthMax) {
 
 __global__
 void DepthToRGBKernel(float4* d_output, float* d_input,
-                                 unsigned int width, unsigned int height,
-                                 float minDepth, float maxDepth) {
+                      unsigned int width, unsigned int height,
+                      float minDepth, float maxDepth) {
   const int x = blockIdx.x*blockDim.x + threadIdx.x;
   const int y = blockIdx.y*blockDim.y + threadIdx.y;
 

@@ -23,9 +23,6 @@ struct __ALIGN__(16) HashParams {
 
   uint  block_count;                // 1000000
 
-  /// Put it else where since it changes
-  uint  occupied_block_count;	      // occupied blocks in the viewing frustum
-
   int   block_size;                 // 8 (voxels)
 
   uint  voxel_count;                // block_count * block_size^3
@@ -37,13 +34,5 @@ struct __ALIGN__(16) HashParams {
 
   uint  weight_sample;              // 10,  TODO(wei): change it dynamically!
   uint  weight_upper_bound;         // 255
-  //////////////////////////////////////////////////
-
-  /// Stream from GPU to CPU (external storage)
-  /// Go through these later
-  float3		m_streamingVoxelExtents;
-  int3			m_streamingGridDimensions;
-  int3			m_streamingMinGridPos;
-  uint      m_streamingInitialChunkListSize;
 };
 #endif //VH_HASH_PARAM_H

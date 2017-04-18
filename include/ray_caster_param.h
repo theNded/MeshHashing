@@ -10,19 +10,19 @@
 #include <helper_math.h>
 
 struct __ALIGN__(16) RayCasterParams {
+  float4x4 intrinsics;               /// Intrinsic matrix
+  float4x4 intrinsics_inverse;
 
-  float4x4 m_intrinsics;               /// Intrinsic matrix
-  float4x4 m_intrinsicsInverse;
+  uint width;                /// 640
+  uint height;               /// 480
 
-  unsigned int m_width;                /// 640
-  unsigned int m_height;               /// 480
+  float min_raycast_depth;
+  float max_raycast_depth;
+  float raycast_step;                /// 0.8f * SDF_Truncation
 
-  float m_minDepth;
-  float m_maxDepth;
-  float m_rayIncrement;                /// 0.8f * SDF_Truncation
-  float m_thresSampleDist;             /// 50.5f * s_rayIncrement
-  float m_thresDist;                   /// 50.0f * s_rayIncrement
-  bool  m_useGradients;
+  float sample_sdf_threshold;        /// 50.5f * s_rayIncrement
+  float sdf_threshold;               /// 50.0f * s_rayIncrement
+  bool  enable_gradients;
 
   uint dummy0;
 };

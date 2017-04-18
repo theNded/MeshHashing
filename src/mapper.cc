@@ -17,15 +17,15 @@ void Mapper::BindSensorDataToTexture(const SensorData &sensor_data) {
 }
 
 void Mapper::Integrate(Map *map, Sensor* sensor,
-                       unsigned int *d_bitMask) {
+                       unsigned int *is_streamed_mask) {
 
   //make the rigid transform available on the GPU
   //map->hash_table().updateParams(map->hash_params());
   /// seems OK
 
   //allocate all hash blocks which are corresponding to depth map entries
-  map->AllocBlocks(sensor);
-  /// DIFFERENT: d_bitMask now empty
+  AllocBlocks(map, sensor);
+  /// DIFFERENT: is_streamed_mask now empty
   /// seems OK now, supported by MATLAB scatter3
 
   //generate a linear hash array with only occupied entries
@@ -46,4 +46,14 @@ void Mapper::IntegrateDepthMap(Map *map, Sensor *sensor) {
   IntegrateCudaHost(map->hash_table(), map->hash_params(),
                         sensor->getSensorData(), sensor->getSensorParams(),
                         sensor->c_T_w());
+}
+
+
+void Mapper::AllocBlocks(Map* map, Sensor* sensor) {
+  ResetBucketMutexesCudaHost(map->hash_table(), map->hash_params());
+  // TODO(wei): add bit_mask
+  AllocBlocksCudaHost(map->hash_table(), map->hash_params(),
+                      sensor->getSensorData(), sensor->getSensorParams(),
+                      sensor->w_T_c(),
+                      NULL);
 }

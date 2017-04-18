@@ -13,6 +13,7 @@ extern __constant__ HashParams kHashParams;
 extern __constant__ SensorParams kSensorParams;
 
 ///////////////////////////////////////////////////
+/// Affected scale: Map (HashTable)
 /// Transforms between world, voxel, and block coordinate systems
 /// Semantic: A pos To B pos; A, B in {world, voxel, block}
 /// float is only used to do interpolation
@@ -99,6 +100,7 @@ inline int WorldPosToIdx(const float3& world_pos) {
 }
 
 ///////////////////////////////////////////////////////////////
+/// Affected scale: Map (HashTable) and Sensor
 /// Projections and reprojections
 /// Between the Camera coordinate system and the image plane
 /// Projection
@@ -113,12 +115,6 @@ __device__
 static inline int2 CameraProjectToImagei(const float3& camera_pos)	{
   float2 uv = CameraProjectToImagef(camera_pos);
   return make_int2(uv + make_float2(0.5f, 0.5f));
-}
-
-__device__
-static inline uint2 CameraProjectToImageui(const float3& camera_pos)	{
-  int2 uv = CameraProjectToImagei(camera_pos);
-  return make_uint2(uv.x, uv.y);
 }
 
 /// R^3 -> [0, 1]^3
