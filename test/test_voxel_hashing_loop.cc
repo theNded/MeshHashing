@@ -208,6 +208,7 @@ int main() {
   sensor_params.height = 480;
   sensor_params.width = 640;
 
+  SetConstantSensorParams(sensor_params);
   Sensor sensor(sensor_params);
 
   float4x4 T; T.setIdentity();
@@ -219,8 +220,6 @@ int main() {
 
   /// Ray Caster
   RayCasterParams ray_cast_params;
-  ray_cast_params.c_T_w = T;
-  ray_cast_params.w_T_c = T.getInverse();
   ray_cast_params.m_intrinsics = K;
   ray_cast_params.m_intrinsicsInverse = K.getInverse();
   ray_cast_params.m_width = 640;
@@ -232,6 +231,7 @@ int main() {
   ray_cast_params.m_thresDist = 50.0f * ray_cast_params.m_rayIncrement;
   bool m_useGradients = true;
 
+  SetConstantRayCasterParams(ray_cast_params);
   RayCaster ray_caster(ray_cast_params);
   mapper.BindSensorDataToTexture(sensor.getSensorData());
 

@@ -60,6 +60,8 @@ private:
   HashParams hash_params_;
   HashTable  hash_table_;
   uint integrated_frame_count_;
+  uint occupied_block_count_;
+
 };
 
 

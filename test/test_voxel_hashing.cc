@@ -129,7 +129,7 @@ int main() {
   sensor_params.width = 640;
 
   Sensor sensor;
-  sensor.alloc(640, 480, sensor_params);
+  sensor.Alloc(640, 480, sensor_params);
   /// suppose its ok
   /// check camera params
 

@@ -94,7 +94,8 @@ float3 GradientAtPoint(const HashTable& hash, const float3& pos) {
   return -grad/l;
 }
 
-__global__ void CastKernel(const HashTable hash_table, RayCasterData rayCasterData) {
+__global__ void CastKernel(const HashTable hash_table, RayCasterData rayCasterData,
+                           const float4x4 c_T_w, const float4x4 w_T_c) {
   const unsigned int x = blockIdx.x*blockDim.x + threadIdx.x;
   const unsigned int y = blockIdx.y*blockDim.y + threadIdx.y;
 
@@ -110,8 +111,8 @@ __global__ void CastKernel(const HashTable hash_table, RayCasterData rayCasterDa
 
     /// WRONG! this uses the sensor's parameter instead of the viewer's
     float3 camDir = normalize(ImageReprojectToCamera(x, y, 1.0f));
-    float3 worldCamPos = rayCastParams.w_T_c * make_float3(0.0f, 0.0f, 0.0f);
-    float4 w = rayCastParams.w_T_c * make_float4(camDir, 0.0f);
+    float3 worldCamPos = w_T_c * make_float3(0.0f, 0.0f, 0.0f);
+    float4 w = w_T_c * make_float4(camDir, 0.0f);
     float3 worldDir = normalize(make_float3(w.x, w.y, w.z));
 
     float minInterval = rayCastParams.m_minDepth;
@@ -159,7 +160,7 @@ __global__ void CastKernel(const HashTable hash_table, RayCasterData rayCasterDa
               {
                 float3 normal = GradientAtPoint(hash_table, currentIso);
                 normal = - normal;
-                float4 n = rayCastParams.c_T_w * make_float4(normal, 0.0f);
+                float4 n = c_T_w * make_float4(normal, 0.0f);
                 rayCasterData.normal_image_[y*rayCastParams.m_width+x] = make_float4(n.x, n.y, n.z, 1.0f);
               }
 
@@ -185,12 +186,12 @@ __global__ void CastKernel(const HashTable hash_table, RayCasterData rayCasterDa
 
 __host__
 void CastCudaHost(const HashTable        &hash_table,   const RayCasterData   &rayCastData,
-              const RayCasterParams &rayCastParams) {
+              const RayCasterParams &rayCastParams, const float4x4 &c_T_w, const float4x4 &w_T_c) {
 
   const dim3 gridSize((rayCastParams.m_width + T_PER_BLOCK - 1)/T_PER_BLOCK, (rayCastParams.m_height + T_PER_BLOCK - 1)/T_PER_BLOCK);
   const dim3 blockSize(T_PER_BLOCK, T_PER_BLOCK);
 
-  CastKernel<<<gridSize, blockSize>>>(hash_table, rayCastData);
+  CastKernel<<<gridSize, blockSize>>>(hash_table, rayCastData, c_T_w, w_T_c);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }

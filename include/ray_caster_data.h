@@ -44,14 +44,6 @@ struct RayCasterData {
     checkCudaErrors(cudaMalloc(&vertex_image_, sizeof(float4) * params.m_width * params.m_height));
     checkCudaErrors(cudaMalloc(&normal_image_, sizeof(float4) * params.m_width * params.m_height));
     checkCudaErrors(cudaMalloc(&color_image_, sizeof(float4) * params.m_width * params.m_height));
-
-    /// wei: should it happen here?
-    //updateParams(params);
-  }
-
-  __host__
-  void updateParams(const RayCasterParams &params) {
-    SetConstantRayCasterParams(params);
   }
 
   __host__
@@ -61,19 +53,6 @@ struct RayCasterData {
     checkCudaErrors(cudaFree(normal_image_));
     checkCudaErrors(cudaFree(color_image_));
   }
-
-  /////////////////
-  // Device part //
-  /////////////////
-#ifdef __CUDACC__
-
-  __device__
-const RayCasterParams& params() const {
-  return kRayCasterParams;
-}
-
-
-#endif // __CUDACC__
 
   /// WRITE in ray_caster,
   /// specifically in traverseCoarseGridSimpleSampleAll

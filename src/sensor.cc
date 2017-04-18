@@ -30,7 +30,7 @@ Sensor::Sensor(SensorParams &sensor_params) {
 
   /// Parameter settings
   sensor_params_ = sensor_params; // Is it copy constructing?
-  sensor_data_.alloc(sensor_params_);
+  sensor_data_.Alloc(sensor_params_);
 }
 
 Sensor::~Sensor() {
@@ -46,18 +46,15 @@ int Sensor::Process(cv::Mat &depth, cv::Mat &color) {
   /// Input:  CPU short*
   /// Output: GPU float *
   DepthCpuToGpuCudaHost(sensor_data_.depth_image_, (short *)depth.data,
-                         sensor_params_.width, sensor_params_.height,
-                         sensor_params_.min_depth_range,
-                         sensor_params_.max_depth_range);
+                        sensor_params_.width, sensor_params_.height,
+                        sensor_params_.min_depth_range,
+                        sensor_params_.max_depth_range);
 
   /// Input:  CPU uchar4 *
   /// Output: GPU float4 *
   ColorCpuToGpuCudaHost(sensor_data_.color_image_, color.data,
-                          sensor_params_.width,
-                          sensor_params_.height);
-
-  /// TODO: Put intrinsics into SensorParams
-  sensor_data_.updateParams(getSensorParams());
+                        sensor_params_.width,
+                        sensor_params_.height);
 
   /// Array used as texture in mapper
   checkCudaErrors(cudaMemcpyToArray(sensor_data_.depth_array_, 0, 0, sensor_data_.depth_image_,

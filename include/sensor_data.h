@@ -28,7 +28,7 @@ struct SensorData {
   }
 
   __host__
-  void alloc(const SensorParams& params) {
+  void Alloc(const SensorParams& params) {
     checkCudaErrors(cudaMalloc(&depth_image_, sizeof(float) * params.width * params.height));
     checkCudaErrors(cudaMalloc(&color_image_, sizeof(float4) * params.width * params.height));
 
@@ -36,14 +36,6 @@ struct SensorData {
     checkCudaErrors(cudaMallocArray(&depth_array_, &h_depthChannelDesc, params.width, params.height));
     h_colorChannelDesc = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
     checkCudaErrors(cudaMallocArray(&color_array_, &h_colorChannelDesc, params.width, params.height));
-
-    /// Added here
-    updateParams(params);
-  }
-
-  __host__
-  void updateParams(const SensorParams& params) {
-    SetConstantSensorParams(params);
   }
 
   __host__
@@ -57,14 +49,6 @@ struct SensorData {
     color_image_ = NULL;
     depth_array_ = NULL;
     color_array_ = NULL;
-  }
-
-
-  /////////////////
-  // Device part //
-  /////////////////
-  static inline const SensorParams& params() {
-    return kSensorParams;
   }
 
   /// Raw data

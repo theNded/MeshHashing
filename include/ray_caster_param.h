@@ -10,9 +10,6 @@
 #include <helper_math.h>
 
 struct __ALIGN__(16) RayCasterParams {
-  /// Put them elsewhere since they change
-  float4x4 c_T_w;               /// World to Cam, c_T_w
-  float4x4 w_T_c;
 
   float4x4 m_intrinsics;               /// Intrinsic matrix
   float4x4 m_intrinsicsInverse;
