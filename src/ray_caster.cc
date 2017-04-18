@@ -6,44 +6,21 @@
 #include "ray_caster_data.h"
 #include "hash_table.h"
 
-RayCaster::RayCaster(const RayCastParams& params) {
-  create(params);
+RayCaster::RayCaster(const RayCasterParams& params) {
+  ray_caster_params_ = params;
+  ray_caster_data_.Alloc(ray_caster_params_);
 }
 
 RayCaster::~RayCaster(void) {
-  destroy();
-}
-
-void RayCaster::create(const RayCastParams& params) {
-  m_params = params;
-  m_data.Alloc(m_params);
-}
-
-void RayCaster::destroy(void) {
-  m_data.Free();
+  ray_caster_data_.Free();
 }
 
 /// Major function, extract surface and normal from the volumes
-void RayCaster::render(const HashTable& hash_table, const HashParams& hash_params,
-                       const float4x4& lastRigidTransform) {
+void RayCaster::Cast(Map* map, const float4x4& c_T_w) {
 
-  m_params.m_viewMatrix = lastRigidTransform;
-  m_params.m_viewMatrixInverse = m_params.m_viewMatrix.getInverse();
-  m_data.updateParams(m_params);
+  ray_caster_params_.c_T_w = c_T_w;
+  ray_caster_params_.w_T_c = ray_caster_params_.c_T_w.getInverse();
+  ray_caster_data_.updateParams(ray_caster_params_);
 
-  renderCS(hash_table, m_data, m_params);
-
-  //convertToCameraSpace(cameraData);
-  //if (!m_params.m_useGradients) {
-//    computeNormals(m_data.d_normals, m_data.d_depth4, m_params.m_width, m_params.m_height);
-//  }
+  CastCudaHost(map->hash_table(), ray_caster_data_, ray_caster_params_);
 }
-
-//
-//void RayCaster::convertToCameraSpace(const SensorData& cameraData) {
-//  convertDepthFloatToCameraSpaceFloat4(m_data.d_depth4, m_data.d_depth, m_params.m_intrinsicsInverse, m_params.m_width, m_params.m_height, cameraData);
-//
-//  if(!m_params.m_useGradients) {
-//    computeNormals(m_data.d_normals, m_data.d_depth4, m_params.m_width, m_params.m_height);
-//  }
-//}

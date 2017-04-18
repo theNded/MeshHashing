@@ -10,8 +10,8 @@ texture<float, cudaTextureType2D, cudaReadModeElementType> depthTextureRef;
 texture<float4, cudaTextureType2D, cudaReadModeElementType> colorTextureRef;
 __host__
 void BindSensorDataToTextureCudaHost(const SensorData& sensor_data) {
-  checkCudaErrors(cudaBindTextureToArray(depthTextureRef, sensor_data.d_depthArray, sensor_data.h_depthChannelDesc));
-  checkCudaErrors(cudaBindTextureToArray(colorTextureRef, sensor_data.d_colorArray, sensor_data.h_colorChannelDesc));
+  checkCudaErrors(cudaBindTextureToArray(depthTextureRef, sensor_data.depth_array_, sensor_data.h_depthChannelDesc));
+  checkCudaErrors(cudaBindTextureToArray(colorTextureRef, sensor_data.color_array_, sensor_data.h_colorChannelDesc));
   depthTextureRef.filterMode = cudaFilterModePoint;
   colorTextureRef.filterMode = cudaFilterModePoint;
 }
@@ -41,7 +41,7 @@ void IntegrateCudaKernel(HashTable hash_table, SensorData cameraData, float4x4 c
     //float depth = g_InputDepth[screenPos];
     float depth = tex2D(depthTextureRef, screenPos.x, screenPos.y);
     float4 color  = make_float4(MINF, MINF, MINF, MINF);
-    if (cameraData.d_colorData) {
+    if (cameraData.color_image_) {
       color = tex2D(colorTextureRef, screenPos.x, screenPos.y);
       //color = bilinearFilterColor(cameraData.CameraProjectToImagef(pf));
     }
@@ -73,7 +73,7 @@ void IntegrateCudaKernel(HashTable hash_table, SensorData cameraData, float4x4 c
 
           //float3 c = g_InputColor[screenPos].xyz;
           //curr.color = (int3)(c * 255.0f);
-          if (cameraData.d_colorData) {
+          if (cameraData.color_image_) {
             //const float4& c = tex2D(colorTextureRef, screenPos.x, screenPos.y);
             curr.color = make_uchar3(255*color.x, 255*color.y, 255*color.z);
           } else {

@@ -32,17 +32,12 @@ extern void CollectInvalidBlockInfoCudaHost(HashTable& hash_table, const HashPar
 extern void RecycleInvalidBlockCudaHost(HashTable& hash_table, const HashParams& hash_params);
 
 class Map {
-private:
-  HashParams hash_params_;
-  HashTable  hash_table_;
-
 public:
-  uint integrated_frame_count_;
 
   Map(const HashParams& hash_params);
   ~Map();
-  void Reset();
 
+  void Reset();
   void AllocBlocks(Sensor* sensor);
   void GenerateCompressedHashEntries(float4x4 c_T_w);
   void RecycleInvalidBlocks();
@@ -53,12 +48,18 @@ public:
   HashParams &hash_params() {
     return hash_params_;
   }
-
+  uint& frame_count() {
+    return integrated_frame_count_;
+  }
 
 //! debug only!
   unsigned int getHeapFreeCount();
   void debugHash();
 
+private:
+  HashParams hash_params_;
+  HashTable  hash_table_;
+  uint integrated_frame_count_;
 };
 
 

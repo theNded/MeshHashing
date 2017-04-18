@@ -7,45 +7,31 @@
 
 #include "common.h"
 
-#include "hash_table.h"
+#include "map.h"
 #include "ray_caster_data.h"
 #include "ray_caster_param.h"
 #include "sensor_data.h"
 
 /// CUDA functions
-extern void renderCS(const HashTable& hash_table, const RayCasterData &rayCastData, const RayCastParams &rayCastParams);
+extern void CastCudaHost(const HashTable& hash_table, const RayCasterData &rayCastData, const RayCasterParams &rayCastParams);
 
-extern void computeNormals(float4* d_output, float4* d_input, unsigned int width, unsigned int height);
-extern void convertDepthFloatToCameraSpaceFloat4(float4* d_output, float* d_input, float4x4 intrinsicsInv, unsigned int width, unsigned int height, const SensorData& sensor_data);
-
-/// CUDA / C++ shared class
 class RayCaster {
 public:
-  RayCaster(const RayCastParams& params);
+  RayCaster(const RayCasterParams& params);
   ~RayCaster(void);
 
-  void render(const HashTable& hash_table,
-              const HashParams& hash_params,
-              const float4x4& lastRigidTransform);
+  void Cast(Map* map, const float4x4& c_T_w);
 
-  const RayCasterData& getRayCasterData(void) {
-    return m_data;
+  const RayCasterData& ray_caster_data(void) {
+    return ray_caster_data_;
   }
-  const RayCastParams& getRayCastParams() const {
-    return m_params;
+  const RayCasterParams& ray_caster_params() const {
+    return ray_caster_params_;
   }
-
-  // debugging
-  void convertToCameraSpace(const SensorData& cameraData);
 
 private:
-
-  void create(const RayCastParams& params);
-  void destroy(void);
-
-  RayCastParams m_params;
-  /// float *d_depth in CUDA
-  RayCasterData m_data;
+  RayCasterParams ray_caster_params_;
+  RayCasterData ray_caster_data_;
 
 };
 

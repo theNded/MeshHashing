@@ -6,9 +6,10 @@
 #include <helper_math.h>
 
 /// Input short* depth (cpu) to float* depth (gpu)
-__global__ void convertDepthRawToFloatKernel(float *d_output, short *d_input,
-                                          unsigned int width, unsigned int height,
-                                          float minDepth, float maxDepth) {
+__global__
+void DepthCpuToGpuCudaHostKernel(float *d_output, short *d_input,
+                                 unsigned int width, unsigned int height,
+                                 float minDepth, float maxDepth) {
   const int x = blockIdx.x * blockDim.x + threadIdx.x;
   const int y = blockIdx.y * blockDim.y + threadIdx.y;
 
@@ -20,9 +21,10 @@ __global__ void convertDepthRawToFloatKernel(float *d_output, short *d_input,
   d_output[idx] = is_valid ? depth : MINF;
 }
 
-void convertDepthRawToFloat(float* d_output, short* d_input,
-                            unsigned int width, unsigned int height,
-                            float minDepth, float maxDepth) {
+__host__
+void DepthCpuToGpuCudaHost(float* d_output, short* d_input,
+                           unsigned int width, unsigned int height,
+                           float minDepth, float maxDepth) {
   /// First copy cpu data in to cuda short
   short *cuda_input;
   checkCudaErrors(cudaMalloc(&cuda_input, sizeof(short) * width * height));
@@ -31,13 +33,13 @@ void convertDepthRawToFloat(float* d_output, short* d_input,
   const dim3 gridSize((width + T_PER_BLOCK - 1)/T_PER_BLOCK, (height + T_PER_BLOCK - 1)/T_PER_BLOCK);
   const dim3 blockSize(T_PER_BLOCK, T_PER_BLOCK);
 
-  convertDepthRawToFloatKernel<<<gridSize, blockSize>>>(d_output, cuda_input,
+  DepthCpuToGpuCudaHostKernel<<<gridSize, blockSize>>>(d_output, cuda_input,
           width, height, minDepth, maxDepth);
 }
 
 ///
 /// Input uchar* color (cpu) to float4* color (gpu)
-__global__ void convertColorRawToFloat4Kernel(float4* d_output, unsigned char *d_input,
+__global__ void ColorCpuToGpuCudaHostKernel(float4* d_output, unsigned char *d_input,
                                         unsigned int width, unsigned int height) {
   const int x = blockIdx.x * blockDim.x + threadIdx.x;
   const int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -53,7 +55,8 @@ __global__ void convertColorRawToFloat4Kernel(float4* d_output, unsigned char *d
                            : make_float4(MINF, MINF, MINF, MINF);
 }
 
-void convertColorRawToFloat4(float4* d_output, unsigned char* d_input,
+__host__
+void ColorCpuToGpuCudaHost(float4* d_output, unsigned char* d_input,
                              unsigned int width, unsigned int height) {
   unsigned char *cuda_input;
   checkCudaErrors(cudaMalloc(&cuda_input, 4 * sizeof(unsigned char) * width * height));
@@ -62,11 +65,12 @@ void convertColorRawToFloat4(float4* d_output, unsigned char* d_input,
   const dim3 gridSize((width + T_PER_BLOCK - 1)/T_PER_BLOCK, (height + T_PER_BLOCK - 1)/T_PER_BLOCK);
   const dim3 blockSize(T_PER_BLOCK, T_PER_BLOCK);
 
-  convertColorRawToFloat4Kernel<<<gridSize, blockSize>>>(d_output, cuda_input, width, height);
+  ColorCpuToGpuCudaHostKernel<<<gridSize, blockSize>>>(d_output, cuda_input, width, height);
 }
 
 /// Util: Depth to RGB
-__device__ float3 convertHSVToRGB(const float3& hsv) {
+__device__
+float3 HSVToRGB(const float3& hsv) {
   float H = hsv.x;
   float S = hsv.y;
   float V = hsv.z;
@@ -98,7 +102,8 @@ __device__ float3 convertHSVToRGB(const float3& hsv) {
   }
 }
 
-__device__ float3 convertDepthToRGB(float depth, float depthMin, float depthMax) {
+__device__
+float3 DepthToRGB(float depth, float depthMin, float depthMax) {
   float depthZeroOne = (depth - depthMin)/(depthMax - depthMin);
   float x = 1.0f-depthZeroOne;
   if (x < 0.0f)	x = 0.0f;
@@ -106,10 +111,11 @@ __device__ float3 convertDepthToRGB(float depth, float depthMin, float depthMax)
 
   x = 360.0f*x - 120.0f;
   if (x < 0.0f) x += 359.0f;
-  return convertHSVToRGB(make_float3(x, 1.0f, 0.5f));
+  return HSVToRGB(make_float3(x, 1.0f, 0.5f));
 }
 
-__global__ void depthToHSVDevice(float4* d_output, float* d_input,
+__global__
+void DepthToRGBKernel(float4* d_output, float* d_input,
                                  unsigned int width, unsigned int height,
                                  float minDepth, float maxDepth) {
   const int x = blockIdx.x*blockDim.x + threadIdx.x;
@@ -119,7 +125,7 @@ __global__ void depthToHSVDevice(float4* d_output, float* d_input,
 
     float depth = d_input[y*width + x];
     if (depth != MINF && depth != 0.0f && depth >= minDepth && depth <= maxDepth) {
-      float3 c = convertDepthToRGB(depth, minDepth, maxDepth);
+      float3 c = DepthToRGB(depth, minDepth, maxDepth);
       d_output[y*width + x] = make_float4(c, 1.0f);
     } else {
       d_output[y*width + x] = make_float4(0.0f);
@@ -127,9 +133,12 @@ __global__ void depthToHSVDevice(float4* d_output, float* d_input,
   }
 }
 
-void depthToHSV(float4* d_output, float* d_input, unsigned int width, unsigned int height, float minDepth, float maxDepth) {
+__host__
+void DepthToRGBCudaHost(float4* d_output, float* d_input,
+                        unsigned int width, unsigned int height,
+                        float minDepth, float maxDepth) {
   const dim3 gridSize((width + T_PER_BLOCK - 1)/T_PER_BLOCK, (height + T_PER_BLOCK - 1)/T_PER_BLOCK);
   const dim3 blockSize(T_PER_BLOCK, T_PER_BLOCK);
 
-  depthToHSVDevice<<<gridSize, blockSize>>>(d_output, d_input, width, height, minDepth, maxDepth);
+  DepthToRGBKernel<<<gridSize, blockSize>>>(d_output, d_input, width, height, minDepth, maxDepth);
 }

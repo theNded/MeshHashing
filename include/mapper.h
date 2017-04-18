@@ -26,6 +26,7 @@ public:
   ~Mapper();
 
   /// Set input (image)
+  /// Should bind only once
   void BindSensorDataToTexture(const SensorData& sensor_data);
 
   /// SDF fusion

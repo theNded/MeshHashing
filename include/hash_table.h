@@ -24,7 +24,7 @@
 #include "sensor_data.h"
 
 /// constant.cu
-extern void UpdateConstantHashParams(const HashParams &params);
+extern void SetConstantHashParams(const HashParams &params);
 extern __constant__ HashParams kHashParams;
 
 // TODO(wei): make a templated class to adapt to more types
@@ -50,7 +50,7 @@ struct HashTable {
   __host__
   void updateParams(const HashParams &params) {
     if (is_on_gpu) {
-      UpdateConstantHashParams(params);
+      SetConstantHashParams(params);
     }
   }
 

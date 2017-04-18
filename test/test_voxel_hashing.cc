@@ -17,7 +17,7 @@
 
 const std::string kDefaultDatasetPath = "/home/wei/data/TUM/rgbd_dataset_freiburg1_xyz/";
 
-void depthToHSV(float4* d_output, float* d_input,
+void DepthToRGBCudaHost(float4* d_output, float* d_input,
                 unsigned int width, unsigned int height,
                 float minDepth, float maxDepth);
 
@@ -141,9 +141,9 @@ int main() {
   K.m23 = sensor_params.cy;
 
   /// Ray Caster
-  RayCastParams ray_cast_params;
-  ray_cast_params.m_viewMatrix = T;
-  ray_cast_params.m_viewMatrixInverse = T.getInverse();
+  RayCasterParams ray_cast_params;
+  ray_cast_params.c_T_w_ = T;
+  ray_cast_params.w_T_c_ = T.getInverse();
   ray_cast_params.m_intrinsics = K;
   ray_cast_params.m_intrinsicsInverse = K.getInverse();
   ray_cast_params.m_width = 640;
@@ -167,8 +167,8 @@ int main() {
 
 
   sensor.process(depth, color);
-  // checkCudaFloatMemory(sensor.getSensorData().d_depthData);
-  // checkCudaFloat4Memory(sensor.getSensorData().d_colorData);
+  // checkCudaFloatMemory(sensor.getSensorData().depth_image_);
+  // checkCudaFloat4Memory(sensor.getSensorData().color_image_);
   /// input gpu data OK
 
   LOG(INFO) << "Integrate";
@@ -181,13 +181,13 @@ int main() {
   /// output blocks seems correct
 
   LOG(INFO) << "Render";
-  ray_caster.render(mapper.getHashTable(), mapper.getHashParams(),
+  ray_caster.Cast(mapper.getHashTable(), mapper.getHashParams(),
                     sensor.getSensorData(), T);
   /// runnable, still have bugs
 
   float4 *cuda_hsv;
   checkCudaErrors(cudaMalloc(&cuda_hsv, sizeof(float4) * 640 * 480));
-  depthToHSV(cuda_hsv, ray_caster.getRayCasterData().d_depth, 640, 480, 0.5f, 3.5f);
+  DepthToRGBCudaHost(cuda_hsv, ray_caster.ray_caster_data().depth_image_, 640, 480, 0.5f, 3.5f);
   checkCudaFloat4Memory(cuda_hsv);
-  //checkCudaFloat4Memory(ray_caster.getRayCasterData().d_colors);
+  //checkCudaFloat4Memory(ray_caster.ray_caster_data().color_image_);
 }

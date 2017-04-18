@@ -13,7 +13,7 @@
 
 /// constant.cu
 extern __constant__ SensorParams kSensorParams;
-extern void UpdateConstantSensorParams(const SensorParams& params);
+extern void SetConstantSensorParams(const SensorParams& params);
 
 struct SensorData {
   ///////////////
@@ -21,21 +21,21 @@ struct SensorData {
   ///////////////
   __device__ __host__
   SensorData() {
-    d_depthData = NULL;
-    d_colorData = NULL;
-    d_depthArray = NULL;
-    d_colorArray = NULL;
+    depth_image_ = NULL;
+    color_image_ = NULL;
+    depth_array_ = NULL;
+    color_array_ = NULL;
   }
 
   __host__
   void alloc(const SensorParams& params) {
-    checkCudaErrors(cudaMalloc(&d_depthData, sizeof(float) * params.width * params.height));
-    checkCudaErrors(cudaMalloc(&d_colorData, sizeof(float4) * params.width * params.height));
+    checkCudaErrors(cudaMalloc(&depth_image_, sizeof(float) * params.width * params.height));
+    checkCudaErrors(cudaMalloc(&color_image_, sizeof(float4) * params.width * params.height));
 
     h_depthChannelDesc = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
-    checkCudaErrors(cudaMallocArray(&d_depthArray, &h_depthChannelDesc, params.width, params.height));
+    checkCudaErrors(cudaMallocArray(&depth_array_, &h_depthChannelDesc, params.width, params.height));
     h_colorChannelDesc = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
-    checkCudaErrors(cudaMallocArray(&d_colorArray, &h_colorChannelDesc, params.width, params.height));
+    checkCudaErrors(cudaMallocArray(&color_array_, &h_colorChannelDesc, params.width, params.height));
 
     /// Added here
     updateParams(params);
@@ -43,20 +43,20 @@ struct SensorData {
 
   __host__
   void updateParams(const SensorParams& params) {
-    UpdateConstantSensorParams(params);
+    SetConstantSensorParams(params);
   }
 
   __host__
   void Free() {
-    if (d_depthData) checkCudaErrors(cudaFree(d_depthData));
-    if (d_colorData) checkCudaErrors(cudaFree(d_colorData));
-    if (d_depthArray) checkCudaErrors(cudaFreeArray(d_depthArray));
-    if (d_colorArray) checkCudaErrors(cudaFreeArray(d_colorArray));
+    if (depth_image_) checkCudaErrors(cudaFree(depth_image_));
+    if (color_image_) checkCudaErrors(cudaFree(color_image_));
+    if (depth_array_) checkCudaErrors(cudaFreeArray(depth_array_));
+    if (color_array_) checkCudaErrors(cudaFreeArray(color_array_));
 
-    d_depthData = NULL;
-    d_colorData = NULL;
-    d_depthArray = NULL;
-    d_colorArray = NULL;
+    depth_image_ = NULL;
+    color_image_ = NULL;
+    depth_array_ = NULL;
+    color_array_ = NULL;
   }
 
 
@@ -68,12 +68,12 @@ struct SensorData {
   }
 
   /// Raw data
-  float*		d_depthData;
-  float4*		d_colorData;
+  float*		depth_image_;
+  float4*		color_image_;
 
   /// Texture-binded data
-  cudaArray*	d_depthArray;
-  cudaArray*	d_colorArray;
+  cudaArray*	depth_array_;
+  cudaArray*	color_array_;
   cudaChannelFormatDesc h_depthChannelDesc;
   cudaChannelFormatDesc h_colorChannelDesc;
 };

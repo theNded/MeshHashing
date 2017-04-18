@@ -22,7 +22,10 @@ struct __ALIGN__(16) HashParams {
   uint  linked_list_size;           // 7
 
   uint  block_count;                // 1000000
+
+  /// Put it else where since it changes
   uint  occupied_block_count;	      // occupied blocks in the viewing frustum
+
   int   block_size;                 // 8 (voxels)
 
   uint  voxel_count;                // block_count * block_size^3

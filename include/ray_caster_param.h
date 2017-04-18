@@ -9,19 +9,16 @@
 
 #include <helper_math.h>
 
-struct __ALIGN__(16) RayCastParams {
-  float4x4 m_viewMatrix;               /// World to Cam, c_T_w
-  float4x4 m_viewMatrixInverse;
+struct __ALIGN__(16) RayCasterParams {
+  /// Put them elsewhere since they change
+  float4x4 c_T_w;               /// World to Cam, c_T_w
+  float4x4 w_T_c;
+
   float4x4 m_intrinsics;               /// Intrinsic matrix
   float4x4 m_intrinsicsInverse;
 
   unsigned int m_width;                /// 640
   unsigned int m_height;               /// 480
-
-	/// Seems deprecated
-  unsigned int m_numOccupiedSDFBlocks;
-  unsigned int m_maxNumVertices;
-  int m_splatMinimum;
 
   float m_minDepth;
   float m_maxDepth;

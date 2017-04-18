@@ -12,21 +12,21 @@
 #include <matrix.h>
 
 /// extern in cuda
-void convertDepthRawToFloat(float* d_output, short* d_input,
-                            unsigned int width, unsigned int height,
-                            float minDepth, float maxDepth);
-void convertColorRawToFloat4(float4* d_output, unsigned char* d_input,
-                             unsigned int width, unsigned int height);
-void depthToHSV(float4* d_output, float* d_input,
+void DepthCpuToGpuCudaHost(float* d_output, short* d_input,
+                           unsigned int width, unsigned int height,
+                           float minDepth, float maxDepth);
+void ColorCpuToGpuCudaHost(float4* d_output, unsigned char* d_input,
+                           unsigned int width, unsigned int height);
+void DepthToRGBCudaHost(float4* d_output, float* d_input,
                 unsigned int width, unsigned int height,
                 float minDepth, float maxDepth);
 
 Sensor::Sensor(SensorParams &sensor_params) {
 
-  d_depthHSV = NULL;
+  depth_image_HSV = NULL;
 
   const unsigned int bufferDimDepth = sensor_params.height * sensor_params.width;
-  checkCudaErrors(cudaMalloc(&d_depthHSV, sizeof(float4)*bufferDimDepth));
+  checkCudaErrors(cudaMalloc(&depth_image_HSV, sizeof(float4)*bufferDimDepth));
 
   /// Parameter settings
   sensor_params_ = sensor_params; // Is it copy constructing?
@@ -34,7 +34,7 @@ Sensor::Sensor(SensorParams &sensor_params) {
 }
 
 Sensor::~Sensor() {
-  checkCudaErrors(cudaFree(d_depthHSV));
+  checkCudaErrors(cudaFree(depth_image_HSV));
 
   sensor_data_.Free();
 }
@@ -45,14 +45,14 @@ int Sensor::Process(cv::Mat &depth, cv::Mat &color) {
 
   /// Input:  CPU short*
   /// Output: GPU float *
-  convertDepthRawToFloat(sensor_data_.d_depthData, (short *)depth.data,
+  DepthCpuToGpuCudaHost(sensor_data_.depth_image_, (short *)depth.data,
                          sensor_params_.width, sensor_params_.height,
                          sensor_params_.min_depth_range,
                          sensor_params_.max_depth_range);
 
   /// Input:  CPU uchar4 *
   /// Output: GPU float4 *
-  convertColorRawToFloat4(sensor_data_.d_colorData, color.data,
+  ColorCpuToGpuCudaHost(sensor_data_.color_image_, color.data,
                           sensor_params_.width,
                           sensor_params_.height);
 
@@ -60,10 +60,10 @@ int Sensor::Process(cv::Mat &depth, cv::Mat &color) {
   sensor_data_.updateParams(getSensorParams());
 
   /// Array used as texture in mapper
-  checkCudaErrors(cudaMemcpyToArray(sensor_data_.d_depthArray, 0, 0, sensor_data_.d_depthData,
+  checkCudaErrors(cudaMemcpyToArray(sensor_data_.depth_array_, 0, 0, sensor_data_.depth_image_,
                                     sizeof(float)*sensor_params_.height*sensor_params_.width,
                                     cudaMemcpyDeviceToDevice));
-  checkCudaErrors(cudaMemcpyToArray(sensor_data_.d_colorArray, 0, 0, sensor_data_.d_colorData,
+  checkCudaErrors(cudaMemcpyToArray(sensor_data_.color_array_, 0, 0, sensor_data_.color_image_,
                                     sizeof(float4)*sensor_params_.height*sensor_params_.width,
                                     cudaMemcpyDeviceToDevice));
 
@@ -87,8 +87,8 @@ unsigned int Sensor::getColorHeight() const {
 }
 
 float4* Sensor::getAndComputeDepthHSV() const {
-  depthToHSV(d_depthHSV, sensor_data_.d_depthData, getDepthWidth(), getDepthHeight(),
+  DepthToRGBCudaHost(depth_image_HSV, sensor_data_.depth_image_, getDepthWidth(), getDepthHeight(),
              sensor_params_.min_depth_range,
              sensor_params_.max_depth_range);
-  return d_depthHSV;
+  return depth_image_HSV;
 }

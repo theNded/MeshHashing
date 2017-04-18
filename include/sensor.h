@@ -58,7 +58,7 @@ private:
   float4x4      c_T_w_;
 
   //! hsv depth for visualization
-  float4* d_depthHSV;
+  float4* depth_image_HSV;
 };
 
 

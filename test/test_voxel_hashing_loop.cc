@@ -25,7 +25,7 @@
 #ifdef ICL
 const std::string kDefaultDatasetPath = "/home/wei/data/ICL/kt2/";
 
-void depthToHSV(float4* d_output, float* d_input,
+void DepthToRGBCudaHost(float4* d_output, float* d_input,
                 unsigned int width, unsigned int height,
                 float minDepth, float maxDepth);
 
@@ -70,7 +70,7 @@ void LoadTrajectory(std::string dataset_path, std::vector<float4x4> &wTc_list) {
 #else
 const std::string kDefaultDatasetPath = "/home/wei/data/TUM/rgbd_dataset_freiburg1_xyz/";
 
-void depthToHSV(float4* d_output, float* d_input,
+void DepthToRGBCudaHost(float4* d_output, float* d_input,
                 unsigned int width, unsigned int height,
                 float minDepth, float maxDepth);
 
@@ -218,9 +218,9 @@ int main() {
   K.m23 = sensor_params.cy;
 
   /// Ray Caster
-  RayCastParams ray_cast_params;
-  ray_cast_params.m_viewMatrix = T;
-  ray_cast_params.m_viewMatrixInverse = T.getInverse();
+  RayCasterParams ray_cast_params;
+  ray_cast_params.c_T_w = T;
+  ray_cast_params.w_T_c = T.getInverse();
   ray_cast_params.m_intrinsics = K;
   ray_cast_params.m_intrinsicsInverse = K.getInverse();
   ray_cast_params.m_width = 640;
@@ -258,10 +258,10 @@ int main() {
 
     mapper.Integrate(&voxel_map, &sensor, NULL);
 
-    ray_caster.render(voxel_map.hash_table(), voxel_map.hash_params(), T.getInverse());
-    //depthToHSV(cuda_hsv, ray_caster.getRayCasterData().d_depth, 640, 480, 0.5f, 3.5f);
+    ray_caster.Cast(&voxel_map, T.getInverse());
+    //DepthToRGBCudaHost(cuda_hsv, ray_caster.ray_caster_data().depth_image_, 640, 480, 0.5f, 3.5f);
     //checkCudaFloat4Memory(cuda_hsv);
-    checkCudaFloat4Memory(ray_caster.getRayCasterData().d_normals);
+    checkCudaFloat4Memory(ray_caster.ray_caster_data().normal_image_);
 
     cv::waitKey(1);
   }
@@ -278,5 +278,5 @@ int main() {
 
   LOG(INFO) << "Render";
 
-  //checkCudaFloat4Memory(ray_caster.getRayCasterData().d_colors);
+  //checkCudaFloat4Memory(ray_caster.ray_caster_data().color_image_);
 }

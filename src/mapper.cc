@@ -39,7 +39,7 @@ void Mapper::Integrate(Map *map, Sensor* sensor,
 
   map->RecycleInvalidBlocks();
 
-  map->integrated_frame_count_++;
+  map->frame_count() ++;
 }
 
 void Mapper::IntegrateDepthMap(Map *map, Sensor *sensor) {
