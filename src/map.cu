@@ -18,7 +18,8 @@ extern texture<float, cudaTextureType2D, cudaReadModeElementType> depthTextureRe
 extern texture<float4, cudaTextureType2D, cudaReadModeElementType> colorTextureRef;
 
 //////////
-/// Reset cuda memory
+/// Reset cuda memory:
+/// Private bucket_mutexes
 __global__
 void ResetBucketMutexesKernel(HashTable hash_table) {
   const HashParams& hash_params = kHashParams;
@@ -40,6 +41,8 @@ void ResetBucketMutexesCudaHost(HashTable& hash_table, const HashParams& hash_pa
 }
 
 __global__
+/// Private heap
+/// Public DeleteVoxel
 void ResetHeapKernel(HashTable hash_table) {
   const HashParams& hash_params = kHashParams;
   unsigned int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -58,6 +61,8 @@ void ResetHeapKernel(HashTable hash_table) {
   }
 }
 
+/// Public DeleteHashEntry
+/// Private hash_entries, compacted_hash_entries
 __global__
 void ResetEntriesKernel(HashTable hash_table) {
   const HashParams& hash_params = kHashParams;
@@ -103,6 +108,7 @@ void ResetCudaHost(HashTable& hash_table, const HashParams& hash_params) {
 
 //////////
 /// Compress hash entries
+/// Private hash_entries.ptr, compacted_hash_entries
 #define COMPACTIFY_HASH_THREADS_PER_BLOCK 256
 __global__
 void GenerateCompressedHashEntriesKernel(HashTable hash_table, float4x4 c_T_w) {
@@ -188,21 +194,15 @@ void StarveOccupiedVoxelsCudaHost(HashTable& hash_table, const HashParams& hash_
 
 //////////
 /// Outlier blocks recycling
-__shared__ float	shared_MinSDF[SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE / 2];
-__shared__ uint		shared_MaxWeight[SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE / 2];
+/// Private compacted_hash_entries, block_remove_flags
+__shared__ float	shared_min_sdf   [SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE / 2];
+__shared__ uint		shared_max_weight[SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE / 2];
 
 __global__
 void CollectInvalidBlockInfoKernel(HashTable hash_table) {
 
   const unsigned int hashIdx = blockIdx.x;
   const HashEntry& entry = hash_table.compacted_hash_entries[hashIdx];
-
-  //uint h = hash_table.HashBucketForBlockPos(entry.pos);
-  //hash_table.block_remove_flags[hashIdx] = 1;
-  //if (hash_table.bucket_mutexes[h] == LOCK_ENTRY)	return;
-
-  //if (entry.ptr == FREE_ENTRY) return; //should never happen since we did compactify before
-  //const uint linBlockSize = SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE;
 
   const unsigned int idx0 = entry.ptr + 2*threadIdx.x+0;
   const unsigned int idx1 = entry.ptr + 2*threadIdx.x+1;
@@ -213,23 +213,23 @@ void CollectInvalidBlockInfoKernel(HashTable hash_table) {
   if (v0.weight == 0)	v0.sdf = PINF;
   if (v1.weight == 0)	v1.sdf = PINF;
 
-  shared_MinSDF[threadIdx.x] = min(fabsf(v0.sdf), fabsf(v1.sdf));	//init shared memory
-  shared_MaxWeight[threadIdx.x] = max(v0.weight, v1.weight);
+  shared_min_sdf[threadIdx.x] = min(fabsf(v0.sdf), fabsf(v1.sdf));	//init shared memory
+  shared_max_weight[threadIdx.x] = max(v0.weight, v1.weight);
 
 #pragma unroll 1
   for (uint stride = 2; stride <= blockDim.x; stride <<= 1) {
     __syncthreads();
     if ((threadIdx.x  & (stride-1)) == (stride-1)) {
-      shared_MinSDF[threadIdx.x] = min(shared_MinSDF[threadIdx.x-stride/2], shared_MinSDF[threadIdx.x]);
-      shared_MaxWeight[threadIdx.x] = max(shared_MaxWeight[threadIdx.x-stride/2], shared_MaxWeight[threadIdx.x]);
+      shared_min_sdf[threadIdx.x] = min(shared_min_sdf[threadIdx.x-stride/2], shared_min_sdf[threadIdx.x]);
+      shared_max_weight[threadIdx.x] = max(shared_max_weight[threadIdx.x-stride/2], shared_max_weight[threadIdx.x]);
     }
   }
 
   __syncthreads();
 
   if (threadIdx.x == blockDim.x - 1) {
-    float minSDF = shared_MinSDF[threadIdx.x];
-    uint maxWeight = shared_MaxWeight[threadIdx.x];
+    float minSDF = shared_min_sdf[threadIdx.x];
+    uint maxWeight = shared_max_weight[threadIdx.x];
 
     float t = truncate_distance(kSensorParams.max_depth_range);	//MATTHIAS TODO check whether this is a reasonable metric
 
@@ -260,13 +260,16 @@ void CollectInvalidBlockInfoCudaHost(HashTable& hash_table, const HashParams& ha
 
 
 __global__
+/// Private block_remove_flags
+/// Public DeleteHashEntryElement && DeleteVoxel
 void RecycleInvalidBlockKernel(HashTable hash_table) {
 
   //const uint hashIdx = blockIdx.x;
   const uint hashIdx = blockIdx.x*blockDim.x + threadIdx.x;
 
 
-  if (hashIdx < *hash_table.compacted_hash_entry_counter && hash_table.block_remove_flags[hashIdx] != 0) {	//decision to delete the hash entry
+  if (hashIdx < (*hash_table.compacted_hash_entry_counter)
+      && hash_table.block_remove_flags[hashIdx] != 0) {	//decision to delete the hash entry
 
     const HashEntry& entry = hash_table.compacted_hash_entries[hashIdx];
     //if (entry.ptr == FREE_ENTRY) return; //should never happen since we did compactify before

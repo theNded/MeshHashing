@@ -16,7 +16,7 @@ inline float3 frac(const float3& val)  {
   return make_float3(frac(val.x), frac(val.y), frac(val.z));
 }
 __device__
-bool TrilinearInterpolation(const HashTable& hash, const float3& pos,
+bool TrilinearInterpolation(const HashTable& hash_table, const float3& pos,
                             float& sdf, uchar3& color) {
   const float offset = kHashParams.voxel_size;
   const float3 pos_corner = pos - 0.5f * offset;
@@ -30,7 +30,7 @@ bool TrilinearInterpolation(const HashTable& hash, const float3& pos,
   float3 v_color;
   
   /// 000
-  v = hash.GetVoxel(pos_corner+make_float3(0.0f, 0.0f, 0.0f));
+  v = hash_table.GetVoxel(pos_corner+make_float3(0.0f, 0.0f, 0.0f));
   if(v.weight == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
   w = (1.0f-ratio.x)*(1.0f-ratio.y)*(1.0f-ratio.z);
@@ -38,7 +38,7 @@ bool TrilinearInterpolation(const HashTable& hash, const float3& pos,
   colorf += w * v_color;
 
   /// 001
-  v = hash.GetVoxel(pos_corner+make_float3(0.0f, 0.0f, offset));
+  v = hash_table.GetVoxel(pos_corner+make_float3(0.0f, 0.0f, offset));
   if(v.weight == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
   w = (1.0f-ratio.x)*(1.0f-ratio.y)*ratio.z;
@@ -46,7 +46,7 @@ bool TrilinearInterpolation(const HashTable& hash, const float3& pos,
   colorf += w * v_color;
 
   /// 010
-  v = hash.GetVoxel(pos_corner+make_float3(0.0f, offset, 0.0f));
+  v = hash_table.GetVoxel(pos_corner+make_float3(0.0f, offset, 0.0f));
   if(v.weight == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
   w = (1.0f-ratio.x)*ratio.y *(1.0f-ratio.z);
@@ -54,7 +54,7 @@ bool TrilinearInterpolation(const HashTable& hash, const float3& pos,
   colorf += w * v_color;
 
   /// 011
-  v = hash.GetVoxel(pos_corner+make_float3(0.0f, offset, offset));
+  v = hash_table.GetVoxel(pos_corner+make_float3(0.0f, offset, offset));
   if(v.weight == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
   w = (1.0f-ratio.x)*ratio.y*ratio.z;
@@ -62,7 +62,7 @@ bool TrilinearInterpolation(const HashTable& hash, const float3& pos,
   colorf += w * v_color;
 
   /// 100
-  v = hash.GetVoxel(pos_corner+make_float3(offset, 0.0f, 0.0f));
+  v = hash_table.GetVoxel(pos_corner+make_float3(offset, 0.0f, 0.0f));
   if(v.weight == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
   w = ratio.x*(1.0f-ratio.y)*(1.0f-ratio.z);
@@ -70,7 +70,7 @@ bool TrilinearInterpolation(const HashTable& hash, const float3& pos,
   colorf += w * v_color;
 
   /// 101
-  v = hash.GetVoxel(pos_corner+make_float3(offset, 0.0f, offset));
+  v = hash_table.GetVoxel(pos_corner+make_float3(offset, 0.0f, offset));
   if(v.weight == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
   w = ratio.x*(1.0f-ratio.y)*ratio.z;
@@ -78,7 +78,7 @@ bool TrilinearInterpolation(const HashTable& hash, const float3& pos,
   colorf += w	* v_color;
 
   /// 110
-  v = hash.GetVoxel(pos_corner+make_float3(offset, offset, 0.0f));
+  v = hash_table.GetVoxel(pos_corner+make_float3(offset, offset, 0.0f));
   if(v.weight == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
   w = ratio.x*ratio.y*(1.0f-ratio.z);
@@ -86,7 +86,7 @@ bool TrilinearInterpolation(const HashTable& hash, const float3& pos,
   colorf += w * v_color;
 
   /// 111
-  v = hash.GetVoxel(pos_corner+make_float3(offset, offset, offset));
+  v = hash_table.GetVoxel(pos_corner+make_float3(offset, offset, offset));
   if(v.weight == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
   w = ratio.x*ratio.y*ratio.z;

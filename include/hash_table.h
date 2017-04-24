@@ -28,11 +28,13 @@ extern __constant__ HashParams kHashParams;
 extern void SetConstantHashParams(const HashParams& hash_params);
 
 // TODO(wei): make a templated class to adapt to more types
-struct HashTable {
+template <typename Value>
+class TemplatedHashTable {
+public:
   /// Hash VALUE part
   uint      *heap;               /// index to free blocks
   uint      *heap_counter;       /// single element; used as an atomic counter (points to the next free block)
-  Voxel     *blocks;             /// pre-allocated and managed by heap manually to avoid expensive malloc
+  Value     *blocks;             /// pre-allocated and managed by heap manually to avoid expensive malloc
   int       *block_remove_flags; /// used in garbage collection
 
   /// Hash KEY part
@@ -48,7 +50,7 @@ struct HashTable {
   // Host part //
   ///////////////
   __device__ __host__
-  HashTable() {
+  TemplatedHashTable() {
     heap = NULL;
     heap_counter = NULL;
     blocks = NULL;
@@ -129,8 +131,8 @@ struct HashTable {
   }
 
   __host__
-  HashTable CopyToCPU(const HashParams &params) const {
-    HashTable hash_table;
+  TemplatedHashTable CopyToCPU(const HashParams &params) const {
+    TemplatedHashTable hash_table;
     hash_table.Alloc(params, false);
 
     checkCudaErrors(cudaMemcpy(hash_table.heap, heap,
@@ -331,90 +333,90 @@ struct HashTable {
     heap[addr + 1] = ptr;
   }
 
-	//pos in SDF block coordinates
-	__device__
-	void AllocBlock(const int3& pos) {
-		uint bucket_idx             = HashBucketForBlockPos(pos);				//hash bucket
-		uint bucket_first_entry_idx = bucket_idx * HASH_BUCKET_SIZE;	//hash position
+  //pos in SDF block coordinates
+  __device__
+  void AllocBlock(const int3& pos) {
+    uint bucket_idx             = HashBucketForBlockPos(pos);				//hash bucket
+    uint bucket_first_entry_idx = bucket_idx * HASH_BUCKET_SIZE;	//hash position
 
-		int empty_entry_idx = -1;
-		for (uint j = 0; j < HASH_BUCKET_SIZE; j++) {
-			uint i = j + bucket_first_entry_idx;
-			const HashEntry& curr_entry = hash_entries[i];
-			if (IsBlockAllocated(pos, curr_entry)) {
-				return;
-			}
+    int empty_entry_idx = -1;
+    for (uint j = 0; j < HASH_BUCKET_SIZE; j++) {
+      uint i = j + bucket_first_entry_idx;
+      const HashEntry& curr_entry = hash_entries[i];
+      if (IsBlockAllocated(pos, curr_entry)) {
+        return;
+      }
 
       /// wei: should not break and alloc before a thorough searching is over
-			if (empty_entry_idx == -1 && curr_entry.ptr == FREE_ENTRY) {
-				empty_entry_idx = i;
-			}
-		}
+      if (empty_entry_idx == -1 && curr_entry.ptr == FREE_ENTRY) {
+        empty_entry_idx = i;
+      }
+    }
 
 #ifdef HANDLE_COLLISIONS
     const uint bucket_last_entry_idx = bucket_first_entry_idx + HASH_BUCKET_SIZE - 1;
-		uint i = bucket_last_entry_idx;
-		int offset = 0;
-		for (uint iter = 0; iter < kHashParams.linked_list_size; ++iter) {
-		  HashEntry& curr_entry = hash_entries[i];
-		  if (IsBlockAllocated(pos, curr_entry)) {
-		    return;
-		  }
-		  if (curr_entry.offset == 0) {
-		    break;
-		  }
-		  i = (bucket_last_entry_idx + curr_entry.offset) % kHashParams.entry_count;
-		}
+    uint i = bucket_last_entry_idx;
+    int offset = 0;
+    for (uint iter = 0; iter < kHashParams.linked_list_size; ++iter) {
+      HashEntry& curr_entry = hash_entries[i];
+      if (IsBlockAllocated(pos, curr_entry)) {
+        return;
+      }
+      if (curr_entry.offset == 0) {
+        break;
+      }
+      i = (bucket_last_entry_idx + curr_entry.offset) % kHashParams.entry_count;
+    }
 #endif
 
-		if (empty_entry_idx != -1) {
-			int lock = atomicExch(&bucket_mutexes[bucket_idx], LOCK_ENTRY);
-			if (lock != LOCK_ENTRY) {
-				HashEntry& entry = hash_entries[empty_entry_idx];
-				entry.pos    = pos;
-				entry.offset = NO_OFFSET;
-				entry.ptr    = AllocHeap() * SDF_BLOCK_SIZE*SDF_BLOCK_SIZE*SDF_BLOCK_SIZE;	//memory alloc
-			}
-			return;
-		}
+    if (empty_entry_idx != -1) {
+      int lock = atomicExch(&bucket_mutexes[bucket_idx], LOCK_ENTRY);
+      if (lock != LOCK_ENTRY) {
+        HashEntry& entry = hash_entries[empty_entry_idx];
+        entry.pos    = pos;
+        entry.offset = NO_OFFSET;
+        entry.ptr    = AllocHeap() * SDF_BLOCK_SIZE*SDF_BLOCK_SIZE*SDF_BLOCK_SIZE;	//memory alloc
+      }
+      return;
+    }
 
 #ifdef HANDLE_COLLISIONS
-		i = bucket_last_entry_idx;
-		offset = 0;
+    i = bucket_last_entry_idx;
+    offset = 0;
 
-		#pragma  unroll 1
-		for (uint iter = 0; iter < kHashParams.linked_list_size; ++iter) {
-			offset ++;
-			if ((offset % HASH_BUCKET_SIZE) == 0) continue;
+    #pragma  unroll 1
+    for (uint iter = 0; iter < kHashParams.linked_list_size; ++iter) {
+      offset ++;
+      if ((offset % HASH_BUCKET_SIZE) == 0) continue;
 
-			i = (bucket_last_entry_idx + offset) % kHashParams.entry_count;
+      i = (bucket_last_entry_idx + offset) % kHashParams.entry_count;
 
-			HashEntry& curr_entry = hash_entries[i];
+      HashEntry& curr_entry = hash_entries[i];
 
-			if (curr_entry.ptr == FREE_ENTRY) {	//this is the first free entry
-				int lock = atomicExch(&bucket_mutexes[bucket_idx], LOCK_ENTRY);
-				if (lock != LOCK_ENTRY) {
-				  // Not use reference in order to avoid lock ?
-					HashEntry& bucket_last_entry = hash_entries[bucket_last_entry_idx];
-					uint alloc_bucket_idx = i / HASH_BUCKET_SIZE;
+      if (curr_entry.ptr == FREE_ENTRY) {	//this is the first free entry
+        int lock = atomicExch(&bucket_mutexes[bucket_idx], LOCK_ENTRY);
+        if (lock != LOCK_ENTRY) {
+          // Not use reference in order to avoid lock ?
+          HashEntry& bucket_last_entry = hash_entries[bucket_last_entry_idx];
+          uint alloc_bucket_idx = i / HASH_BUCKET_SIZE;
 
-					lock = atomicExch(&bucket_mutexes[alloc_bucket_idx], LOCK_ENTRY);
-					if (lock != LOCK_ENTRY) {
-						HashEntry& entry = hash_entries[i];
-						entry.pos    = pos;
-						entry.offset = bucket_last_entry.offset; // pointer assignment in linked list
-						entry.ptr    = AllocHeap() * SDF_BLOCK_SIZE*SDF_BLOCK_SIZE*SDF_BLOCK_SIZE;	//memory alloc
+          lock = atomicExch(&bucket_mutexes[alloc_bucket_idx], LOCK_ENTRY);
+          if (lock != LOCK_ENTRY) {
+            HashEntry& entry = hash_entries[i];
+            entry.pos    = pos;
+            entry.offset = bucket_last_entry.offset; // pointer assignment in linked list
+            entry.ptr    = AllocHeap() * SDF_BLOCK_SIZE*SDF_BLOCK_SIZE*SDF_BLOCK_SIZE;	//memory alloc
 
             // Not sure if it is ok to directly assign to reference
-						bucket_last_entry.offset = offset;
-						hash_entries[bucket_last_entry_idx] = bucket_last_entry;
-					}
-				}
-				return;	//bucket was already locked
-			}
-		}
+            bucket_last_entry.offset = offset;
+            hash_entries[bucket_last_entry_idx] = bucket_last_entry;
+          }
+        }
+        return;	//bucket was already locked
+      }
+    }
 #endif
-	}
+  }
 
 
   //! deletes a hash entry position for a given block_pos index (returns true uppon successful deletion; otherwise returns false)
@@ -501,8 +503,8 @@ struct HashTable {
   //!inserts a hash entry without allocating any memory: used by streaming:
   __device__
   bool insertHashEntry(HashEntry entry) {
-		uint h  = HashBucketForBlockPos(entry.pos); //hash bucket
-		uint hp = h * HASH_BUCKET_SIZE;	//hash position
+    uint h  = HashBucketForBlockPos(entry.pos); //hash bucket
+    uint hp = h * HASH_BUCKET_SIZE;	//hash position
 
     for (uint j = 0; j < HASH_BUCKET_SIZE; ++j) {
       uint i = j + hp;
@@ -613,5 +615,7 @@ struct HashTable {
 #endif	//CUDACC
 
 };
+
+typedef TemplatedHashTable<Block> HashTable;
 
 #endif

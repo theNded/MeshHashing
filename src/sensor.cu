@@ -1,9 +1,10 @@
 /// 16 threads per block
-#define T_PER_BLOCK 16
-#define MINF __int_as_float(0xff800000)
 
 #include <helper_cuda.h>
 #include <helper_math.h>
+
+#define T_PER_BLOCK 16
+#define MINF __int_as_float(0xff800000)
 
 /// Input short* depth (cpu) to float* depth (gpu)
 __global__

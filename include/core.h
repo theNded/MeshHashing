@@ -37,4 +37,8 @@ struct __ALIGN__(8) Voxel {
   }
 };
 
+/// Block
+/// Typically Block is an array of Voxels
+/// TODO: a more reasonable wrapper for accessing
+typedef Voxel Block;
 #endif //VH_CORE_H
