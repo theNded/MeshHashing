@@ -5,7 +5,7 @@
 #include <glog/logging.h>
 
 #include <cuda_runtime.h>
-#include "hash_table.h"
+#include "hash_table_gpu.h"
 #include "test_hash_table.h"
 
 #include <helper_cuda.h>
@@ -26,7 +26,7 @@ int main(int argc, const char **argv) {
 
   findCudaDevice(argc, argv);
   HashParams params;
-  params.block_count = 256 * 256 * 4;
+  params.value_capacity = 256 * 256 * 4;
   params.bucket_count = 500000;
   params.bucket_size = 10;
   params.block_size = 8;

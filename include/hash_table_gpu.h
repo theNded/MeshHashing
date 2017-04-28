@@ -28,17 +28,17 @@ extern __constant__ HashParams kHashParams;
 extern void SetConstantHashParams(const HashParams& hash_params);
 
 // TODO(wei): make a templated class to adapt to more types
-template <typename Value>
-class TemplatedHashTable {
+template <typename ValueType>
+class HashTableGPU {
 public:
   /// Hash VALUE part
-  uint      *heap;               /// index to free blocks
+  uint      *heap;               /// index to free values
   uint      *heap_counter;       /// single element; used as an atomic counter (points to the next free block)
-  Value     *blocks;             /// pre-allocated and managed by heap manually to avoid expensive malloc
-  int       *block_remove_flags; /// used in garbage collection
+  ValueType *values;             /// pre-allocated and managed by heap manually to avoid expensive malloc
+  int       *value_remove_flags; /// used in garbage collection
 
   /// Hash KEY part
-  HashEntry *hash_entries;                 /// hash entries that stores pointers to sdf blocks
+  HashEntry *hash_entries;                 /// hash entries that stores pointers to sdf values
   HashEntry *compacted_hash_entries;       /// allocated for parallel computation
   int       *compacted_hash_entry_counter; /// atomic counter to add compacted entries atomically
                                            /// == occupied_block_count
@@ -50,11 +50,11 @@ public:
   // Host part //
   ///////////////
   __device__ __host__
-  TemplatedHashTable() {
+  HashTableGPU() {
     heap = NULL;
     heap_counter = NULL;
-    blocks = NULL;
-    block_remove_flags = NULL;
+    values = NULL;
+    value_remove_flags = NULL;
 
     hash_entries = NULL;
     compacted_hash_entries = NULL;
@@ -68,10 +68,10 @@ public:
   void Alloc(const HashParams &params, bool is_data_on_gpu = true) {
     is_on_gpu = is_data_on_gpu;
     if (is_on_gpu) {
-      checkCudaErrors(cudaMalloc(&heap, sizeof(uint) * params.block_count));
+      checkCudaErrors(cudaMalloc(&heap, sizeof(uint) * params.value_capacity));
       checkCudaErrors(cudaMalloc(&heap_counter, sizeof(uint)));
-      checkCudaErrors(cudaMalloc(&blocks, sizeof(Voxel) * params.voxel_count));
-      checkCudaErrors(cudaMalloc(&block_remove_flags, sizeof(int) * params.entry_count));
+      checkCudaErrors(cudaMalloc(&values, sizeof(ValueType) * params.value_capacity));
+      checkCudaErrors(cudaMalloc(&value_remove_flags, sizeof(int) * params.entry_count));
 
       checkCudaErrors(cudaMalloc(&hash_entries, sizeof(HashEntry) * params.entry_count));
       checkCudaErrors(cudaMalloc(&compacted_hash_entries, sizeof(HashEntry) * params.entry_count));
@@ -79,10 +79,10 @@ public:
 
       checkCudaErrors(cudaMalloc(&bucket_mutexes, sizeof(int) * params.bucket_count));
     } else {
-      heap               = new uint[params.block_count];
+      heap               = new uint[params.value_capacity];
       heap_counter       = new uint[1];
-      blocks             = new Voxel[params.voxel_count];
-      block_remove_flags = new int[params.entry_count];
+      values             = new ValueType[params.value_capacity];
+      value_remove_flags = new int[params.entry_count];
 
       hash_entries                 = new HashEntry[params.entry_count];
       compacted_hash_entries       = new HashEntry[params.entry_count];
@@ -97,8 +97,8 @@ public:
     if (is_on_gpu) {
       checkCudaErrors(cudaFree(heap));
       checkCudaErrors(cudaFree(heap_counter));
-      checkCudaErrors(cudaFree(blocks));
-      checkCudaErrors(cudaFree(block_remove_flags));
+      checkCudaErrors(cudaFree(values));
+      checkCudaErrors(cudaFree(value_remove_flags));
 
       checkCudaErrors(cudaFree(hash_entries));
       checkCudaErrors(cudaFree(compacted_hash_entries));
@@ -108,8 +108,8 @@ public:
     } else {
       if (heap)               delete[] heap;
       if (heap_counter)       delete[] heap_counter;
-      if (blocks)             delete[] blocks;
-      if (block_remove_flags) delete[] block_remove_flags;
+      if (values)             delete[] values;
+      if (value_remove_flags) delete[] value_remove_flags;
 
       if (hash_entries)                 delete[] hash_entries;
       if (compacted_hash_entries)       delete[] compacted_hash_entries;
@@ -120,51 +120,14 @@ public:
 
     heap               = NULL;
     heap_counter       = NULL;
-    blocks             = NULL;
-    block_remove_flags = NULL;
+    values             = NULL;
+    value_remove_flags = NULL;
 
     hash_entries                 = NULL;
     compacted_hash_entries       = NULL;
     compacted_hash_entry_counter = NULL;
 
     bucket_mutexes = NULL;
-  }
-
-  __host__
-  TemplatedHashTable CopyToCPU(const HashParams &params) const {
-    TemplatedHashTable hash_table;
-    hash_table.Alloc(params, false);
-
-    checkCudaErrors(cudaMemcpy(hash_table.heap, heap,
-                               sizeof(uint) * params.block_count,
-                               cudaMemcpyDeviceToHost));
-    checkCudaErrors(cudaMemcpy(hash_table.heap_counter, heap_counter,
-                               sizeof(unsigned int),
-                               cudaMemcpyDeviceToHost));
-    checkCudaErrors(cudaMemcpy(hash_table.blocks, blocks,
-                               sizeof(Voxel) * params.voxel_count,
-                               cudaMemcpyDeviceToHost));
-    checkCudaErrors(cudaMemcpy(hash_table.block_remove_flags, block_remove_flags,
-                               sizeof(int) * params.entry_count,
-                               cudaMemcpyDeviceToHost));
-
-    checkCudaErrors(cudaMemcpy(hash_table.hash_entries, hash_entries,
-                               sizeof(HashEntry) * params.entry_count,
-                               cudaMemcpyDeviceToHost));
-    checkCudaErrors(cudaMemcpy(hash_table.compacted_hash_entries, compacted_hash_entries,
-                               sizeof(HashEntry) * params.entry_count,
-                               cudaMemcpyDeviceToHost));
-    checkCudaErrors(cudaMemcpy(hash_table.compacted_hash_entry_counter, compacted_hash_entry_counter,
-                               sizeof(unsigned int),
-                               cudaMemcpyDeviceToHost));
-
-    checkCudaErrors(cudaMemcpy(hash_table.bucket_mutexes, bucket_mutexes,
-                               sizeof(int) * params.bucket_count,
-                               cudaMemcpyDeviceToHost));
-
-    // TODO MATTHIAS look at this (i.e,. when does memory get destroyed ;
-    // if it's in the destructer it would kill everything here
-    return hash_table;
   }
 
   /////////////////
@@ -188,45 +151,21 @@ public:
     return (uint) res;
   }
 
-  __device__
-  void UpdateVoxel(Voxel &in, const Voxel& update) const {
-    float3 c_in     = make_float3(in.color.x, in.color.y, in.color.z);
-    float3 c_update = make_float3(update.color.x, update.color.y, update.color.z);
-    float3 c_out = 0.5f * c_in + 0.5f * c_update;
-
-    uchar3 color = make_uchar3(c_out.x + 0.5f, c_out.y + 0.5f, c_out.z + 0.5f);
-
-    in.color.x = color.x, in.color.y = color.y, in.color.z = color.z;
-    in.sdf = (in.sdf * (float)in.weight + update.sdf * (float)update.weight)
-            / ((float)in.weight + (float)update.weight);
-    in.weight = min(kHashParams.weight_upper_bound, (uint)in.weight + (uint)update.weight);
-  }
 
   ////////////////////////////////////////
   /// Access
   __device__
-  HashEntry GetHashEntryForWorldPos(const float3& world_pos) const	{
-    int3 block_pos = WorldToBlock(world_pos);
-    return GetHashEntryForBlockPos(block_pos);
+    void ClearHashEntry(uint id) {
+      ClearHashEntry(hash_entries[id]);
   }
 
   __device__
-    void DeleteHashEntry(uint id) {
-      DeleteHashEntry(hash_entries[id]);
-  }
-
-  __device__
-  void DeleteHashEntry(HashEntry& hash_entry) {
+  void ClearHashEntry(HashEntry& hash_entry) {
     hash_entry.pos    = make_int3(0);
     hash_entry.offset = 0;
     hash_entry.ptr    = FREE_ENTRY;
   }
 
-  __device__
-  bool IsBlockAllocated(const float3& world_pos) const {
-    HashEntry hash_entry = GetHashEntryForWorldPos(world_pos);
-    return (hash_entry.ptr != FREE_ENTRY);
-  }
 
   __device__
   bool IsBlockAllocated(const int3& block_pos, const HashEntry& hash_entry) const {
@@ -236,52 +175,9 @@ public:
         && hash_entry.ptr != FREE_ENTRY;
   }
 
-  __device__
-  void DeleteVoxel(Voxel& v) const {
-    v.color  = make_uchar3(0, 0, 0);
-    v.weight = 0;
-    v.sdf    = 0.0f;
-  }
-  __device__
-  void DeleteVoxel(uint id) {
-    DeleteVoxel(blocks[id]);
-  }
 
   __device__
-  Voxel GetVoxel(const float3& world_pos) const	{
-    HashEntry hash_entry = GetHashEntryForWorldPos(world_pos);
-    Voxel v;
-    if (hash_entry.ptr == FREE_ENTRY) {
-      DeleteVoxel(v);
-    } else {
-      int3 voxel_pos = WorldToVoxeli(world_pos);
-      v = blocks[hash_entry.ptr + VoxelPosToIdx(voxel_pos)];
-    }
-    return v;
-  }
-
-  __device__
-  Voxel GetVoxel(const int3& voxel_pos) const	{
-    HashEntry hash_entry = GetHashEntryForBlockPos(VoxelToBlock(voxel_pos));
-    Voxel v;
-    if (hash_entry.ptr == FREE_ENTRY) {
-      DeleteVoxel(v);
-    } else {
-      v = blocks[hash_entry.ptr + VoxelPosToIdx(voxel_pos)];
-    }
-    return v;
-  }
-
-  __device__
-  void SetVoxel(const int3& voxel_pos, Voxel& voxel) const {
-    HashEntry hash_entry = GetHashEntryForBlockPos(VoxelToBlock(voxel_pos));
-    if (hash_entry.ptr != FREE_ENTRY) {
-      blocks[hash_entry.ptr + VoxelPosToIdx(voxel_pos)] = voxel;
-    }
-  }
-
-  __device__
-  HashEntry GetHashEntryForBlockPos(const int3& block_pos) const {
+  HashEntry GetEntry(const int3& block_pos) const {
     uint bucket_idx             = HashBucketForBlockPos(block_pos);
     uint bucket_first_entry_idx = bucket_idx * HASH_BUCKET_SIZE;
 
@@ -335,7 +231,7 @@ public:
 
   //pos in SDF block coordinates
   __device__
-  void AllocBlock(const int3& pos) {
+  void AllocEntry(const int3& pos) {
     uint bucket_idx             = HashBucketForBlockPos(pos);				//hash bucket
     uint bucket_first_entry_idx = bucket_idx * HASH_BUCKET_SIZE;	//hash position
 
@@ -375,7 +271,7 @@ public:
         HashEntry& entry = hash_entries[empty_entry_idx];
         entry.pos    = pos;
         entry.offset = NO_OFFSET;
-        entry.ptr    = AllocHeap() * SDF_BLOCK_SIZE*SDF_BLOCK_SIZE*SDF_BLOCK_SIZE;	//memory alloc
+        entry.ptr    = AllocHeap();	//memory alloc
       }
       return;
     }
@@ -405,7 +301,7 @@ public:
             HashEntry& entry = hash_entries[i];
             entry.pos    = pos;
             entry.offset = bucket_last_entry.offset; // pointer assignment in linked list
-            entry.ptr    = AllocHeap() * SDF_BLOCK_SIZE*SDF_BLOCK_SIZE*SDF_BLOCK_SIZE;	//memory alloc
+            entry.ptr    = AllocHeap();	//memory alloc
 
             // Not sure if it is ok to directly assign to reference
             bucket_last_entry.offset = offset;
@@ -421,7 +317,7 @@ public:
 
   //! deletes a hash entry position for a given block_pos index (returns true uppon successful deletion; otherwise returns false)
   __device__
-  bool DeleteHashEntryElement(const int3& block_pos) {
+  bool DeleteEntry(const int3& block_pos) {
     uint bucket_idx = HashBucketForBlockPos(block_pos);	//hash bucket
     uint bucket_first_entry_idx = bucket_idx * HASH_BUCKET_SIZE;		//hash position
 
@@ -431,28 +327,25 @@ public:
       if (IsBlockAllocated(block_pos, curr)) {
 
 #ifndef HANDLE_COLLISIONS
-        const uint block_size = SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE;
-        FreeHeap(curr.ptr / block_size);
-        DeleteHashEntry(i);
+        FreeHeap(curr.ptr);
+        ClearHashEntry(i);
         return true;
 #else
         // Deal with linked list: curr = curr->next
         if (curr.offset != 0) {
           int lock = atomicExch(&bucket_mutexes[bucket_idx], LOCK_ENTRY);
           if (lock != LOCK_ENTRY) {
-            const uint block_size = SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE;
-            FreeHeap(curr.ptr / block_size);
+            FreeHeap(curr.ptr);
             int next_idx = (i + curr.offset) % (kHashParams.entry_count);
             hash_entries[i] = hash_entries[next_idx];
-            DeleteHashEntry(next_idx);
+            ClearHashEntry(next_idx);
             return true;
           } else {
             return false;
           }
         } else {
-          const uint block_size = SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE;
-          FreeHeap(curr.ptr / block_size);
-          DeleteHashEntry(i);
+          FreeHeap(curr.ptr);
+          ClearHashEntry(i);
           return true;
         }
 #endif
@@ -475,9 +368,8 @@ public:
       if (IsBlockAllocated(block_pos, curr)) {
         int lock = atomicExch(&bucket_mutexes[bucket_idx], LOCK_ENTRY);
         if (lock != LOCK_ENTRY) {
-          const uint block_size = SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE;
-          FreeHeap(curr.ptr / block_size);
-          DeleteHashEntry(i);
+          FreeHeap(curr.ptr);
+          ClearHashEntry(i);
           HashEntry prev = hash_entries[prev_idx];
           prev.offset = curr.offset;
           hash_entries[prev_idx] = prev;
@@ -565,57 +457,10 @@ public:
     return false;
   }
 
-  //////////
-  // Histogram (no collision traversal)
-  __device__
-  unsigned int getNumHashEntriesPerBucket(unsigned int bucketID) {
-    unsigned int h = 0;
-    for (uint i = 0; i < HASH_BUCKET_SIZE; i++) {
-      if (hash_entries[bucketID*HASH_BUCKET_SIZE+i].ptr != FREE_ENTRY) {
-        h++;
-      }
-    }
-    return h;
-  }
-
-  // Histogram (collisions traversal only)
-  __device__
-  unsigned int getNumHashLinkedList(unsigned int bucketID) {
-    unsigned int listLen = 0;
-
-#ifdef HANDLE_COLLISIONS
-    const uint idxLastEntryInBucket = (bucketID+1)*HASH_BUCKET_SIZE - 1;
-    unsigned int i = idxLastEntryInBucket;	//start with the last entry of the current bucket
-    //int offset = 0;
-    HashEntry curr;	curr.offset = 0;
-    //traverse list until end: memorize idx at list end and memorize offset from last element of bucket to list end
-
-    unsigned int maxIter = 0;
-    uint g_MaxLoopIterCount = kHashParams.linked_list_size;
-    #pragma unroll 1
-    while (maxIter < g_MaxLoopIterCount) {
-      //offset = curr.offset;
-      //curr = GetHashEntry(g_Hash, i);
-      curr = hash_entries[i];
-
-      if (curr.offset == 0) {	//we have found the end of the list
-        break;
-      }
-      i = idxLastEntryInBucket + curr.offset;		//go to next element in the list
-      i %= (HASH_BUCKET_SIZE * kHashParams.bucket_count);	//check for overflow
-      listLen++;
-
-      maxIter++;
-    }
-#endif
-    return listLen;
-  }
-
-
 #endif	//CUDACC
 
 };
 
-typedef TemplatedHashTable<Block> HashTable;
+typedef HashTableGPU<Block> HashTable;
 
 #endif

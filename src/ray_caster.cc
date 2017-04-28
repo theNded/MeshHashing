@@ -4,7 +4,7 @@
 
 #include "ray_caster.h"
 #include "ray_caster_data.h"
-#include "hash_table.h"
+#include "hash_table_gpu.h"
 
 RayCaster::RayCaster(const RayCasterParams& params) {
   ray_caster_params_ = params;

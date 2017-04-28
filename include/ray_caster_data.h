@@ -8,7 +8,7 @@
 #include "common.h"
 #include <helper_cuda.h>
 
-#include "hash_table.h"
+#include "hash_table_gpu.h"
 #include "ray_caster_param.h"
 
 #ifndef MINF

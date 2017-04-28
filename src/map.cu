@@ -1,6 +1,6 @@
 #include "matrix.h"
 
-#include "hash_table.h"
+#include "hash_table_gpu.h"
 #include "sensor_data.h"
 
 #include <helper_cuda.h>
@@ -42,34 +42,30 @@ void ResetBucketMutexesCudaHost(HashTable& hash_table, const HashParams& hash_pa
 
 __global__
 /// Private heap
-/// Public DeleteVoxel
+/// Public ClearVoxel
 void ResetHeapKernel(HashTable hash_table) {
   const HashParams& hash_params = kHashParams;
   unsigned int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
   if (idx == 0) {
-    hash_table.heap_counter[0] = hash_params.block_count - 1;	//points to the last element of the array
+    hash_table.heap_counter[0] = hash_params.value_capacity - 1;	//points to the last element of the array
   }
 
-  if (idx < hash_params.block_count) {
-    hash_table.heap[idx] = hash_params.block_count - idx - 1;
-    uint blockSize = SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE;
-    uint base_idx = idx * blockSize;
-    for (uint i = 0; i < blockSize; i++) {
-      hash_table.DeleteVoxel(base_idx+i);
-    }
+  if (idx < hash_params.value_capacity) {
+    hash_table.heap[idx] = hash_params.value_capacity - idx - 1;
+    hash_table.values[idx].Clear();
   }
 }
 
-/// Public DeleteHashEntry
+/// Public ClearHashEntry
 /// Private hash_entries, compacted_hash_entries
 __global__
 void ResetEntriesKernel(HashTable hash_table) {
   const HashParams& hash_params = kHashParams;
   const unsigned int idx = blockIdx.x*blockDim.x + threadIdx.x;
   if (idx < hash_params.bucket_count * HASH_BUCKET_SIZE) {
-    hash_table.DeleteHashEntry(hash_table.hash_entries[idx]);
-    hash_table.DeleteHashEntry(hash_table.compacted_hash_entries[idx]);
+    hash_table.ClearHashEntry(hash_table.hash_entries[idx]);
+    hash_table.ClearHashEntry(hash_table.compacted_hash_entries[idx]);
   }
 }
 
@@ -77,7 +73,7 @@ __host__
 void ResetCudaHost(HashTable& hash_table, const HashParams& hash_params) {
   {
     //resetting the heap and SDF blocks
-    const dim3 gridSize((hash_params.block_count + (T_PER_BLOCK*T_PER_BLOCK) - 1)/(T_PER_BLOCK*T_PER_BLOCK), 1);
+    const dim3 gridSize((hash_params.value_capacity + (T_PER_BLOCK*T_PER_BLOCK) - 1)/(T_PER_BLOCK*T_PER_BLOCK), 1);
     const dim3 blockSize((T_PER_BLOCK*T_PER_BLOCK), 1);
 
     ResetHeapKernel<<<gridSize, blockSize>>>(hash_table);
@@ -170,9 +166,9 @@ void StarveOccupiedVoxelsKernel(HashTable hash_table) {
   const HashEntry& entry = hash_table.compacted_hash_entries[idx];
 
   //is typically exectued only every n'th frame
-  int weight = hash_table.blocks[entry.ptr + threadIdx.x].weight;
+  int weight = hash_table.values[entry.ptr](threadIdx.x).weight;
   weight = max(0, weight-1);
-  hash_table.blocks[entry.ptr + threadIdx.x].weight = weight;
+  hash_table.values[entry.ptr](threadIdx.x).weight = weight;
 }
 
 __host__
@@ -194,7 +190,7 @@ void StarveOccupiedVoxelsCudaHost(HashTable& hash_table, const HashParams& hash_
 
 //////////
 /// Outlier blocks recycling
-/// Private compacted_hash_entries, block_remove_flags
+/// Private compacted_hash_entries, value_remove_flags
 __shared__ float	shared_min_sdf   [SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE / 2];
 __shared__ uint		shared_max_weight[SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE / 2];
 
@@ -204,11 +200,9 @@ void CollectInvalidBlockInfoKernel(HashTable hash_table) {
   const unsigned int hashIdx = blockIdx.x;
   const HashEntry& entry = hash_table.compacted_hash_entries[hashIdx];
 
-  const unsigned int idx0 = entry.ptr + 2*threadIdx.x+0;
-  const unsigned int idx1 = entry.ptr + 2*threadIdx.x+1;
 
-  Voxel v0 = hash_table.blocks[idx0];
-  Voxel v1 = hash_table.blocks[idx1];
+  Voxel v0 = hash_table.values[entry.ptr](2*threadIdx.x+0);
+  Voxel v1 = hash_table.values[entry.ptr](2*threadIdx.x+1);
 
   if (v0.weight == 0)	v0.sdf = PINF;
   if (v1.weight == 0)	v1.sdf = PINF;
@@ -234,9 +228,9 @@ void CollectInvalidBlockInfoKernel(HashTable hash_table) {
     float t = truncate_distance(kSensorParams.max_depth_range);	//MATTHIAS TODO check whether this is a reasonable metric
 
     if (minSDF >= t || maxWeight == 0) {
-      hash_table.block_remove_flags[hashIdx] = 1;
+      hash_table.value_remove_flags[hashIdx] = 1;
     } else {
-      hash_table.block_remove_flags[hashIdx] = 0;
+      hash_table.value_remove_flags[hashIdx] = 0;
     }
   }
 }
@@ -260,8 +254,8 @@ void CollectInvalidBlockInfoCudaHost(HashTable& hash_table, const HashParams& ha
 
 
 __global__
-/// Private block_remove_flags
-/// Public DeleteHashEntryElement && DeleteVoxel
+/// Private value_remove_flags
+/// Public DeleteEntry && ClearVoxel
 void RecycleInvalidBlockKernel(HashTable hash_table) {
 
   //const uint hashIdx = blockIdx.x;
@@ -269,18 +263,13 @@ void RecycleInvalidBlockKernel(HashTable hash_table) {
 
 
   if (hashIdx < (*hash_table.compacted_hash_entry_counter)
-      && hash_table.block_remove_flags[hashIdx] != 0) {	//decision to delete the hash entry
+      && hash_table.value_remove_flags[hashIdx] != 0) {	//decision to delete the hash entry
 
     const HashEntry& entry = hash_table.compacted_hash_entries[hashIdx];
     //if (entry.ptr == FREE_ENTRY) return; //should never happen since we did compactify before
 
-    if (hash_table.DeleteHashEntryElement(entry.pos)) {	//delete hash entry from hash (and performs heap append)
-      const uint linBlockSize = SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE;
-
-#pragma unroll 1
-      for (uint i = 0; i < linBlockSize; i++) {	//clear sdf block: CHECK TODO another kernel?
-        hash_table.DeleteVoxel(entry.ptr + i);
-      }
+    if (hash_table.DeleteEntry(entry.pos)) {	//delete hash entry from hash (and performs heap append)
+      hash_table.values[entry.ptr].Clear();
     }
   }
 }

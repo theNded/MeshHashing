@@ -5,7 +5,7 @@
 #ifndef MRF_VH_TEST_HASH_DATA_H
 #define MRF_VH_TEST_HASH_DATA_H
 
-#include "hash_table.h"
+#include "hash_table_gpu.h"
 
 class TestHashTable {
 public:

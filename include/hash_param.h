@@ -21,7 +21,7 @@ struct __ALIGN__(16) HashParams {
   uint  entry_count;                // bucket_count * bucket_size
   uint  linked_list_size;           // 7
 
-  uint  block_count;                // 1000000
+  uint  value_capacity;                // 1000000
 
   int   block_size;                 // 8 (voxels)
 

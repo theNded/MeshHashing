@@ -1,7 +1,7 @@
 /// Input depth image as texture
 /// Easier interpolation
 
-#include "hash_table.h"
+#include "hash_table_gpu.h"
 #include "sensor_data.h"
 
 #define PINF  __int_as_float(0x7f800000)
@@ -69,8 +69,7 @@ void IntegrateCudaKernel(HashTable hash_table, SensorData sensor_data, float4x4 
     delta.color = make_uchar3(0, 255, 0);
   }
 
-  uint idx = entry.ptr + local_idx;
-  hash_table.UpdateVoxel(hash_table.blocks[idx], delta);
+  hash_table.values[entry.ptr].Update(local_idx, delta);
 }
 
 
@@ -162,7 +161,7 @@ void AllocBlocksKernel(HashTable hash_table, SensorData sensor_data,
     if (IsBlockInCameraFrustum(w_T_c.getInverse(), block_pos_curr)) {
       /// Disable streaming at current
       // && !isSDFBlockStreamedOut(idCurrentVoxel, hash_table, is_streamed_mask)) {
-      hash_table.AllocBlock(block_pos_curr);
+      hash_table.AllocEntry(block_pos_curr);
     }
 
     // Traverse voxel grid

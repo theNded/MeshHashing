@@ -173,9 +173,9 @@ int main() {
   hash_params.entry_count = hash_params.bucket_count * hash_params.bucket_size;
   hash_params.linked_list_size = 7;
 
-  hash_params.block_count = 1000000;
+  hash_params.value_capacity = 1000000;
   hash_params.block_size = 8;
-  hash_params.voxel_count = hash_params.block_count
+  hash_params.voxel_count = hash_params.value_capacity
                             * (hash_params.block_size * hash_params.block_size * hash_params.block_size);
   hash_params.voxel_size = 0.01;
 
@@ -241,7 +241,8 @@ int main() {
   //cv::VideoWriter writer("icl-vh.avi", CV_FOURCC('X','V','I','D'), 30, cv::Size(640, 480));
   std::chrono::time_point<std::chrono::system_clock> start, end;
   start = std::chrono::system_clock::now();
-  for (int i = 0; i < 880; ++i) {
+  int frames = 880;
+  for (int i = 0; i < frames; ++i) {
     LOG(INFO) << i;
     cv::Mat depth = cv::imread(depth_img_list[i], -1);
     //cv::flip(depth, depth, 2);
@@ -266,7 +267,7 @@ int main() {
   end = std::chrono::system_clock::now();
   std::chrono::duration<double> seconds = end - start;
   LOG(INFO) << "Total time: " << seconds.count();
-  LOG(INFO) << "Fps: " << 790 / seconds.count();
+  LOG(INFO) << "Fps: " << frames / seconds.count();
 
   checkCudaErrors(cudaFree(cuda_hsv));
   //cv::waitKey(-1);

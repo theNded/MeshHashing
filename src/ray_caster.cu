@@ -1,7 +1,7 @@
 #include <matrix.h>
 
 #include "sensor_data.h"
-#include "hash_table.h"
+#include "hash_table_gpu.h"
 #include "ray_caster.h"
 #include "ray_caster_data.h"
 
@@ -15,6 +15,21 @@ __device__
 inline float3 frac(const float3& val)  {
   return make_float3(frac(val.x), frac(val.y), frac(val.z));
 }
+
+__device__
+Voxel GetVoxel(const HashTable& hash_table, float3 world_pos) {
+  HashEntry hash_entry = hash_table.GetEntry(WorldToBlock(world_pos));
+  Voxel v;
+  if (hash_entry.ptr == FREE_ENTRY) {
+    v.Clear();
+  } else {
+    int3 voxel_pos = WorldToVoxeli(world_pos);
+    int i = VoxelPosToIdx(voxel_pos);
+    v = hash_table.values[hash_entry.ptr](i);
+  }
+  return v;
+}
+
 __device__
 bool TrilinearInterpolation(const HashTable& hash_table, const float3& pos,
                             float& sdf, uchar3& color) {
@@ -30,7 +45,7 @@ bool TrilinearInterpolation(const HashTable& hash_table, const float3& pos,
   float3 v_color;
   
   /// 000
-  v = hash_table.GetVoxel(pos_corner+make_float3(0.0f, 0.0f, 0.0f));
+  v = GetVoxel(hash_table, pos_corner+make_float3(0.0f, 0.0f, 0.0f));
   if(v.weight == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
   w = (1.0f-ratio.x)*(1.0f-ratio.y)*(1.0f-ratio.z);
@@ -38,7 +53,7 @@ bool TrilinearInterpolation(const HashTable& hash_table, const float3& pos,
   colorf += w * v_color;
 
   /// 001
-  v = hash_table.GetVoxel(pos_corner+make_float3(0.0f, 0.0f, offset));
+  v = GetVoxel(hash_table, pos_corner+make_float3(0.0f, 0.0f, offset));
   if(v.weight == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
   w = (1.0f-ratio.x)*(1.0f-ratio.y)*ratio.z;
@@ -46,7 +61,7 @@ bool TrilinearInterpolation(const HashTable& hash_table, const float3& pos,
   colorf += w * v_color;
 
   /// 010
-  v = hash_table.GetVoxel(pos_corner+make_float3(0.0f, offset, 0.0f));
+  v = GetVoxel(hash_table, pos_corner+make_float3(0.0f, offset, 0.0f));
   if(v.weight == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
   w = (1.0f-ratio.x)*ratio.y *(1.0f-ratio.z);
@@ -54,7 +69,7 @@ bool TrilinearInterpolation(const HashTable& hash_table, const float3& pos,
   colorf += w * v_color;
 
   /// 011
-  v = hash_table.GetVoxel(pos_corner+make_float3(0.0f, offset, offset));
+  v = GetVoxel(hash_table, pos_corner+make_float3(0.0f, offset, offset));
   if(v.weight == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
   w = (1.0f-ratio.x)*ratio.y*ratio.z;
@@ -62,7 +77,7 @@ bool TrilinearInterpolation(const HashTable& hash_table, const float3& pos,
   colorf += w * v_color;
 
   /// 100
-  v = hash_table.GetVoxel(pos_corner+make_float3(offset, 0.0f, 0.0f));
+  v = GetVoxel(hash_table, pos_corner+make_float3(offset, 0.0f, 0.0f));
   if(v.weight == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
   w = ratio.x*(1.0f-ratio.y)*(1.0f-ratio.z);
@@ -70,7 +85,7 @@ bool TrilinearInterpolation(const HashTable& hash_table, const float3& pos,
   colorf += w * v_color;
 
   /// 101
-  v = hash_table.GetVoxel(pos_corner+make_float3(offset, 0.0f, offset));
+  v = GetVoxel(hash_table, pos_corner+make_float3(offset, 0.0f, offset));
   if(v.weight == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
   w = ratio.x*(1.0f-ratio.y)*ratio.z;
@@ -78,7 +93,7 @@ bool TrilinearInterpolation(const HashTable& hash_table, const float3& pos,
   colorf += w	* v_color;
 
   /// 110
-  v = hash_table.GetVoxel(pos_corner+make_float3(offset, offset, 0.0f));
+  v = GetVoxel(hash_table, pos_corner+make_float3(offset, offset, 0.0f));
   if(v.weight == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
   w = ratio.x*ratio.y*(1.0f-ratio.z);
@@ -86,7 +101,7 @@ bool TrilinearInterpolation(const HashTable& hash_table, const float3& pos,
   colorf += w * v_color;
 
   /// 111
-  v = hash_table.GetVoxel(pos_corner+make_float3(offset, offset, offset));
+  v = GetVoxel(hash_table, pos_corner+make_float3(offset, offset, offset));
   if(v.weight == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
   w = ratio.x*ratio.y*ratio.z;

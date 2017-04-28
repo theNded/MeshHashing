@@ -9,7 +9,7 @@
 
 #include "geometry_util.h"
 #include "hash_param.h"
-#include "hash_table.h"
+#include "hash_table_gpu.h"
 #include "map.h"
 #include "sensor.h"
 

@@ -60,20 +60,20 @@ unsigned int Map::getHeapFreeCount() {
 void Map::debugHash() {
   HashEntry *hashCPU = new HashEntry[hash_params_.bucket_size * hash_params_.bucket_count];
   HashEntry *hashCompCPU = new HashEntry[occupied_block_count_];
-  Voxel *voxelCPU = new Voxel[hash_params_.block_count * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE];
-  unsigned int *heapCPU = new unsigned int[hash_params_.block_count];
+  Voxel *voxelCPU = new Voxel[hash_params_.value_capacity * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE];
+  unsigned int *heapCPU = new unsigned int[hash_params_.value_capacity];
   unsigned int heapCounterCPU;
 
   checkCudaErrors(cudaMemcpy(&heapCounterCPU, hash_table_.heap_counter, sizeof(unsigned int), cudaMemcpyDeviceToHost));
   heapCounterCPU++;  //points to the first free entry: number of blocks is one more
 
-  checkCudaErrors(cudaMemcpy(heapCPU, hash_table_.heap, sizeof(unsigned int) * hash_params_.block_count, cudaMemcpyDeviceToHost));
+  checkCudaErrors(cudaMemcpy(heapCPU, hash_table_.heap, sizeof(unsigned int) * hash_params_.value_capacity, cudaMemcpyDeviceToHost));
   checkCudaErrors(cudaMemcpy(hashCPU, hash_table_.hash_entries,
                              sizeof(HashEntry) * hash_params_.bucket_size * hash_params_.bucket_count, cudaMemcpyDeviceToHost));
   checkCudaErrors(cudaMemcpy(hashCompCPU, hash_table_.compacted_hash_entries,
                              sizeof(HashEntry) * occupied_block_count_, cudaMemcpyDeviceToHost));
-  checkCudaErrors(cudaMemcpy(voxelCPU, hash_table_.blocks,
-                             sizeof(Voxel) * hash_params_.block_count * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE,
+  checkCudaErrors(cudaMemcpy(voxelCPU, hash_table_.values,
+                             sizeof(Voxel) * hash_params_.value_capacity * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE,
                              cudaMemcpyDeviceToHost));
 
   std::cout << "Compactified" << std::endl;
@@ -106,7 +106,7 @@ void Map::debugHash() {
 
 
   std::unordered_set<unsigned int> pointersFreeHash;
-  std::vector<int> pointersFreeVec(hash_params_.block_count, 0);
+  std::vector<int> pointersFreeVec(hash_params_.value_capacity, 0);
   for (unsigned int i = 0; i < heapCounterCPU; i++) {
     pointersFreeHash.insert(heapCPU[i]);
     pointersFreeVec[heapCPU[i]] = FREE_ENTRY;
@@ -138,18 +138,17 @@ void Map::debugHash() {
       l.push_back(a);
       //v.push_back(a);
 
-      unsigned int linearBlockSize =
-              hash_params_.block_size * hash_params_.block_size * hash_params_.block_size;
-      if (pointersFreeHash.find(hashCPU[i].ptr / linearBlockSize) != pointersFreeHash.end()) {
+
+      if (pointersFreeHash.find(hashCPU[i].ptr) != pointersFreeHash.end()) {
         std::cerr << ("ERROR: ptr is on free heap, but also marked as an allocated entry");
       }
-      pointersFreeVec[hashCPU[i].ptr / linearBlockSize] = LOCK_ENTRY;
+      pointersFreeVec[hashCPU[i].ptr] = LOCK_ENTRY;
     }
   }
 
   unsigned int numHeapFree = 0;
   unsigned int numHeapOccupied = 0;
-  for (unsigned int i = 0; i < hash_params_.block_count; i++) {
+  for (unsigned int i = 0; i < hash_params_.value_capacity; i++) {
     if (pointersFreeVec[i] == FREE_ENTRY) numHeapFree++;
     else if (pointersFreeVec[i] == LOCK_ENTRY) numHeapOccupied++;
     else {
@@ -157,7 +156,7 @@ void Map::debugHash() {
       exit(-1);
     }
   }
-  if (numHeapFree + numHeapOccupied == hash_params_.block_count) std::cout << "HEAP OK!" << std::endl;
+  if (numHeapFree + numHeapOccupied == hash_params_.value_capacity) std::cout << "HEAP OK!" << std::endl;
   else {
     std::cerr << "HEAP CORRUPTED";
     exit(-1);

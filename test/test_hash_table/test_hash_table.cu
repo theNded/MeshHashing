@@ -1,4 +1,4 @@
-#include "hash_table.h"
+#include "hash_table_gpu.h"
 #include "test_hash_table.h"
 #include <helper_cuda.h>
 

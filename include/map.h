@@ -5,7 +5,7 @@
 #ifndef VOXEL_HASHING_MAP_H
 #define VOXEL_HASHING_MAP_H
 
-#include "hash_table.h"
+#include "hash_table_gpu.h"
 #include "sensor.h"
 #include "sensor_data.h"
 
