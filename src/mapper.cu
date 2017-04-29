@@ -1,22 +1,15 @@
 /// Input depth image as texture
 /// Easier interpolation
 
+#include "sensor.h"
 #include "mapper.h"
 #include "hash_table_gpu.h"
 
 #define PINF  __int_as_float(0x7f800000)
 
-//////////
-/// Bind texture
-texture<float, cudaTextureType2D, cudaReadModeElementType> depthTextureRef;
-texture<float4, cudaTextureType2D, cudaReadModeElementType> colorTextureRef;
-__host__
-void Mapper::BindSensorDataToTexture(const SensorData& sensor_data) {
-  checkCudaErrors(cudaBindTextureToArray(depthTextureRef, sensor_data.depth_array_, sensor_data.depth_channel_desc));
-  checkCudaErrors(cudaBindTextureToArray(colorTextureRef, sensor_data.color_array_, sensor_data.color_channel_desc));
-  depthTextureRef.filterMode = cudaFilterModePoint;
-  colorTextureRef.filterMode = cudaFilterModePoint;
-}
+/// Refer to sensor.cu
+extern texture<float, cudaTextureType2D, cudaReadModeElementType> depth_texture;
+extern texture<float4, cudaTextureType2D, cudaReadModeElementType> color_texture;
 
 /// Kernel functions
 __global__
@@ -40,7 +33,7 @@ void IntegrateCudaKernel(HashTableGPU<Block> hash_table, SensorData sensor_data,
     return;
 
   /// 3. Find correspondent depth observation
-  float depth = tex2D(depthTextureRef, image_pos.x, image_pos.y);
+  float depth = tex2D(depth_texture, image_pos.x, image_pos.y);
   if (depth == MINF || depth == 0.0f || depth >= hash_params.sdf_upper_bound)
     return;
 
@@ -60,7 +53,7 @@ void IntegrateCudaKernel(HashTableGPU<Block> hash_table, SensorData sensor_data,
   delta.sdf = sdf;
   delta.weight = max(hash_params.weight_sample * 1.5f * (1.0f - NormalizeDepth(depth)), 1.0f);
   if (sensor_data.color_image_) {
-    float4 color = tex2D(colorTextureRef, image_pos.x, image_pos.y);
+    float4 color = tex2D(color_texture, image_pos.x, image_pos.y);
     delta.color = make_uchar3(255 * color.x, 255 * color.y, 255 * color.z);
   } else {
     delta.color = make_uchar3(0, 255, 0);
@@ -130,7 +123,7 @@ void AllocBlocksKernel(HashTableGPU<Block> hash_table, SensorData sensor_data,
 
   /// TODO(wei): change it here
   /// 1. Get observed data
-  float depth = tex2D(depthTextureRef, x, y);
+  float depth = tex2D(depth_texture, x, y);
   if (depth == MINF || depth == 0.0f
       || depth >= hash_params.sdf_upper_bound)
     return;

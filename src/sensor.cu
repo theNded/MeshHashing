@@ -6,6 +6,20 @@
 
 #define MINF __int_as_float(0xff800000)
 
+texture<float, cudaTextureType2D, cudaReadModeElementType> depth_texture;
+texture<float4, cudaTextureType2D, cudaReadModeElementType> color_texture;
+__host__
+void Sensor::BindSensorDataToTexture() {
+  checkCudaErrors(cudaBindTextureToArray(depth_texture,
+                                         sensor_data_.depth_array_,
+                                         sensor_data_.depth_channel_desc));
+  checkCudaErrors(cudaBindTextureToArray(color_texture,
+                                         sensor_data_.color_array_,
+                                         sensor_data_.color_channel_desc));
+  depth_texture.filterMode = cudaFilterModePoint;
+  color_texture.filterMode = cudaFilterModePoint;
+}
+
 /// Kernel functions
 __global__
 void DepthCPUtoGPUKernel(float *d_output, short *d_input,

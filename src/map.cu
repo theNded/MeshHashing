@@ -17,9 +17,6 @@
 
 /// Input depth image as texture
 /// Easier interpolation
-extern texture<float, cudaTextureType2D, cudaReadModeElementType> depthTextureRef;
-extern texture<float4, cudaTextureType2D, cudaReadModeElementType> colorTextureRef;
-
 /// Kernel functions
 __global__
 void CompactHashEntriesKernel(HashTableGPU<Block> hash_table, float4x4 c_T_w) {

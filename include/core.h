@@ -53,7 +53,7 @@ struct Block {
   }
 
   __device__ void Clear() {
-#ifdef __CUDA_CC__
+#ifdef __CUDACC__
 #pragma unroll 1
 #endif
     for (int i = 0; i < 512; ++i) {

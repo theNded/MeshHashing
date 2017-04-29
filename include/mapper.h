@@ -20,10 +20,6 @@ public:
   Mapper();
   ~Mapper();
 
-  /// Set input (image)
-  /// Should bind only once
-  void BindSensorDataToTexture(const SensorData& sensor_data);
-
   void Integrate(Map* map, Sensor *sensor, unsigned int* is_streamed_mask);
 
 private:

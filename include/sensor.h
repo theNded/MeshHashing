@@ -26,11 +26,13 @@ struct SensorData {
   cudaChannelFormatDesc color_channel_desc;
 };
 
+
 class Sensor {
 public:
   Sensor(SensorParams &params);
   ~Sensor();
 
+  void BindSensorDataToTexture();
   int Process(cv::Mat &depth, cv::Mat &color);
   float4* ColorizeDepthImage() const;
 
@@ -63,6 +65,5 @@ private:
   void DepthCPUtoGPU(cv::Mat &depth);
   void ColorCPUtoGPU(cv::Mat &color);
 };
-
 
 #endif //MRF_VH_SENSOR_H

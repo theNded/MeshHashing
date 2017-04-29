@@ -208,6 +208,7 @@ int main() {
   sensor_params.width = 640;
   SetConstantSensorParams(sensor_params);
   Sensor sensor(sensor_params);
+  sensor.BindSensorDataToTexture();
 
   float4x4 T;
   float4x4 K;
@@ -231,7 +232,6 @@ int main() {
   RayCaster ray_caster(ray_cast_params);
 
   Mapper mapper;
-  mapper.BindSensorDataToTexture(sensor.sensor_data());
 
   /// Process
   float4 *cuda_hsv;
