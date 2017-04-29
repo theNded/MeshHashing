@@ -35,4 +35,38 @@ struct __ALIGN__(16) HashParams {
   uint  weight_sample;              // 10,  TODO(wei): change it dynamically!
   uint  weight_upper_bound;         // 255
 };
+
+struct __ALIGN__(16) RayCasterParams {
+  float4x4 intrinsics;               /// Intrinsic matrix
+  float4x4 intrinsics_inverse;
+
+  uint width;                /// 640
+  uint height;               /// 480
+
+  float min_raycast_depth;
+  float max_raycast_depth;
+  float raycast_step;                /// 0.8f * SDF_Truncation
+
+  float sample_sdf_threshold;        /// 50.5f * s_rayIncrement
+  float sdf_threshold;               /// 50.0f * s_rayIncrement
+  bool  enable_gradients;
+
+  uint dummy0;
+};
+
+/// We may generate a virtual camera for LiDAR
+/// where many points are null
+struct __ALIGN__(16) SensorParams {
+  float fx;              /// Set manually
+  float fy;
+  float cx;
+  float cy;
+
+  uint width;            /// 640
+  uint height;           /// 480
+
+  float min_depth_range; /// 0.5f
+  float max_depth_range; /// 5.0f, might need modify for LiDAR
+};
+
 #endif //VH_HASH_PARAM_H

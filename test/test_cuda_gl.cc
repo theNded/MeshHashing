@@ -11,8 +11,8 @@
 int main() {
   Renderer renderer;
   renderer.InitGL("test", 640, 480,
-                  "../voxel_hashing/shader/vertex.glsl",
-                  "../voxel_hashing/shader/fragment.glsl",
+                  "../shader/vertex.glsl",
+                  "../shader/fragment.glsl",
                   "texture_sampler");
   renderer.InitCUDA();
 
@@ -20,6 +20,7 @@ int main() {
   float * cpu_mem;
   float4* cuda_mem;
   cv::Mat im = cv::imread("../test/img.png");
+
   cv::resize(im, im, cv::Size(640, 480));
   cpu_mem = new float[4 * sizeof(float) * 640 * 480];
   for (int i = 0; i < im.rows; ++i) {
@@ -43,7 +44,7 @@ int main() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glFinish();
 
-    renderer.Render(cuda_mem);
+    renderer.Render(cuda_mem, true);
 
     glfwSwapBuffers(renderer.window());
     glfwPollEvents();

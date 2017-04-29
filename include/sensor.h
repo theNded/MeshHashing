@@ -6,63 +6,46 @@
 #define MRF_VH_SENSOR_H
 
 #include <opencv2/opencv.hpp>
-#include "sensor_data.h"
-#include "sensor_param.h"
+#include <helper_cuda.h>
+#include "params.h"
 
-extern void DepthCpuToGpuCudaHost(
-        float* d_output, short* d_input,
-        unsigned int width, unsigned int height,
-        float minDepth, float maxDepth
-);
-extern void ColorCpuToGpuCudaHost(
-        float4* d_output, unsigned char* d_input,
-        unsigned int width, unsigned int height
-);
-extern void DepthToRGBCudaHost(
-        float4* d_output, float* d_input,
-        unsigned int width, unsigned int height,
-        float minDepth, float maxDepth
-);
+/// constant.cu
+extern __constant__ SensorParams kSensorParams;
+extern void SetConstantSensorParams(const SensorParams& params);
 
 /// At first get rid of CUDARGBDAdaptor and RGBDSensor, use it directly
+struct SensorData {
+  /// Raw data
+  float*		depth_image_;
+  float4*		color_image_;
+
+  /// Texture-binded data
+  cudaArray*	depth_array_;
+  cudaArray*	color_array_;
+  cudaChannelFormatDesc depth_channel_desc;
+  cudaChannelFormatDesc color_channel_desc;
+};
+
 class Sensor {
 public:
   Sensor(SensorParams &params);
   ~Sensor();
 
+  int Process(cv::Mat &depth, cv::Mat &color);
+  float4* ColorizeDepthImage() const;
+
   void set_transform(float4x4 w_T_c) {
     w_T_c_ = w_T_c;
     c_T_w_ = w_T_c_.getInverse();
   }
+  const float4x4& w_T_c() const { return w_T_c_; }
+  const float4x4& c_T_w() const { return c_T_w_; }
 
-  const float4x4& w_T_c() const {
-    return w_T_c_;
-  }
+  uint width() const { return sensor_params_.width; }
+  uint height() const { return sensor_params_.height; }
 
-  const float4x4& c_T_w() const {
-    return c_T_w_;
-  }
-
-  /// Get data from CUDARGBDAdapter, which reads from RGBDSensor
-  int Process(cv::Mat &depth, cv::Mat &color);
-
-  unsigned int getDepthWidth() const;
-  unsigned int getDepthHeight() const;
-  unsigned int getColorWidth() const;
-  unsigned int getColorHeight() const;
-
-  //! the depth camera data (lives on the GPU)
-  const SensorData& getSensorData() {
-    return sensor_data_;
-  }
-
-  //! the depth camera parameter struct (lives on the CPU)
-  const SensorParams& getSensorParams() {
-    return sensor_params_;
-  }
-
-  //! computes and returns the depth map in hsv
-  float4* ColorizeDepthImage() const;
+  const SensorData& sensor_data() { return sensor_data_; }
+  const SensorParams& sensor_params() { return sensor_params_; }
 
 private:
   /// sensor data
@@ -74,6 +57,11 @@ private:
 
   //! hsv depth for visualization
   float4* colored_depth_image_;
+  short*  depth_image_buffer_;
+  uchar*  color_image_buffer_;
+
+  void DepthCPUtoGPU(cv::Mat &depth);
+  void ColorCPUtoGPU(cv::Mat &color);
 };
 
 

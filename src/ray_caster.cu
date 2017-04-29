@@ -1,11 +1,7 @@
 #include <matrix.h>
 
-#include "sensor_data.h"
 #include "hash_table_gpu.h"
 #include "ray_caster.h"
-#include "ray_caster_data.h"
-
-#define T_PER_BLOCK 8
 
 __device__
 inline float frac(float val) {
@@ -16,6 +12,7 @@ inline float3 frac(const float3& val)  {
   return make_float3(frac(val.x), frac(val.y), frac(val.z));
 }
 
+// TODO(wei): refine it
 __device__
 Voxel GetVoxel(const HashTableGPU<Block>& hash_table, float3 world_pos) {
   HashEntry hash_entry = hash_table.GetEntry(WorldToBlock(world_pos));
@@ -31,7 +28,8 @@ Voxel GetVoxel(const HashTableGPU<Block>& hash_table, float3 world_pos) {
 }
 
 __device__
-bool TrilinearInterpolation(const HashTableGPU<Block>& hash_table, const float3& pos,
+bool TrilinearInterpolation(const HashTableGPU<Block>& hash_table,
+                            const float3& pos,
                             float& sdf, uchar3& color) {
   const float offset = kHashParams.voxel_size;
   const float3 pos_corner = pos - 0.5f * offset;
@@ -122,7 +120,8 @@ float LinearIntersection(float t_near, float t_far, float sdf_near, float sdf_fa
 __device__
 /// Iteratively
 bool BisectionIntersection(const HashTableGPU<Block>& hash_table,
-                           const float3& world_pos_camera_origin, const float3& world_dir,
+                           const float3& world_pos_camera_origin,
+                           const float3& world_dir,
                            float sdf_near, float t_near,
                            float sdf_far,  float t_far,
                            float& t, uchar3& color) {
@@ -148,25 +147,32 @@ bool BisectionIntersection(const HashTableGPU<Block>& hash_table,
 }
 
 __device__
-float3 GradientAtPoint(const HashTableGPU<Block>& hash_table, const float3& pos) {
+float3 GradientAtPoint(const HashTableGPU<Block>& hash_table,
+                       const float3& pos) {
   const float voxelSize = kHashParams.voxel_size;
   float3 offset = make_float3(voxelSize, voxelSize, voxelSize);
 
   /// negative
   float distn00; uchar3 colorn00;
-  TrilinearInterpolation(hash_table, pos-make_float3(0.5f*offset.x, 0.0f, 0.0f), distn00, colorn00);
+  TrilinearInterpolation(hash_table, pos-make_float3(0.5f*offset.x, 0.0f, 0.0f),
+                         distn00, colorn00);
   float dist0n0; uchar3 color0n0;
-  TrilinearInterpolation(hash_table, pos-make_float3(0.0f, 0.5f*offset.y, 0.0f), dist0n0, color0n0);
+  TrilinearInterpolation(hash_table, pos-make_float3(0.0f, 0.5f*offset.y, 0.0f),
+                         dist0n0, color0n0);
   float dist00n; uchar3 color00n;
-  TrilinearInterpolation(hash_table, pos-make_float3(0.0f, 0.0f, 0.5f*offset.z), dist00n, color00n);
+  TrilinearInterpolation(hash_table, pos-make_float3(0.0f, 0.0f, 0.5f*offset.z),
+                         dist00n, color00n);
 
   /// positive
   float distp00; uchar3 colorp00;
-  TrilinearInterpolation(hash_table, pos+make_float3(0.5f*offset.x, 0.0f, 0.0f), distp00, colorp00);
+  TrilinearInterpolation(hash_table, pos+make_float3(0.5f*offset.x, 0.0f, 0.0f),
+                         distp00, colorp00);
   float dist0p0; uchar3 color0p0;
-  TrilinearInterpolation(hash_table, pos+make_float3(0.0f, 0.5f*offset.y, 0.0f), dist0p0, color0p0);
+  TrilinearInterpolation(hash_table, pos+make_float3(0.0f, 0.5f*offset.y, 0.0f),
+                         dist0p0, color0p0);
   float dist00p; uchar3 color00p;
-  TrilinearInterpolation(hash_table, pos+make_float3(0.0f, 0.0f, 0.5f*offset.z), dist00p, color00p);
+  TrilinearInterpolation(hash_table, pos+make_float3(0.0f, 0.0f, 0.5f*offset.z),
+                         dist00p, color00p);
 
   float3 grad = make_float3((distp00-distn00)/offset.x,
                             (dist0p0-dist0n0)/offset.y,
@@ -181,10 +187,12 @@ float3 GradientAtPoint(const HashTableGPU<Block>& hash_table, const float3& pos)
 }
 
 __global__
-void CastKernel(const HashTableGPU<Block> hash_table, RayCasterData rayCasterData,
-                const float4x4 c_T_w, const float4x4 w_T_c) {
-  const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
-  const unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
+void CastKernel(const HashTableGPU<Block> hash_table,
+                RayCasterData ray_caster_data,
+                const float4x4 c_T_w,
+                const float4x4 w_T_c) {
+  const uint x = blockIdx.x * blockDim.x + threadIdx.x;
+  const uint y = blockIdx.y * blockDim.y + threadIdx.y;
 
   const RayCasterParams &ray_caster_params = kRayCasterParams;
 
@@ -193,10 +201,10 @@ void CastKernel(const HashTableGPU<Block> hash_table, RayCasterData rayCasterDat
     return;
 
   int pixel_idx = y * ray_caster_params.width + x;
-  rayCasterData.depth_image_ [pixel_idx] = MINF;
-  rayCasterData.vertex_image_[pixel_idx] = make_float4(MINF, MINF, MINF, MINF);
-  rayCasterData.normal_image_[pixel_idx] = make_float4(MINF, MINF, MINF, MINF);
-  rayCasterData.color_image_ [pixel_idx] = make_float4(MINF, MINF, MINF, MINF);
+  ray_caster_data.depth_image_ [pixel_idx] = MINF;
+  ray_caster_data.vertex_image_[pixel_idx] = make_float4(MINF, MINF, MINF, MINF);
+  ray_caster_data.normal_image_[pixel_idx] = make_float4(MINF, MINF, MINF, MINF);
+  ray_caster_data.color_image_ [pixel_idx] = make_float4(MINF, MINF, MINF, MINF);
 
   /// Fix this! this uses the sensor's parameter instead of the viewer's
   /// 1. Determine ray direction
@@ -230,28 +238,34 @@ void CastKernel(const HashTableGPU<Block> hash_table, RayCasterData rayCasterDat
         float interpolated_t;
         uchar3 interpolated_color;
         /// Find isosurface
-        bool is_isosurface_found = BisectionIntersection(hash_table,
-                                                         world_pos_camera_origin, world_dir,
-                                                         prev_sample.sdf, prev_sample.t, sdf, t,
-                                                         interpolated_t, interpolated_color);
+        bool is_isosurface_found = BisectionIntersection(
+                hash_table,
+                world_pos_camera_origin, world_dir,
+                prev_sample.sdf, prev_sample.t, sdf, t,
+                interpolated_t, interpolated_color);
 
         float3 world_pos_isosurface = world_pos_camera_origin + interpolated_t * world_dir;
         /// Good enough sample
-        if (is_isosurface_found && abs(prev_sample.sdf - sdf) < ray_caster_params.sample_sdf_threshold) {
+        if (is_isosurface_found
+            && abs(prev_sample.sdf - sdf) < ray_caster_params.sample_sdf_threshold) {
           /// Trick from the original author of voxel-hashing
           if (abs(sdf) < ray_caster_params.sdf_threshold) {
             float depth = interpolated_t / ray_length_per_depth_unit;
 
-            rayCasterData.depth_image_ [pixel_idx] = depth;
-            rayCasterData.vertex_image_[pixel_idx] = make_float4(ImageReprojectToCamera(x, y, depth), 1.0f);
-            rayCasterData.color_image_ [pixel_idx] = make_float4(interpolated_color.x / 255.f,
-                                                                 interpolated_color.y / 255.f,
-                                                                 interpolated_color.z / 255.f, 1.0f);
+            ray_caster_data.depth_image_ [pixel_idx] = depth;
+            ray_caster_data.vertex_image_[pixel_idx]
+                    = make_float4(ImageReprojectToCamera(x, y, depth), 1.0f);
+            ray_caster_data.color_image_ [pixel_idx]
+                    = make_float4(interpolated_color.x / 255.f,
+                                  interpolated_color.y / 255.f,
+                                  interpolated_color.z / 255.f, 1.0f);
+            
             if (ray_caster_params.enable_gradients) {
               float3 normal = GradientAtPoint(hash_table, world_pos_isosurface);
               normal = -normal;
               float4 n = c_T_w * make_float4(normal, 0.0f);
-              rayCasterData.normal_image_[pixel_idx] = make_float4(n.x, n.y, n.z, 1.0f);
+              ray_caster_data.normal_image_[pixel_idx]
+                      = make_float4(n.x, n.y, n.z, 1.0f);
             }
 
             return;
@@ -268,14 +282,32 @@ void CastKernel(const HashTableGPU<Block> hash_table, RayCasterData rayCasterDat
 }
 
 
-__host__
-void CastCudaHost(const HashTableGPU<Block>        &hash_table,   const RayCasterData   &rayCastData,
-              const RayCasterParams &ray_caster_params, const float4x4 &c_T_w, const float4x4 &w_T_c) {
+RayCaster::RayCaster(const RayCasterParams& params) {
+  ray_caster_params_ = params;
+  uint image_size = params.width * params.height;
+  checkCudaErrors(cudaMalloc(&ray_caster_data_.depth_image_, sizeof(float) * image_size));
+  checkCudaErrors(cudaMalloc(&ray_caster_data_.vertex_image_, sizeof(float4) * image_size));
+  checkCudaErrors(cudaMalloc(&ray_caster_data_.normal_image_, sizeof(float4) * image_size));
+  checkCudaErrors(cudaMalloc(&ray_caster_data_.color_image_, sizeof(float4) * image_size));
+}
 
-  const dim3 gridSize((ray_caster_params.width + T_PER_BLOCK - 1)/T_PER_BLOCK, (ray_caster_params.height + T_PER_BLOCK - 1)/T_PER_BLOCK);
-  const dim3 blockSize(T_PER_BLOCK, T_PER_BLOCK);
+RayCaster::~RayCaster() {
+  checkCudaErrors(cudaFree(ray_caster_data_.depth_image_));
+  checkCudaErrors(cudaFree(ray_caster_data_.vertex_image_));
+  checkCudaErrors(cudaFree(ray_caster_data_.normal_image_));
+  checkCudaErrors(cudaFree(ray_caster_data_.color_image_));
+}
 
-  CastKernel<<<gridSize, blockSize>>>(hash_table, rayCastData, c_T_w, w_T_c);
+/// Major function, extract surface and normal from the volumes
+void RayCaster::Cast(Map* map, const float4x4& c_T_w) {
+  const uint threads_per_block = 8;
+  const float4x4 w_T_c = c_T_w.getInverse();
+
+  const dim3 grid_size((ray_caster_params_.width + threads_per_block - 1)/threads_per_block,
+                       (ray_caster_params_.height + threads_per_block - 1)/threads_per_block);
+  const dim3 block_size(threads_per_block, threads_per_block);
+
+  CastKernel<<<grid_size, block_size>>>(map->hash_table(), ray_caster_data_, c_T_w, w_T_c);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }

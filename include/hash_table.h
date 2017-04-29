@@ -30,6 +30,8 @@ public:
   void Resize(const HashParams &params);
   void Reset();
   void ResetMutexes();
+
+  void Debug();
 };
 
 #endif //VOXEL_HASHING_HASH_TABLE_H

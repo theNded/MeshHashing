@@ -18,7 +18,6 @@
 #include <ray_caster.h>
 
 #include "mapper.h"
-#include "sensor_data.h"
 #include "renderer.h"
 
 #define ICL
@@ -232,7 +231,7 @@ int main() {
   RayCaster ray_caster(ray_cast_params);
 
   Mapper mapper;
-  mapper.BindSensorDataToTexture(sensor.getSensorData());
+  mapper.BindSensorDataToTexture(sensor.sensor_data());
 
   /// Process
   float4 *cuda_hsv;
@@ -271,7 +270,7 @@ int main() {
 
   checkCudaErrors(cudaFree(cuda_hsv));
   //cv::waitKey(-1);
-  voxel_map.debugHash();
+  voxel_map.hash_table_.Debug();
   /// seems ok
   /// output blocks seems correct
 

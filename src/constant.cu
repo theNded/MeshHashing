@@ -1,6 +1,5 @@
-#include "hash_param.h"
-#include "ray_caster_param.h"
-#include "sensor_param.h"
+#include "params.h"
+
 #include <helper_cuda.h>
 
 __constant__ HashParams kHashParams;

@@ -1,16 +1,16 @@
 /// 16 threads per block
 
+#include "sensor.h"
 #include <helper_cuda.h>
 #include <helper_math.h>
 
-#define T_PER_BLOCK 16
 #define MINF __int_as_float(0xff800000)
 
-/// Input short* depth (cpu) to float* depth (gpu)
+/// Kernel functions
 __global__
-void DepthCpuToGpuCudaHostKernel(float *d_output, short *d_input,
-                                 unsigned int width, unsigned int height,
-                                 float minDepth, float maxDepth) {
+void DepthCPUtoGPUKernel(float *d_output, short *d_input,
+                         uint width, uint height,
+                         float min_depth_range, float max_depth_range) {
   const int x = blockIdx.x * blockDim.x + threadIdx.x;
   const int y = blockIdx.y * blockDim.y + threadIdx.y;
 
@@ -18,30 +18,13 @@ void DepthCpuToGpuCudaHostKernel(float *d_output, short *d_input,
   const int idx = y * width + x;
   /// Convert mm -> m
   const float depth = 0.0002f * d_input[idx]; // (1 / 5000)
-  bool is_valid = (depth >= minDepth && depth <= maxDepth);
+  bool is_valid = (depth >= min_depth_range && depth <= max_depth_range);
   d_output[idx] = is_valid ? depth : MINF;
 }
 
-__host__
-void DepthCpuToGpuCudaHost(float* d_output, short* d_input,
-                           unsigned int width, unsigned int height,
-                           float minDepth, float maxDepth) {
-  /// First copy cpu data in to cuda short
-  short *cuda_input;
-  checkCudaErrors(cudaMalloc(&cuda_input, sizeof(short) * width * height));
-  checkCudaErrors(cudaMemcpy(cuda_input, d_input, sizeof(short) * width * height, cudaMemcpyHostToDevice));
-
-  const dim3 gridSize((width + T_PER_BLOCK - 1)/T_PER_BLOCK, (height + T_PER_BLOCK - 1)/T_PER_BLOCK);
-  const dim3 blockSize(T_PER_BLOCK, T_PER_BLOCK);
-
-  DepthCpuToGpuCudaHostKernel<<<gridSize, blockSize>>>(d_output, cuda_input,
-          width, height, minDepth, maxDepth);
-}
-
-///
-/// Input uchar* color (cpu) to float4* color (gpu)
-__global__ void ColorCpuToGpuCudaHostKernel(float4* d_output, unsigned char *d_input,
-                                        unsigned int width, unsigned int height) {
+__global__
+void ColorCPUtoGPUKernel(float4* d_output, uchar *d_input,
+                         uint width, uint height) {
   const int x = blockIdx.x * blockDim.x + threadIdx.x;
   const int y = blockIdx.y * blockDim.y + threadIdx.y;
 
@@ -56,19 +39,6 @@ __global__ void ColorCpuToGpuCudaHostKernel(float4* d_output, unsigned char *d_i
                            : make_float4(MINF, MINF, MINF, MINF);
 }
 
-__host__
-void ColorCpuToGpuCudaHost(float4* d_output, unsigned char* d_input,
-                             unsigned int width, unsigned int height) {
-  unsigned char *cuda_input;
-  checkCudaErrors(cudaMalloc(&cuda_input, 4 * sizeof(unsigned char) * width * height));
-  checkCudaErrors(cudaMemcpy(cuda_input, d_input, 4 * sizeof(unsigned char) * width * height, cudaMemcpyHostToDevice));
-
-  const dim3 gridSize((width + T_PER_BLOCK - 1)/T_PER_BLOCK, (height + T_PER_BLOCK - 1)/T_PER_BLOCK);
-  const dim3 blockSize(T_PER_BLOCK, T_PER_BLOCK);
-
-  ColorCpuToGpuCudaHostKernel<<<gridSize, blockSize>>>(d_output, cuda_input, width, height);
-}
-
 /// Util: Depth to RGB
 __device__
 float3 HSVToRGB(const float3& hsv) {
@@ -77,7 +47,7 @@ float3 HSVToRGB(const float3& hsv) {
   float V = hsv.z;
 
   float hd = H/60.0f;
-  unsigned int h = (unsigned int)hd;
+  uint h = (uint)hd;
   float f = hd-h;
 
   float p = V*(1.0f-S);
@@ -117,16 +87,18 @@ float3 DepthToRGB(float depth, float depthMin, float depthMax) {
 
 __global__
 void DepthToRGBKernel(float4* d_output, float* d_input,
-                      unsigned int width, unsigned int height,
-                      float minDepth, float maxDepth) {
+                      uint width, uint height,
+                      float min_depth_range, float max_depth_range) {
   const int x = blockIdx.x*blockDim.x + threadIdx.x;
   const int y = blockIdx.y*blockDim.y + threadIdx.y;
 
   if (x >= 0 && x < width && y >= 0 && y < height) {
 
     float depth = d_input[y*width + x];
-    if (depth != MINF && depth != 0.0f && depth >= minDepth && depth <= maxDepth) {
-      float3 c = DepthToRGB(depth, minDepth, maxDepth);
+    if (depth != MINF && depth != 0.0f
+        && depth >= min_depth_range
+        && depth <= max_depth_range) {
+      float3 c = DepthToRGB(depth, min_depth_range, max_depth_range);
       d_output[y*width + x] = make_float4(c, 1.0f);
     } else {
       d_output[y*width + x] = make_float4(0.0f);
@@ -134,12 +106,115 @@ void DepthToRGBKernel(float4* d_output, float* d_input,
   }
 }
 
-__host__
-void DepthToRGBCudaHost(float4* d_output, float* d_input,
-                        unsigned int width, unsigned int height,
-                        float minDepth, float maxDepth) {
-  const dim3 gridSize((width + T_PER_BLOCK - 1)/T_PER_BLOCK, (height + T_PER_BLOCK - 1)/T_PER_BLOCK);
-  const dim3 blockSize(T_PER_BLOCK, T_PER_BLOCK);
+/// Member function
+Sensor::Sensor(SensorParams &sensor_params) {
+  colored_depth_image_ = NULL;
+  const uint image_size = sensor_params.height * sensor_params.width;
 
-  DepthToRGBKernel<<<gridSize, blockSize>>>(d_output, d_input, width, height, minDepth, maxDepth);
+  checkCudaErrors(cudaMalloc(&colored_depth_image_, sizeof(float4) * image_size));
+  checkCudaErrors(cudaMalloc(&depth_image_buffer_, sizeof(short) * image_size));
+  checkCudaErrors(cudaMalloc(&color_image_buffer_, 4 * sizeof(uchar) * image_size));
+
+  /// Parameter settings
+  sensor_params_ = sensor_params; // Is it copy constructing?
+  checkCudaErrors(cudaMalloc(&sensor_data_.depth_image_, sizeof(float) * image_size));
+  checkCudaErrors(cudaMalloc(&sensor_data_.color_image_, sizeof(float4) * image_size));
+
+  sensor_data_.depth_channel_desc = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
+  checkCudaErrors(cudaMallocArray(&sensor_data_.depth_array_, &sensor_data_.depth_channel_desc,
+                                  sensor_params_.width, sensor_params_.height));
+  sensor_data_.color_channel_desc = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
+  checkCudaErrors(cudaMallocArray(&sensor_data_.color_array_, &sensor_data_.color_channel_desc,
+                                  sensor_params_.width, sensor_params_.height));
 }
+
+Sensor::~Sensor() {
+  checkCudaErrors(cudaFree(colored_depth_image_));
+  checkCudaErrors(cudaFree(depth_image_buffer_));
+  checkCudaErrors(cudaFree(color_image_buffer_));
+
+  checkCudaErrors(cudaFree(sensor_data_.depth_image_));
+  checkCudaErrors(cudaFree(sensor_data_.color_image_));
+  checkCudaErrors(cudaFreeArray(sensor_data_.depth_array_));
+  checkCudaErrors(cudaFreeArray(sensor_data_.color_array_));
+}
+
+int Sensor::Process(cv::Mat &depth, cv::Mat &color) {
+  /// Distortion is not yet dealt with yet
+  /// Disable all filter at current
+
+  /// Input:  CPU short*
+  /// Output: GPU float *
+  DepthCPUtoGPU(depth);
+
+  /// Input:  CPU uchar4 *
+  /// Output: GPU float4 *
+  ColorCPUtoGPU(color);
+
+  /// Array used as texture in mapper
+  checkCudaErrors(cudaMemcpyToArray(sensor_data_.depth_array_, 0, 0, sensor_data_.depth_image_,
+                                    sizeof(float)*sensor_params_.height*sensor_params_.width,
+                                    cudaMemcpyDeviceToDevice));
+  checkCudaErrors(cudaMemcpyToArray(sensor_data_.color_array_, 0, 0, sensor_data_.color_image_,
+                                    sizeof(float4)*sensor_params_.height*sensor_params_.width,
+                                    cudaMemcpyDeviceToDevice));
+  return 0;
+}
+
+__host__
+void Sensor::DepthCPUtoGPU(cv::Mat& depth) {
+  /// First copy cpu data in to cuda short
+  uint width = sensor_params_.width;
+  uint height = sensor_params_.height;
+  uint image_size = width * height;
+
+  checkCudaErrors(cudaMemcpy(depth_image_buffer_, (short *)depth.data,
+                             sizeof(short) * image_size, cudaMemcpyHostToDevice));
+
+  const uint threads_per_block = 16;
+  const dim3 grid_size((width + threads_per_block - 1)/threads_per_block,
+                       (height + threads_per_block - 1)/threads_per_block);
+  const dim3 block_size(threads_per_block, threads_per_block);
+
+  DepthCPUtoGPUKernel<<<grid_size, block_size>>>(
+          sensor_data_.depth_image_, depth_image_buffer_,
+          width, height,
+          sensor_params_.min_depth_range,
+          sensor_params_.max_depth_range);
+}
+
+__host__
+void Sensor::ColorCPUtoGPU(cv::Mat &color) {
+  uint width = sensor_params_.width;
+  uint height = sensor_params_.height;
+  uint image_size = width * height;
+
+  checkCudaErrors(cudaMemcpy(color_image_buffer_, sensor_data_.color_image_,
+                             4 * sizeof(uchar) * image_size, cudaMemcpyHostToDevice));
+
+  const int threads_per_block = 16;
+  const dim3 grid_size((width + threads_per_block - 1)/threads_per_block,
+                       (height + threads_per_block - 1)/threads_per_block);
+  const dim3 block_size(threads_per_block, threads_per_block);
+
+  ColorCPUtoGPUKernel<<<grid_size, block_size>>>(
+          sensor_data_.color_image_, color_image_buffer_, width, height);
+}
+
+float4* Sensor::ColorizeDepthImage() const {
+  const uint threads_per_block = 16;
+  const dim3 grid_size((sensor_params_.width + threads_per_block - 1)/threads_per_block,
+                       (sensor_params_.height + threads_per_block - 1)/threads_per_block);
+  const dim3 block_size(threads_per_block, threads_per_block);
+
+  DepthToRGBKernel<<<grid_size, block_size>>>(
+          colored_depth_image_, sensor_data_.depth_image_,
+          sensor_params_.width, sensor_params_.height,
+          sensor_params_.min_depth_range,
+          sensor_params_.max_depth_range);
+  checkCudaErrors(cudaDeviceSynchronize());
+  checkCudaErrors(cudaGetLastError());
+
+  return colored_depth_image_;
+}
+

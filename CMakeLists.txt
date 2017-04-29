@@ -87,7 +87,6 @@ INCLUDE_DIRECTORIES(
         ${VH}/include
         ${VH}/gl_utils
         ${VH}/cuda_utils
-        ${MRF}/include
         ${CUDA_TOOLKIT_INCLUDE})
 
 #----------
@@ -104,53 +103,31 @@ SET(CUDA_SEPARABLE_COMPILATION ON)
 # sm MUST >= 50, otherwise separable compilation will be disabled...
 # compute_35, sm_50 is ok
 LIST(APPEND CUDA_NVCC_FLAGS -gencode=arch=compute_52,code=sm_52)
-CUDA_ADD_LIBRARY(CUDAVoxelHashing
+CUDA_ADD_LIBRARY(cuda-voxel-hashing
         ${VH}/src/constant.cu
         ${VH}/src/hash_table.cu
         ${VH}/src/sensor.cu
         ${VH}/src/map.cu
         ${VH}/src/mapper.cu
         ${VH}/src/ray_caster.cu)
+TARGET_LINK_LIBRARIES(cuda-voxel-hashing ${OpenCV_LIBRARIES} glog)
 
 ### 3. VoxelHashing C++
-ADD_LIBRARY(VoxelHashing
-        ${VH}/src/renderer.cc
-        ${VH}/src/sensor.cc
-        ${VH}/src/map.cc
-        ${VH}/src/mapper.cc
-        ${VH}/src/ray_caster.cc)
-TARGET_LINK_LIBRARIES(VoxelHashing GL_UTILS)
+ADD_LIBRARY(voxel-hashing
+        ${VH}/src/renderer.cc)
+TARGET_LINK_LIBRARIES(voxel-hashing GL_UTILS)
 
 #----------
 ## Unit tests
-### 1. Core (SDF, HashEntry)
-CUDA_ADD_LIBRARY(cu_test_core test/test_core/test_core.cu)
-ADD_EXECUTABLE(test_core test/test_core/test_core.cc)
-TARGET_LINK_LIBRARIES(test_core cu_test_core glog)
-
-### 2. HashTable (Hash)
-### shared variables should compile together by nvcc
-CUDA_ADD_LIBRARY(cu_test_hash_table
-        test/test_hash_table/test_hash_table.cu
-        ${VH}/src/constant.cu)
-ADD_EXECUTABLE(test_hash_table test/test_hash_table/test_hash_table.cc)
-TARGET_LINK_LIBRARIES(test_hash_table cu_test_hash_table VoxelHashing glog)
-
-### 3. CUDA - OpenGL intergration
+### CUDA - OpenGL intergration
 ADD_EXECUTABLE(test_cuda_gl test/test_cuda_gl.cc)
 TARGET_LINK_LIBRARIES(test_cuda_gl GL_UTILS
-        VoxelHashing
+        voxel-hashing
         glog ${CUDA_DEPENDENCIES} ${OTHER_DEPENDENCIES})
 
-### 4. Mapper and RayCaster
-ADD_EXECUTABLE(test_voxel_hashing test/test_voxel_hashing.cc)
-TARGET_LINK_LIBRARIES(test_voxel_hashing GL_UTILS
-        VoxelHashing CUDAVoxelHashing
-        glog ${CUDA_DEPENDENCIES} ${OTHER_DEPENDENCIES})
-
-### 5. Loop over
+### Loop over
 ADD_EXECUTABLE(test_voxel_hashing_loop test/test_voxel_hashing_loop.cc)
 TARGET_LINK_LIBRARIES(test_voxel_hashing_loop GL_UTILS
-        VoxelHashing CUDAVoxelHashing
+        voxel-hashing cuda-voxel-hashing
         glog ${CUDA_DEPENDENCIES} ${OTHER_DEPENDENCIES})
 

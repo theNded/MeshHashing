@@ -20,8 +20,7 @@
 
 #include "core.h"
 #include "geometry_util.h"
-#include "hash_param.h"
-#include "sensor_data.h"
+#include "params.h"
 
 /// constant.cu
 extern __constant__ HashParams kHashParams;
@@ -45,24 +44,6 @@ public:
   /// Misc
   int       *bucket_mutexes;     /// binary flag per hash bucket; used for allocation to atomically lock a bucket
   bool       is_on_gpu;          /// the class be be used on both cpu and gpu
-
-  ///////////////
-  // Host part //
-  ///////////////
-  __device__ __host__
-  HashTableGPU() {
-    heap = NULL;
-    heap_counter = NULL;
-    values = NULL;
-    hash_entry_remove_flags = NULL;
-
-    hash_entries = NULL;
-    compacted_hash_entries = NULL;
-    compacted_hash_entry_counter = NULL;
-
-    bucket_mutexes = NULL;
-    is_on_gpu = false;
-  }
 
   __host__
   void Alloc(const HashParams &params, bool is_data_on_gpu = true) {

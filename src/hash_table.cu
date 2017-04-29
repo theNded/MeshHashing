@@ -1,10 +1,14 @@
+#include <unordered_set>
+#include <vector>
+#include <list>
 #include "hash_table.h"
+#include <glog/logging.h>
 
 /// Kernel functions
 __global__
 void ResetBucketMutexesKernel(HashTableGPU<Block> hash_table) {
   const HashParams& hash_params = kHashParams;
-  const unsigned int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (idx < hash_params.bucket_count) {
     hash_table.bucket_mutexes[idx] = FREE_ENTRY;
   }
@@ -13,7 +17,7 @@ void ResetBucketMutexesKernel(HashTableGPU<Block> hash_table) {
 __global__
 void ResetHeapKernel(HashTableGPU<Block> hash_table) {
   const HashParams& hash_params = kHashParams;
-  unsigned int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  uint idx = blockIdx.x * blockDim.x + threadIdx.x;
 
   if (idx == 0) {
     hash_table.heap_counter[0] = hash_params.value_capacity - 1;	//points to the last element of the array
@@ -28,14 +32,14 @@ void ResetHeapKernel(HashTableGPU<Block> hash_table) {
 __global__
 void ResetEntriesKernel(HashTableGPU<Block> hash_table) {
   const HashParams& hash_params = kHashParams;
-  const unsigned int idx = blockIdx.x*blockDim.x + threadIdx.x;
+  const uint idx = blockIdx.x*blockDim.x + threadIdx.x;
   if (idx < hash_params.bucket_count * HASH_BUCKET_SIZE) {
     hash_table.ClearHashEntry(hash_table.hash_entries[idx]);
     hash_table.ClearHashEntry(hash_table.compacted_hash_entries[idx]);
   }
 }
 
-/// Member functions
+/// Member functions (pure CPU code)
 template <typename T>
 HashTable<T>::HashTable() {}
 
@@ -95,7 +99,7 @@ void HashTable<T>::Free() {
   }
 }
 
-/// Member host functions calling kernels
+/// Member functions (kernel callers on CPU)
 // (__host__)
 template <typename T>
 void HashTable<T>::ResetMutexes() {
@@ -140,4 +144,127 @@ void HashTable<T>::Reset() {
   }
 }
 
+/// Member function: Debug only
+template <typename T>
+void HashTable<T>::Debug() {
+  HashEntry *entries = new HashEntry[hash_params_.bucket_size * hash_params_.bucket_count];
+  T *values          = new T[hash_params_.value_capacity];
+  uint *heap = new uint[hash_params_.value_capacity];
+  uint  heap_counter;
+
+  checkCudaErrors(cudaMemcpy(&heap_counter, gpu_data_.heap_counter, sizeof(uint), cudaMemcpyDeviceToHost));
+  heap_counter++; //points to the first free entry: number of blocks is one more
+
+  checkCudaErrors(cudaMemcpy(heap, gpu_data_.heap,
+                             sizeof(uint) * hash_params_.value_capacity,
+                             cudaMemcpyDeviceToHost));
+  checkCudaErrors(cudaMemcpy(entries, gpu_data_.hash_entries,
+                             sizeof(HashEntry) * hash_params_.bucket_size * hash_params_.bucket_count,
+                             cudaMemcpyDeviceToHost));
+  checkCudaErrors(cudaMemcpy(values, gpu_data_.values,
+                             sizeof(T) * hash_params_.value_capacity,
+                             cudaMemcpyDeviceToHost));
+
+  LOG(INFO) << "GPU -> CPU data transfer finished";
+
+  //Check for duplicates
+  class Entry {
+  public:
+    Entry() {}
+    Entry(int x_, int y_, int z_, int i_, int offset_, int ptr_) :
+            x(x_), y(y_), z(z_), i(i_), offset(offset_), ptr(ptr_) {}
+    ~Entry() {}
+
+    bool operator< (const Entry &other) const {
+      if (x == other.x) {
+        if (y == other.y) {
+          return z < other.z;
+        } return y < other.y;
+      } return x < other.x;
+    }
+
+    bool operator== (const Entry &other) const {
+      return x == other.x && y == other.y && z == other.z;
+    }
+
+    int x, y, z, i;
+    int offset;
+    int ptr;
+  };
+
+  /// Iterate over free heap
+  std::unordered_set<uint> free_heap_index;
+  std::vector<int> free_value_index(hash_params_.value_capacity, 0);
+  for (uint i = 0; i < heap_counter; i++) {
+    free_heap_index.insert(heap[i]);
+    free_value_index[heap[i]] = FREE_ENTRY;
+  }
+  if (free_heap_index.size() != heap_counter) {
+    LOG(ERROR) << "Heap check invalid";
+  }
+
+  uint not_free_entry_count = 0;
+  uint not_locked_entry_count = 0;
+
+  /// Iterate over entries
+  std::list<Entry> l;
+  uint entry_count = hash_params_.bucket_size * hash_params_.bucket_count;
+  for (uint i = 0; i < entry_count; i++) {
+    if (entries[i].ptr != LOCK_ENTRY) {
+      not_locked_entry_count++;
+    }
+
+    if (entries[i].ptr != FREE_ENTRY) {
+      not_free_entry_count++;
+      Entry occupied_entry(entries[i].pos.x, entries[i].pos.y, entries[i].pos.z,
+                           i, entries[i].offset, entries[i].ptr);
+      l.push_back(occupied_entry);
+
+      if (free_heap_index.find(occupied_entry.ptr) != free_heap_index.end()) {
+        LOG(ERROR) << "ERROR: ptr is on free heap, but also marked as an allocated entry";
+      }
+      free_value_index[entries[i].ptr] = LOCK_ENTRY;
+    }
+  }
+
+  /// Iterate over values
+  uint free_value_count = 0;
+  uint not_free_value_count = 0;
+  for (uint i = 0; i < hash_params_.value_capacity; i++) {
+    if (free_value_index[i] == FREE_ENTRY) {
+      free_value_count++;
+    } else if (free_value_index[i] == LOCK_ENTRY) {
+      not_free_value_count++;
+    } else {
+      LOG(ERROR) << "memory leak detected: neither free nor allocated";
+      return;
+    }
+  }
+
+  if (free_value_count + not_free_value_count == hash_params_.value_capacity)
+    LOG(INFO) << "HEAP OK!";
+  else {
+    LOG(ERROR) << "HEAP CORRUPTED";
+    return;
+  }
+
+  l.sort();
+  size_t size_before = l.size();
+  l.unique();
+  size_t size_after = l.size();
+
+
+  LOG(INFO) << "Duplicated entry count: " << size_before - size_after;
+  LOG(INFO) << "Not locked entry count: " << not_locked_entry_count;
+  LOG(INFO) << "Not free entry count: " << not_free_entry_count
+            << "\t free entry count: " << heap_counter;
+  LOG(INFO) << "not_free + free entry count: "
+            << not_free_entry_count + heap_counter;
+
+  delete [] entries;
+  delete [] values;
+  delete [] heap;
+}
+
+/// Instantiate for correctly compilation
 template class HashTable<Block>;

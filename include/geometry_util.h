@@ -6,8 +6,7 @@
 #define VOXEL_HASHING_POSITION_CONVERTER_H
 
 #include "common.h"
-#include "hash_param.h"
-#include "sensor_param.h"
+#include "params.h"
 
 extern __constant__ HashParams kHashParams;
 extern __constant__ SensorParams kSensorParams;

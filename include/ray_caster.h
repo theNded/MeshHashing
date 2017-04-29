@@ -8,16 +8,27 @@
 #include "common.h"
 
 #include "map.h"
-#include "ray_caster_data.h"
-#include "ray_caster_param.h"
-#include "sensor_data.h"
+#include "params.h"
+#include "sensor.h"
 
-/// CUDA functions
-extern void CastCudaHost(
-        const HashTableGPU<Block>& hash_table, const RayCasterData &rayCastData,
-        const RayCasterParams &rayCastParams,
-        const float4x4& c_T_w, const float4x4& w_T_c
-);
+
+struct RayCasterSample {
+  float sdf;
+  float t;
+  uint weight;
+};
+
+/// constant.cu
+extern __constant__ RayCasterParams kRayCasterParams;
+extern void SetConstantRayCasterParams(const RayCasterParams &ray_caster_params);
+
+struct RayCasterData {
+  float  *depth_image_;
+  float4 *vertex_image_;
+  float4 *normal_image_;
+  float4 *color_image_;
+};
+
 
 class RayCaster {
 public:
@@ -26,7 +37,8 @@ public:
 
   void Cast(Map* map, const float4x4& c_T_w);
 
-  const RayCasterData& ray_caster_data(void) {
+
+  const RayCasterData& ray_caster_data() {
     return ray_caster_data_;
   }
   const RayCasterParams& ray_caster_params() const {
