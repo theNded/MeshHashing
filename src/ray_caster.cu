@@ -17,7 +17,7 @@ inline float3 frac(const float3& val)  {
 }
 
 __device__
-Voxel GetVoxel(const HashTable& hash_table, float3 world_pos) {
+Voxel GetVoxel(const HashTableGPU<Block>& hash_table, float3 world_pos) {
   HashEntry hash_entry = hash_table.GetEntry(WorldToBlock(world_pos));
   Voxel v;
   if (hash_entry.ptr == FREE_ENTRY) {
@@ -31,7 +31,7 @@ Voxel GetVoxel(const HashTable& hash_table, float3 world_pos) {
 }
 
 __device__
-bool TrilinearInterpolation(const HashTable& hash_table, const float3& pos,
+bool TrilinearInterpolation(const HashTableGPU<Block>& hash_table, const float3& pos,
                             float& sdf, uchar3& color) {
   const float offset = kHashParams.voxel_size;
   const float3 pos_corner = pos - 0.5f * offset;
@@ -121,7 +121,7 @@ float LinearIntersection(float t_near, float t_far, float sdf_near, float sdf_fa
 // d0 near, d1 far
 __device__
 /// Iteratively
-bool BisectionIntersection(const HashTable& hash_table,
+bool BisectionIntersection(const HashTableGPU<Block>& hash_table,
                            const float3& world_pos_camera_origin, const float3& world_dir,
                            float sdf_near, float t_near,
                            float sdf_far,  float t_far,
@@ -148,7 +148,7 @@ bool BisectionIntersection(const HashTable& hash_table,
 }
 
 __device__
-float3 GradientAtPoint(const HashTable& hash_table, const float3& pos) {
+float3 GradientAtPoint(const HashTableGPU<Block>& hash_table, const float3& pos) {
   const float voxelSize = kHashParams.voxel_size;
   float3 offset = make_float3(voxelSize, voxelSize, voxelSize);
 
@@ -181,7 +181,7 @@ float3 GradientAtPoint(const HashTable& hash_table, const float3& pos) {
 }
 
 __global__
-void CastKernel(const HashTable hash_table, RayCasterData rayCasterData,
+void CastKernel(const HashTableGPU<Block> hash_table, RayCasterData rayCasterData,
                 const float4x4 c_T_w, const float4x4 w_T_c) {
   const unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
   const unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -269,7 +269,7 @@ void CastKernel(const HashTable hash_table, RayCasterData rayCasterData,
 
 
 __host__
-void CastCudaHost(const HashTable        &hash_table,   const RayCasterData   &rayCastData,
+void CastCudaHost(const HashTableGPU<Block>        &hash_table,   const RayCasterData   &rayCastData,
               const RayCasterParams &ray_caster_params, const float4x4 &c_T_w, const float4x4 &w_T_c) {
 
   const dim3 gridSize((ray_caster_params.width + T_PER_BLOCK - 1)/T_PER_BLOCK, (ray_caster_params.height + T_PER_BLOCK - 1)/T_PER_BLOCK);

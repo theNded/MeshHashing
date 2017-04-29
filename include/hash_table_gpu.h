@@ -35,7 +35,7 @@ public:
   uint      *heap;               /// index to free values
   uint      *heap_counter;       /// single element; used as an atomic counter (points to the next free block)
   ValueType *values;             /// pre-allocated and managed by heap manually to avoid expensive malloc
-  int       *value_remove_flags; /// used in garbage collection
+  int       *hash_entry_remove_flags; /// used in garbage collection
 
   /// Hash KEY part
   HashEntry *hash_entries;                 /// hash entries that stores pointers to sdf values
@@ -54,7 +54,7 @@ public:
     heap = NULL;
     heap_counter = NULL;
     values = NULL;
-    value_remove_flags = NULL;
+    hash_entry_remove_flags = NULL;
 
     hash_entries = NULL;
     compacted_hash_entries = NULL;
@@ -71,7 +71,7 @@ public:
       checkCudaErrors(cudaMalloc(&heap, sizeof(uint) * params.value_capacity));
       checkCudaErrors(cudaMalloc(&heap_counter, sizeof(uint)));
       checkCudaErrors(cudaMalloc(&values, sizeof(ValueType) * params.value_capacity));
-      checkCudaErrors(cudaMalloc(&value_remove_flags, sizeof(int) * params.entry_count));
+      checkCudaErrors(cudaMalloc(&hash_entry_remove_flags, sizeof(int) * params.entry_count));
 
       checkCudaErrors(cudaMalloc(&hash_entries, sizeof(HashEntry) * params.entry_count));
       checkCudaErrors(cudaMalloc(&compacted_hash_entries, sizeof(HashEntry) * params.entry_count));
@@ -82,7 +82,7 @@ public:
       heap               = new uint[params.value_capacity];
       heap_counter       = new uint[1];
       values             = new ValueType[params.value_capacity];
-      value_remove_flags = new int[params.entry_count];
+      hash_entry_remove_flags = new int[params.entry_count];
 
       hash_entries                 = new HashEntry[params.entry_count];
       compacted_hash_entries       = new HashEntry[params.entry_count];
@@ -98,7 +98,7 @@ public:
       checkCudaErrors(cudaFree(heap));
       checkCudaErrors(cudaFree(heap_counter));
       checkCudaErrors(cudaFree(values));
-      checkCudaErrors(cudaFree(value_remove_flags));
+      checkCudaErrors(cudaFree(hash_entry_remove_flags));
 
       checkCudaErrors(cudaFree(hash_entries));
       checkCudaErrors(cudaFree(compacted_hash_entries));
@@ -109,7 +109,7 @@ public:
       if (heap)               delete[] heap;
       if (heap_counter)       delete[] heap_counter;
       if (values)             delete[] values;
-      if (value_remove_flags) delete[] value_remove_flags;
+      if (hash_entry_remove_flags) delete[] hash_entry_remove_flags;
 
       if (hash_entries)                 delete[] hash_entries;
       if (compacted_hash_entries)       delete[] compacted_hash_entries;
@@ -121,7 +121,7 @@ public:
     heap               = NULL;
     heap_counter       = NULL;
     values             = NULL;
-    value_remove_flags = NULL;
+    hash_entry_remove_flags = NULL;
 
     hash_entries                 = NULL;
     compacted_hash_entries       = NULL;
@@ -390,77 +390,10 @@ public:
     return false;
   }
 
-  /// (wei): reported bug on GitHub, wait for responce)
-  //  TODO MATTHIAS check the atomics in this function
-  //!inserts a hash entry without allocating any memory: used by streaming:
-  __device__
-  bool insertHashEntry(HashEntry entry) {
-    uint h  = HashBucketForBlockPos(entry.pos); //hash bucket
-    uint hp = h * HASH_BUCKET_SIZE;	//hash position
-
-    for (uint j = 0; j < HASH_BUCKET_SIZE; ++j) {
-      uint i = j + hp;
-      int lock = atomicCAS(&hash_entries[i].ptr, FREE_ENTRY, LOCK_ENTRY);
-      if (lock == FREE_ENTRY) {
-        hash_entries[i] = entry;
-        return true;
-      }
-    }
-
-#ifdef HANDLE_COLLISIONS
-    const uint idxLastEntryInBucket = hp + HASH_BUCKET_SIZE - 1;
-    uint i = idxLastEntryInBucket;
-
-    #pragma  unroll 1
-    for (uint maxIter = 0; maxIter < kHashParams.linked_list_size; ++maxIter) {
-      //curr = GetHashEntry(hash, i);
-      HashEntry curr = hash_entries[i];	//TODO MATTHIAS do by reference
-      if (curr.offset == 0) break;									//we have found the end of the list
-      i = idxLastEntryInBucket + curr.offset;							//go to next element in the list
-      i %= (HASH_BUCKET_SIZE * kHashParams.bucket_count);	//check for overflow
-    }
-
-    uint maxIter = 0;
-    int offset = 0;
-    #pragma  unroll 1
-    while (maxIter < kHashParams.linked_list_size) {													//linear search for free entry
-      offset++;
-      uint i = (idxLastEntryInBucket + offset) % (HASH_BUCKET_SIZE * kHashParams.bucket_count);	//go to next hash element
-      if ((offset % HASH_BUCKET_SIZE) == 0) continue;										//cannot insert into a last bucket element (would conflict with other linked lists)
-
-      int prevWeight = 0;
-      //InterlockedCompareExchange(hash[3*i+2], FREE_ENTRY, LOCK_ENTRY, prevWeight);		//check for a free entry
-      uint* hash_entriesUI = (uint*)hash_entries;
-      prevWeight = prevWeight = atomicCAS(&hash_entriesUI[3*idxLastEntryInBucket+1], (uint)FREE_ENTRY, (uint)LOCK_ENTRY);
-      if (prevWeight == FREE_ENTRY) {														//if free entry found set prev->next = curr & curr->next = prev->next
-        //[allow_uav_condition]
-        //while(hash[3*idxLastEntryInBucket+2] == LOCK_ENTRY); // expects setHashEntry to set the ptr last, required because pos.z is packed into the same value -> prev->next = curr -> might corrput pos.z
-
-        HashEntry lastEntryInBucket = hash_entries[idxLastEntryInBucket];			//get prev (= lastEntry in Bucket)
-
-        int newOffsetPrev = (offset << 16) | (lastEntryInBucket.pos.z & 0x0000ffff);	//prev->next = curr (maintain old z-pos)
-        int oldOffsetPrev = 0;
-        //InterlockedExchange(hash[3*idxLastEntryInBucket+1], newOffsetPrev, oldOffsetPrev);	//set prev offset atomically
-        uint* hash_entriesUI = (uint*)hash_entries;
-        oldOffsetPrev = prevWeight = atomicExch(&hash_entriesUI[3*idxLastEntryInBucket+1], newOffsetPrev);
-        entry.offset = oldOffsetPrev >> 16;													//remove prev z-pos from old offset
-
-        //setHashEntry(hash, i, entry);														//sets the current hashEntry with: curr->next = prev->next
-        hash_entries[i] = entry;
-        return true;
-      }
-
-      maxIter++;
-    }
-#endif
-
-    return false;
-  }
-
 #endif	//CUDACC
 
 };
 
-typedef HashTableGPU<Block> HashTable;
+//typedef HashTableGPU<Block> HashTable;
 
 #endif

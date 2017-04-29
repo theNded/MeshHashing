@@ -15,12 +15,12 @@
 
 /// ! FUSION PART !
 extern void IntegrateCudaHost(
-        HashTable& hash_table, const HashParams& hash_params,
+        HashTableGPU<Block>& hash_table, const HashParams& hash_params,
         const SensorData& sensor_data, const SensorParams& sensor_params,
         float4x4 c_T_w
 );
 extern void AllocBlocksCudaHost(
-        HashTable& hash_table, const HashParams& hash_params,
+        HashTableGPU<Block>& hash_table, const HashParams& hash_params,
         const SensorData& sensor_data, const SensorParams& sensor_params,
         const float4x4& w_T_c, const unsigned int* is_streamed_mask
 );

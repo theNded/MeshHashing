@@ -50,7 +50,7 @@ void Mapper::IntegrateDepthMap(Map *map, Sensor *sensor) {
 
 
 void Mapper::AllocBlocks(Map* map, Sensor* sensor) {
-  ResetBucketMutexesCudaHost(map->hash_table(), map->hash_params());
+  map->hash_table_.ResetMutexes();
   // TODO(wei): add bit_mask
   AllocBlocksCudaHost(map->hash_table(), map->hash_params(),
                       sensor->getSensorData(), sensor->getSensorParams(),

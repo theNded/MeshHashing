@@ -23,7 +23,7 @@ void BindSensorDataToTextureCudaHost(const SensorData& sensor_data) {
 /// Integrate depth map
 /// Private compcated_hash_entries, blocks
 __global__
-void IntegrateCudaKernel(HashTable hash_table, SensorData sensor_data, float4x4 c_T_w) {
+void IntegrateCudaKernel(HashTableGPU<Block> hash_table, SensorData sensor_data, float4x4 c_T_w) {
   const HashParams &hash_params = kHashParams;
   const SensorParams &sensor_params = kSensorParams;
 
@@ -74,7 +74,7 @@ void IntegrateCudaKernel(HashTable hash_table, SensorData sensor_data, float4x4 
 
 
 __host__
-void IntegrateCudaHost(HashTable& hash_table, const HashParams& hash_params,
+void IntegrateCudaHost(HashTableGPU<Block>& hash_table, const HashParams& hash_params,
                        const SensorData& sensor_data, const SensorParams& sensor_params,
                        float4x4 c_T_w) {
   const unsigned int threadsPerBlock = SDF_BLOCK_SIZE*SDF_BLOCK_SIZE*SDF_BLOCK_SIZE;
@@ -97,7 +97,7 @@ void IntegrateCudaHost(HashTable& hash_table, const HashParams& hash_params,
 /// Alloc blocks in the frustum around observed 3D points
 /// Public AllocBlock
 __global__
-void AllocBlocksKernel(HashTable hash_table, SensorData sensor_data,
+void AllocBlocksKernel(HashTableGPU<Block> hash_table, SensorData sensor_data,
                        float4x4 w_T_c, const unsigned int* is_streamed_mask) {
   const HashParams &hash_params = kHashParams;
   const SensorParams &sensor_params = kSensorParams;
@@ -182,7 +182,7 @@ void AllocBlocksKernel(HashTable hash_table, SensorData sensor_data,
 }
 
 __host__
-void AllocBlocksCudaHost(HashTable& hash_table, const HashParams& hash_params,
+void AllocBlocksCudaHost(HashTableGPU<Block>& hash_table, const HashParams& hash_params,
                          const SensorData& sensor_data, const SensorParams& sensor_params,
                          const float4x4& w_T_c, const unsigned int* is_streamed_mask) {
 

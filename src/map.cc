@@ -10,23 +10,21 @@
 
 Map::Map(const HashParams &hash_params) {
   hash_params_ = hash_params;
-  hash_table_.Alloc(hash_params_);
+  hash_table_.Resize(hash_params_);
 
   Reset();
 }
 
-Map::~Map() {
-  hash_table_.Free();
-}
+Map::~Map() {}
 
 void Map::Reset() {
   integrated_frame_count_ = 0;
   occupied_block_count_ = 0;
-  ResetCudaHost(hash_table_, hash_params_);
+  hash_table_.Reset();
 }
 
 void Map::GenerateCompressedHashEntries(float4x4 c_T_w) {
-  occupied_block_count_ = GenerateCompressedHashEntriesCudaHost(hash_table_, hash_params_, c_T_w);
+  occupied_block_count_ = GenerateCompressedHashEntriesCudaHost(hash_table_.gpu_data(), hash_params_, c_T_w);
   //this version uses atomics over prefix sums, which has a much better performance
   std::cout << "Occupied Blocks: " << occupied_block_count_ << std::endl;
 }
@@ -38,13 +36,13 @@ void Map::RecycleInvalidBlocks() {
 
     if (integrated_frame_count_ > 0
         && integrated_frame_count_ % garbage_collect_starve == 0) {
-      StarveOccupiedVoxelsCudaHost(hash_table_, hash_params_);
+      StarveOccupiedVoxelsCudaHost(hash_table_.gpu_data(), hash_params_);
     }
 
-    CollectInvalidBlockInfoCudaHost(hash_table_, hash_params_);
-    ResetBucketMutexesCudaHost(hash_table_, hash_params_);
+    CollectInvalidBlockInfoCudaHost(hash_table_.gpu_data(), hash_params_);
+    hash_table_.ResetMutexes();
     //needed if linked lists are enabled -> for memeory deletion
-    RecycleInvalidBlockCudaHost(hash_table_, hash_params_);
+    RecycleInvalidBlockCudaHost(hash_table_.gpu_data(), hash_params_);
   }
 }
 
@@ -52,7 +50,8 @@ void Map::RecycleInvalidBlocks() {
 //! debug only!
 unsigned int Map::getHeapFreeCount() {
   unsigned int count;
-  checkCudaErrors(cudaMemcpy(&count, hash_table_.heap_counter, sizeof(unsigned int),
+  checkCudaErrors(cudaMemcpy(&count, hash_table_.gpu_data().heap_counter,
+                             sizeof(unsigned int),
                              cudaMemcpyDeviceToHost));
   return count + 1;  //there is one more free than the address suggests (0 would be also a valid address)
 }
@@ -64,15 +63,15 @@ void Map::debugHash() {
   unsigned int *heapCPU = new unsigned int[hash_params_.value_capacity];
   unsigned int heapCounterCPU;
 
-  checkCudaErrors(cudaMemcpy(&heapCounterCPU, hash_table_.heap_counter, sizeof(unsigned int), cudaMemcpyDeviceToHost));
+  checkCudaErrors(cudaMemcpy(&heapCounterCPU, hash_table_.gpu_data().heap_counter, sizeof(unsigned int), cudaMemcpyDeviceToHost));
   heapCounterCPU++;  //points to the first free entry: number of blocks is one more
 
-  checkCudaErrors(cudaMemcpy(heapCPU, hash_table_.heap, sizeof(unsigned int) * hash_params_.value_capacity, cudaMemcpyDeviceToHost));
-  checkCudaErrors(cudaMemcpy(hashCPU, hash_table_.hash_entries,
+  checkCudaErrors(cudaMemcpy(heapCPU, hash_table_.gpu_data().heap, sizeof(unsigned int) * hash_params_.value_capacity, cudaMemcpyDeviceToHost));
+  checkCudaErrors(cudaMemcpy(hashCPU, hash_table_.gpu_data().hash_entries,
                              sizeof(HashEntry) * hash_params_.bucket_size * hash_params_.bucket_count, cudaMemcpyDeviceToHost));
-  checkCudaErrors(cudaMemcpy(hashCompCPU, hash_table_.compacted_hash_entries,
+  checkCudaErrors(cudaMemcpy(hashCompCPU, hash_table_.gpu_data().compacted_hash_entries,
                              sizeof(HashEntry) * occupied_block_count_, cudaMemcpyDeviceToHost));
-  checkCudaErrors(cudaMemcpy(voxelCPU, hash_table_.values,
+  checkCudaErrors(cudaMemcpy(voxelCPU, hash_table_.gpu_data().values,
                              sizeof(Voxel) * hash_params_.value_capacity * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE,
                              cudaMemcpyDeviceToHost));
 

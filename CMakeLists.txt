@@ -106,6 +106,7 @@ SET(CUDA_SEPARABLE_COMPILATION ON)
 LIST(APPEND CUDA_NVCC_FLAGS -gencode=arch=compute_52,code=sm_52)
 CUDA_ADD_LIBRARY(CUDAVoxelHashing
         ${VH}/src/constant.cu
+        ${VH}/src/hash_table.cu
         ${VH}/src/sensor.cu
         ${VH}/src/map.cu
         ${VH}/src/mapper.cu
