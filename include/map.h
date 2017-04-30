@@ -11,7 +11,8 @@
 class Map {
 
 private:
-  HashParams hash_params_;
+  HashParams   hash_params_;
+
   uint integrated_frame_count_;
   uint occupied_block_count_;
 
@@ -29,12 +30,8 @@ public:
 
   void CompactHashEntries(float4x4 c_T_w);
 
-
   HashTableGPU<Block> &hash_table() {
     return hash_table_.gpu_data();
-  }
-  HashParams &hash_params() {
-    return hash_params_;
   }
   uint& frame_count() {
     return integrated_frame_count_;
@@ -43,9 +40,9 @@ public:
     return occupied_block_count_;
   }
 
+  SensorParams sensor_params_;
+
   HashTable<Block> hash_table_;
-
-
 };
 
 

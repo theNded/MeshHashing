@@ -1,4 +1,5 @@
 #include <matrix.h>
+#include <geometry_util.h>
 
 #include "hash_table_gpu.h"
 #include "ray_caster.h"
@@ -207,7 +208,9 @@ void CastKernel(const HashTableGPU<Block> hash_table,
 
   /// Fix this! this uses the sensor's parameter instead of the viewer's
   /// 1. Determine ray direction
-  float3 camera_dir = normalize(ImageReprojectToCamera(x, y, 1.0f));
+  float3 camera_dir = normalize(ImageReprojectToCamera(x, y, 1.0f,
+  ray_caster_params.fx, ray_caster_params.fy, ray_caster_params.cx, ray_caster_params.cy));
+
   float ray_length_per_depth_unit = 1.0f / camera_dir.z;
   float t_min = ray_caster_params.min_raycast_depth / camera_dir.z;
   float t_max = ray_caster_params.max_raycast_depth / camera_dir.z;
@@ -253,7 +256,10 @@ void CastKernel(const HashTableGPU<Block> hash_table,
 
             ray_caster_data.depth_image_ [pixel_idx] = depth;
             ray_caster_data.vertex_image_[pixel_idx]
-                    = make_float4(ImageReprojectToCamera(x, y, depth), 1.0f);
+                    = make_float4(ImageReprojectToCamera(x, y, depth,
+                                                         ray_caster_params.fx, ray_caster_params.fy,
+                                                         ray_caster_params.cx, ray_caster_params.cy),
+                                  1.0f);
             ray_caster_data.color_image_ [pixel_idx]
                     = make_float4(interpolated_color.x / 255.f,
                                   interpolated_color.y / 255.f,

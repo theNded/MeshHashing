@@ -13,8 +13,10 @@ extern texture<float4, cudaTextureType2D, cudaReadModeElementType> color_texture
 
 /// Kernel functions
 __global__
-void IntegrateCudaKernel(HashTableGPU<Block> hash_table, SensorData sensor_data, float4x4 c_T_w) {
-  const SensorParams &sensor_params = kSensorParams;
+void IntegrateCudaKernel(HashTableGPU<Block> hash_table,
+                         SensorData sensor_data,
+                         SensorParams sensor_params,
+                         float4x4 c_T_w) {
 
   //TODO check if we should load this in shared memory
 
@@ -27,7 +29,9 @@ void IntegrateCudaKernel(HashTableGPU<Block> hash_table, SensorData sensor_data,
   /// 2. Project to camera
   float3 world_pos = VoxelToWorld(voxel_pos);
   float3 camera_pos = c_T_w * world_pos;
-  uint2 image_pos = make_uint2(CameraProjectToImagei(camera_pos));
+  uint2 image_pos = make_uint2(CameraProjectToImagei(camera_pos,
+                                                     sensor_params.fx, sensor_params.fy,
+                                                     sensor_params.cx, sensor_params.cy));
   if (image_pos.x >= sensor_params.width || image_pos.y >= sensor_params.height)
     return;
 
@@ -50,7 +54,7 @@ void IntegrateCudaKernel(HashTableGPU<Block> hash_table, SensorData sensor_data,
   /// 5. Update
   Voxel delta;
   delta.sdf = sdf;
-  delta.weight = max(kSDFParams.weight_sample * 1.5f * (1.0f - NormalizeDepth(depth)), 1.0f);
+  delta.weight = max(kSDFParams.weight_sample * 1.5f * (1.0f - NormalizeDepth(depth, sensor_params.min_depth_range, sensor_params.max_depth_range)), 1.0f);
   if (sensor_data.color_image_) {
     float4 color = tex2D(color_texture, image_pos.x, image_pos.y);
     delta.color = make_uchar3(255 * color.x, 255 * color.y, 255 * color.z);
@@ -102,7 +106,7 @@ void Mapper::IntegrateDepthMap(Map* map, Sensor *sensor) {
 
   if (occupied_block_count <= 0) return;
 
-  IntegrateCudaKernel << <grid_size, block_size >> >(map->hash_table(), sensor->sensor_data(), sensor->c_T_w());
+  IntegrateCudaKernel << <grid_size, block_size >> >(map->hash_table(), sensor->sensor_data(), sensor->sensor_params(), sensor->c_T_w());
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }
@@ -110,8 +114,8 @@ void Mapper::IntegrateDepthMap(Map* map, Sensor *sensor) {
 
 __global__
 void AllocBlocksKernel(HashTableGPU<Block> hash_table, SensorData sensor_data,
+                       SensorParams sensor_params,
                        float4x4 w_T_c, const uint* is_streamed_mask) {
-  const SensorParams &sensor_params = kSensorParams;
 
   const uint x = blockIdx.x * blockDim.x + threadIdx.x;
   const uint y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -131,8 +135,8 @@ void AllocBlocksKernel(HashTableGPU<Block> hash_table, SensorData sensor_data,
   float far_depth = min(kSDFParams.sdf_upper_bound, depth + truncation);
   if (near_depth >= far_depth) return;
 
-  float3 camera_pos_near = ImageReprojectToCamera(x, y, near_depth);
-  float3 camera_pos_far  = ImageReprojectToCamera(x, y, far_depth);
+  float3 camera_pos_near = ImageReprojectToCamera(x, y, near_depth, sensor_params.fx, sensor_params.fy, sensor_params.cx, sensor_params.cy);
+  float3 camera_pos_far  = ImageReprojectToCamera(x, y, far_depth, sensor_params.fx, sensor_params.fy, sensor_params.cx, sensor_params.cy);
 
   /// 2. Set range where blocks are allocated
   float3 world_pos_near  = w_T_c * camera_pos_near;
@@ -169,7 +173,7 @@ void AllocBlocksKernel(HashTableGPU<Block> hash_table, SensorData sensor_data,
   const uint kMaxIterTime = 1024;
 #pragma unroll 1
   for (uint iter = 0; iter < kMaxIterTime; ++iter) {
-    if (IsBlockInCameraFrustum(w_T_c.getInverse(), block_pos_curr)) {
+    if (IsBlockInCameraFrustum(w_T_c.getInverse(), block_pos_curr, sensor_params)) {
       /// Disable streaming at current
       // && !isSDFBlockStreamedOut(idCurrentVoxel, hash_table, is_streamed_mask)) {
       hash_table.AllocEntry(block_pos_curr);
@@ -199,7 +203,7 @@ void Mapper::AllocBlocks(Map* map, Sensor* sensor) {
                        (sensor->sensor_params().height + threads_per_block - 1)/threads_per_block);
   const dim3 block_size(threads_per_block, threads_per_block);
 
-  AllocBlocksKernel<<<grid_size, block_size>>>(map->hash_table(), sensor->sensor_data(), sensor->w_T_c(), NULL);
+  AllocBlocksKernel<<<grid_size, block_size>>>(map->hash_table(), sensor->sensor_data(), sensor->sensor_params(), sensor->w_T_c(), NULL);
 
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());

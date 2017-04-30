@@ -33,7 +33,6 @@ public:
 
   void Cast(Map* map, const float4x4& c_T_w);
 
-
   const RayCasterData& ray_caster_data() {
     return ray_caster_data_;
   }

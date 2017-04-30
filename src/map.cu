@@ -9,9 +9,7 @@
 #include <unordered_set>
 #include <vector>
 #include <list>
-
-// TODO(wei): put functions into hash_table.h
-#define T_PER_BLOCK 8
+#include <glog/logging.h>
 
 #define PINF  __int_as_float(0x7f800000)
 
@@ -19,8 +17,8 @@
 /// Easier interpolation
 /// Kernel functions
 __global__
-void CompactHashEntriesKernel(HashTableGPU<Block> hash_table, float4x4 c_T_w) {
-  const unsigned int idx = blockIdx.x*blockDim.x + threadIdx.x;
+void CompactHashEntriesKernel(HashTableGPU<Block> hash_table, SensorParams sensor_params, float4x4 c_T_w) {
+  const uint idx = blockIdx.x*blockDim.x + threadIdx.x;
 
   __shared__ int local_counter;
   if (threadIdx.x == 0) local_counter = 0;
@@ -29,8 +27,7 @@ void CompactHashEntriesKernel(HashTableGPU<Block> hash_table, float4x4 c_T_w) {
   int addr_local = -1;
   if (idx < *hash_table.entry_count) {
     if (hash_table.hash_entries[idx].ptr != FREE_ENTRY) {
-      if (IsBlockInCameraFrustum(c_T_w, hash_table.hash_entries[idx].pos))
-      {
+      if (IsBlockInCameraFrustum(c_T_w, hash_table.hash_entries[idx].pos, sensor_params)) {
         addr_local = atomicAdd(&local_counter, 1);
       }
     }
@@ -45,7 +42,7 @@ void CompactHashEntriesKernel(HashTableGPU<Block> hash_table, float4x4 c_T_w) {
   __syncthreads();
 
   if (addr_local != -1) {
-    const unsigned int addr = addr_global + addr_local;
+    const uint addr = addr_global + addr_local;
     hash_table.compacted_hash_entries[addr] = hash_table.hash_entries[idx];
   }
 }
@@ -68,7 +65,7 @@ void StarveOccupiedVoxelsKernel(HashTableGPU<Block> hash_table) {
 __global__
 void CollectInvalidBlockInfoKernel(HashTableGPU<Block> hash_table) {
 
-  const unsigned int hashIdx = blockIdx.x;
+  const uint hashIdx = blockIdx.x;
   const HashEntry& entry = hash_table.compacted_hash_entries[hashIdx];
 
   Voxel v0 = hash_table.values[entry.ptr](2*threadIdx.x+0);
@@ -97,7 +94,8 @@ void CollectInvalidBlockInfoKernel(HashTableGPU<Block> hash_table) {
     float minSDF = shared_min_sdf[threadIdx.x];
     uint maxWeight = shared_max_weight[threadIdx.x];
 
-    float t = truncate_distance(kSensorParams.max_depth_range);	//MATTHIAS TODO check whether this is a reasonable metric
+    /// TODO: check this weird reference
+    float t = truncate_distance(5.0f);
 
     if (minSDF >= t || maxWeight == 0) {
       hash_table.hash_entry_remove_flags[hashIdx] = 1;
@@ -157,23 +155,24 @@ void Map::Recycle() {
 
 /// Member functions (kernel function callers)
 void Map::CompactHashEntries(float4x4 c_T_w){
-  const unsigned int threads_per_block = 256;
-  const dim3 grid_size((HASH_BUCKET_SIZE * hash_params_.bucket_count + threads_per_block - 1) / threads_per_block, 1);
+  const uint threads_per_block = 256;
+  const dim3 grid_size((hash_params_.entry_count + threads_per_block - 1) / threads_per_block, 1);
   const dim3 block_size(threads_per_block, 1);
 
   checkCudaErrors(cudaMemset(hash_table_.gpu_data().compacted_hash_entry_counter, 0, sizeof(int)));
-  CompactHashEntriesKernel<< <grid_size, block_size >> >(hash_table_.gpu_data(), c_T_w);
+  CompactHashEntriesKernel<<<grid_size, block_size >>>(hash_table_.gpu_data(), sensor_params_, c_T_w);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 
-  unsigned int res = 0;
-  checkCudaErrors(cudaMemcpy(&res, hash_table_.gpu_data().compacted_hash_entry_counter, sizeof(unsigned int),
+  uint res = 0;
+  checkCudaErrors(cudaMemcpy(&res, hash_table_.gpu_data().compacted_hash_entry_counter, sizeof(uint),
                              cudaMemcpyDeviceToHost));
+  LOG(INFO) << "Occupied block count: " << res;
 }
 
 /// (__host__)
 void Map::StarveOccupiedVoxels() {
-  const unsigned int threads_per_block = SDF_BLOCK_SIZE*SDF_BLOCK_SIZE*SDF_BLOCK_SIZE;
+  const uint threads_per_block = SDF_BLOCK_SIZE*SDF_BLOCK_SIZE*SDF_BLOCK_SIZE;
 
   uint occupied_block_count;
   checkCudaErrors(cudaMemcpy(&occupied_block_count, hash_table_.gpu_data().compacted_hash_entry_counter,
@@ -190,7 +189,7 @@ void Map::StarveOccupiedVoxels() {
 
 /// (__host__)
 void Map::CollectInvalidBlockInfo() {
-  const unsigned int threads_per_block = SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE / 2;
+  const uint threads_per_block = SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE / 2;
 
   uint occupied_block_count;
   checkCudaErrors(cudaMemcpy(&occupied_block_count, hash_table_.gpu_data().compacted_hash_entry_counter,
@@ -207,7 +206,7 @@ void Map::CollectInvalidBlockInfo() {
 
 /// (__host__)
 void Map::RecycleInvalidBlock() {
-  const unsigned int threads_per_block = 64;
+  const uint threads_per_block = 64;
 
   uint occupied_block_count;
   checkCudaErrors(cudaMemcpy(&occupied_block_count, hash_table_.gpu_data().compacted_hash_entry_counter,

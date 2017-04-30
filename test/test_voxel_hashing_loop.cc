@@ -167,6 +167,7 @@ int main() {
   LoadImageList(kDefaultDatasetPath, "rgb.txt", color_img_list);
   LoadTrajectory(kDefaultDatasetPath, wTc);
 
+
   SDFParams sdf_params;
   sdf_params.voxel_size = 0.01;
 
@@ -197,7 +198,7 @@ int main() {
   hash_params.weight_sample = 10;
   hash_params.weight_upper_bound = 255;
 
-  Map voxel_map(hash_params);
+
 
   //mapper.debugHash();
   /// Only to alloc cuda memory, suppose its ok
@@ -219,9 +220,6 @@ int main() {
   sensor_params.max_depth_range = 5.0f;
   sensor_params.height = 480;
   sensor_params.width = 640;
-  SetConstantSensorParams(sensor_params);
-  Sensor sensor(sensor_params);
-  sensor.BindSensorDataToTexture();
 
   float4x4 T;
   float4x4 K;
@@ -232,8 +230,11 @@ int main() {
 
   /// Ray Caster
   RayCasterParams ray_cast_params;
-  ray_cast_params.intrinsics = K;
-  ray_cast_params.intrinsics_inverse = K.getInverse();
+  ray_cast_params.fx = sensor_params.fx;
+  ray_cast_params.fy = sensor_params.fy;
+  ray_cast_params.cx = sensor_params.cx;
+  ray_cast_params.cy = sensor_params.cy;
+
   ray_cast_params.width = 640;
   ray_cast_params.height = 480;
   ray_cast_params.min_raycast_depth = 0.5f;
@@ -243,11 +244,24 @@ int main() {
   ray_cast_params.sdf_threshold = 50.0f * ray_cast_params.raycast_step;
   RayCaster ray_caster(ray_cast_params);
 
+  Map voxel_map(hash_params);
+
   Mapper mapper;
+
+  Sensor sensor(sensor_params);
+  //voxel_map.sensor_params_ = sensor_params;
+  sensor.BindSensorDataToTexture();
 
   /// Process
   float4 *cuda_hsv;
   checkCudaErrors(cudaMalloc(&cuda_hsv, sizeof(float4) * 640 * 480));
+
+  LOG(INFO) << sizeof(SensorParams);
+  LOG(INFO) << sizeof(RayCasterParams);
+  LOG(INFO) << sizeof(HashParams);
+  LOG(INFO) << sizeof(SDFParams);
+
+  voxel_map.sensor_params_ = sensor_params;
 
   //cv::VideoWriter writer("icl-vh.avi", CV_FOURCC('X','V','I','D'), 30, cv::Size(640, 480));
   std::chrono::time_point<std::chrono::system_clock> start, end;
@@ -269,6 +283,7 @@ int main() {
     mapper.Integrate(&voxel_map, &sensor, NULL);
 
     ray_caster.Cast(&voxel_map, T.getInverse());
+
     //DepthToRGBCudaHost(cuda_hsv, ray_caster.ray_caster_data().depth_image_, 640, 480, 0.5f, 3.5f);
     //checkCudaFloat4Memory(cuda_hsv);
     checkCudaFloat4Memory(ray_caster.ray_caster_data().normal_image_);

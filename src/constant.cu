@@ -8,10 +8,3 @@ void SetConstantSDFParams(const SDFParams& params) {
   checkCudaErrors(cudaGetSymbolSize(&size, kSDFParams));
   checkCudaErrors(cudaMemcpyToSymbol(kSDFParams, &params, size, 0, cudaMemcpyHostToDevice));
 }
-
-__constant__ SensorParams kSensorParams;
-void SetConstantSensorParams(const SensorParams& params) {
-  size_t size;
-  checkCudaErrors(cudaGetSymbolSize(&size, kSensorParams));
-  checkCudaErrors(cudaMemcpyToSymbol(kSensorParams, &params, size, 0, cudaMemcpyHostToDevice));
-}

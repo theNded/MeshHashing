@@ -9,10 +9,6 @@
 #include <helper_cuda.h>
 #include "params.h"
 
-/// constant.cu
-extern __constant__ SensorParams kSensorParams;
-extern void SetConstantSensorParams(const SensorParams& params);
-
 /// At first get rid of CUDARGBDAdaptor and RGBDSensor, use it directly
 struct SensorData {
   /// Raw data

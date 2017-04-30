@@ -52,8 +52,10 @@ struct __ALIGN__(16) SDFParams {
 };
 
 struct __ALIGN__(16) RayCasterParams {
-  float4x4 intrinsics;               /// Intrinsic matrix
-  float4x4 intrinsics_inverse;
+  float fx;
+  float fy;
+  float cx;
+  float cy;
 
   uint width;                /// 640
   uint height;               /// 480
@@ -67,6 +69,7 @@ struct __ALIGN__(16) RayCasterParams {
   bool  enable_gradients;
 
   uchar3 dummy0;
+  float4 dummy1;
 };
 
 /// We may generate a virtual camera for LiDAR
