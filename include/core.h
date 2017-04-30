@@ -12,10 +12,12 @@
 #include "common.h"
 
 /// HashEntry
-struct __ALIGN__(16) HashEntry {
+struct __ALIGN__(8) HashEntry {
   int3	pos;		   // hash position (lower left corner of SDFBlock))
   int		ptr;	     // pointer into heap to SDFBlock
   uint	offset;		 // offset for collisions
+
+  // uint padding
 
   __device__ void operator=(const struct HashEntry& e) {
     ((long long*)this)[0] = ((const long long*)&e)[0];
@@ -45,7 +47,7 @@ struct __ALIGN__(8) Voxel {
 /// Block
 /// Typically Block is an array of Voxels
 /// TODO: a more reasonable wrapper for accessing
-struct Block {
+struct __ALIGN__(8) Block {
   Voxel voxels[SDF_BLOCK_SIZE * SDF_BLOCK_SIZE * SDF_BLOCK_SIZE];
 
   __device__ Voxel& operator() (int i) {

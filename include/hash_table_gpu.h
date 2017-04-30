@@ -22,14 +22,9 @@
 #include "geometry_util.h"
 #include "params.h"
 
-/// constant.cu
-extern __constant__ HashParams kHashParams;
-extern void SetConstantHashParams(const HashParams& hash_params);
-
 // TODO(wei): make a templated class to adapt to more types
 template <typename ValueType>
-class HashTableGPU {
-public:
+struct HashTableGPU {
   /// Hash VALUE part
   uint      *heap;               /// index to free values
   uint      *heap_counter;       /// single element; used as an atomic counter (points to the next free block)
@@ -43,73 +38,15 @@ public:
                                            /// == occupied_block_count
   /// Misc
   int       *bucket_mutexes;     /// binary flag per hash bucket; used for allocation to atomically lock a bucket
+
+  /// Parameters
+  uint      *bucket_count;
+  uint      *bucket_size;
+  uint      *entry_count;
+  uint      *value_capacity;
+  uint      *linked_list_size;
+
   bool       is_on_gpu;          /// the class be be used on both cpu and gpu
-
-  __host__
-  void Alloc(const HashParams &params, bool is_data_on_gpu = true) {
-    is_on_gpu = is_data_on_gpu;
-    if (is_on_gpu) {
-      checkCudaErrors(cudaMalloc(&heap, sizeof(uint) * params.value_capacity));
-      checkCudaErrors(cudaMalloc(&heap_counter, sizeof(uint)));
-      checkCudaErrors(cudaMalloc(&values, sizeof(ValueType) * params.value_capacity));
-      checkCudaErrors(cudaMalloc(&hash_entry_remove_flags, sizeof(int) * params.entry_count));
-
-      checkCudaErrors(cudaMalloc(&hash_entries, sizeof(HashEntry) * params.entry_count));
-      checkCudaErrors(cudaMalloc(&compacted_hash_entries, sizeof(HashEntry) * params.entry_count));
-      checkCudaErrors(cudaMalloc(&compacted_hash_entry_counter, sizeof(int)));
-
-      checkCudaErrors(cudaMalloc(&bucket_mutexes, sizeof(int) * params.bucket_count));
-    } else {
-      heap               = new uint[params.value_capacity];
-      heap_counter       = new uint[1];
-      values             = new ValueType[params.value_capacity];
-      hash_entry_remove_flags = new int[params.entry_count];
-
-      hash_entries                 = new HashEntry[params.entry_count];
-      compacted_hash_entries       = new HashEntry[params.entry_count];
-      compacted_hash_entry_counter = new int[1];
-
-      bucket_mutexes = new int[params.bucket_count];
-    }
-  }
-
-  __host__
-  void Free() {
-    if (is_on_gpu) {
-      checkCudaErrors(cudaFree(heap));
-      checkCudaErrors(cudaFree(heap_counter));
-      checkCudaErrors(cudaFree(values));
-      checkCudaErrors(cudaFree(hash_entry_remove_flags));
-
-      checkCudaErrors(cudaFree(hash_entries));
-      checkCudaErrors(cudaFree(compacted_hash_entries));
-      checkCudaErrors(cudaFree(compacted_hash_entry_counter));
-
-      checkCudaErrors(cudaFree(bucket_mutexes));
-    } else {
-      if (heap)               delete[] heap;
-      if (heap_counter)       delete[] heap_counter;
-      if (values)             delete[] values;
-      if (hash_entry_remove_flags) delete[] hash_entry_remove_flags;
-
-      if (hash_entries)                 delete[] hash_entries;
-      if (compacted_hash_entries)       delete[] compacted_hash_entries;
-      if (compacted_hash_entry_counter) delete[] compacted_hash_entry_counter;
-
-      if (bucket_mutexes) delete[] bucket_mutexes;
-    }
-
-    heap               = NULL;
-    heap_counter       = NULL;
-    values             = NULL;
-    hash_entry_remove_flags = NULL;
-
-    hash_entries                 = NULL;
-    compacted_hash_entries       = NULL;
-    compacted_hash_entry_counter = NULL;
-
-    bucket_mutexes = NULL;
-  }
 
   /////////////////
   // Device part //
@@ -127,8 +64,9 @@ public:
     const int p1 = 19349669;
     const int p2 = 83492791;
 
-    int res = ((block_pos.x * p0) ^ (block_pos.y * p1) ^ (block_pos.z * p2)) % kHashParams.bucket_count;
-    if (res < 0) res += kHashParams.bucket_count;
+    int res = ((block_pos.x * p0) ^ (block_pos.y * p1) ^ (block_pos.z * p2))
+            % (*bucket_count);
+    if (res < 0) res += (*bucket_count);
     return (uint) res;
   }
 
@@ -181,7 +119,7 @@ public:
     HashEntry curr_entry;
 
     #pragma unroll 1
-    for (uint iter = 0; iter < kHashParams.linked_list_size; ++iter) {
+    for (uint iter = 0; iter < *linked_list_size; ++iter) {
       curr_entry = hash_entries[i];
 
       if (IsBlockAllocated(block_pos, curr_entry)) {
@@ -191,7 +129,7 @@ public:
         break;
       }
       i = bucket_last_entry_idx + curr_entry.offset;
-      i %= (kHashParams.entry_count); // avoid overflow
+      i %= (*entry_count); // avoid overflow
     }
 #endif
     return entry;
@@ -234,7 +172,7 @@ public:
     const uint bucket_last_entry_idx = bucket_first_entry_idx + HASH_BUCKET_SIZE - 1;
     uint i = bucket_last_entry_idx;
     int offset = 0;
-    for (uint iter = 0; iter < kHashParams.linked_list_size; ++iter) {
+    for (uint iter = 0; iter < *linked_list_size; ++iter) {
       HashEntry& curr_entry = hash_entries[i];
       if (IsBlockAllocated(pos, curr_entry)) {
         return;
@@ -242,7 +180,7 @@ public:
       if (curr_entry.offset == 0) {
         break;
       }
-      i = (bucket_last_entry_idx + curr_entry.offset) % kHashParams.entry_count;
+      i = (bucket_last_entry_idx + curr_entry.offset) % (*entry_count);
     }
 #endif
 
@@ -262,11 +200,11 @@ public:
     offset = 0;
 
     #pragma  unroll 1
-    for (uint iter = 0; iter < kHashParams.linked_list_size; ++iter) {
+    for (uint iter = 0; iter < *linked_list_size; ++iter) {
       offset ++;
       if ((offset % HASH_BUCKET_SIZE) == 0) continue;
 
-      i = (bucket_last_entry_idx + offset) % kHashParams.entry_count;
+      i = (bucket_last_entry_idx + offset) % (*entry_count);
 
       HashEntry& curr_entry = hash_entries[i];
 
@@ -317,7 +255,7 @@ public:
           int lock = atomicExch(&bucket_mutexes[bucket_idx], LOCK_ENTRY);
           if (lock != LOCK_ENTRY) {
             FreeHeap(curr.ptr);
-            int next_idx = (i + curr.offset) % (kHashParams.entry_count);
+            int next_idx = (i + curr.offset) % (*entry_count);
             hash_entries[i] = hash_entries[next_idx];
             ClearHashEntry(next_idx);
             return true;
@@ -340,10 +278,10 @@ public:
     HashEntry& curr = hash_entries[i];
 
     int prev_idx = i;
-    i = (bucket_last_entry_idx + curr.offset) % kHashParams.entry_count;
+    i = (bucket_last_entry_idx + curr.offset) % (*entry_count);
 
     #pragma unroll 1
-    for (uint iter = 0; iter < kHashParams.linked_list_size; ++iter) {
+    for (uint iter = 0; iter < *linked_list_size; ++iter) {
       curr = hash_entries[i];
 
       if (IsBlockAllocated(block_pos, curr)) {
@@ -365,12 +303,11 @@ public:
       }
 
       prev_idx = i;
-      i = (bucket_last_entry_idx + curr.offset) % kHashParams.entry_count;
+      i = (bucket_last_entry_idx + curr.offset) % (*entry_count);
     }
 #endif	// HANDLE_COLLSISION
     return false;
   }
-
 #endif	//CUDACC
 
 };

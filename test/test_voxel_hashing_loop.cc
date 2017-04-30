@@ -155,6 +155,8 @@ cv::Mat checkCudaFloat4Memory(float4 *cuda_memory) {
   return a;
 }
 
+void SetConstantSDFParams(const SDFParams& params);
+
 int main() {
   /// Load images
   std::vector<std::string> depth_img_list;
@@ -164,6 +166,17 @@ int main() {
   LoadImageList(kDefaultDatasetPath, "depth.txt", depth_img_list);
   LoadImageList(kDefaultDatasetPath, "rgb.txt", color_img_list);
   LoadTrajectory(kDefaultDatasetPath, wTc);
+
+  SDFParams sdf_params;
+  sdf_params.voxel_size = 0.01;
+
+  sdf_params.sdf_upper_bound = 4.0;
+  sdf_params.truncation_distance_scale = 0.01;
+  sdf_params.truncation_distance = 0.02;
+  sdf_params.weight_sample = 10;
+  sdf_params.weight_upper_bound = 255;
+
+  SetConstantSDFParams(sdf_params);
 
   /// Mapper
   HashParams hash_params;
@@ -183,7 +196,7 @@ int main() {
   hash_params.truncation_distance = 0.02;
   hash_params.weight_sample = 10;
   hash_params.weight_upper_bound = 255;
-  SetConstantHashParams(hash_params);
+
   Map voxel_map(hash_params);
 
   //mapper.debugHash();

@@ -20,7 +20,6 @@
 /// Kernel functions
 __global__
 void CompactHashEntriesKernel(HashTableGPU<Block> hash_table, float4x4 c_T_w) {
-  const HashParams& hash_params = kHashParams;
   const unsigned int idx = blockIdx.x*blockDim.x + threadIdx.x;
 
   __shared__ int local_counter;
@@ -28,7 +27,7 @@ void CompactHashEntriesKernel(HashTableGPU<Block> hash_table, float4x4 c_T_w) {
   __syncthreads();
 
   int addr_local = -1;
-  if (idx < hash_params.bucket_count * HASH_BUCKET_SIZE) {
+  if (idx < *hash_table.entry_count) {
     if (hash_table.hash_entries[idx].ptr != FREE_ENTRY) {
       if (IsBlockInCameraFrustum(c_T_w, hash_table.hash_entries[idx].pos))
       {

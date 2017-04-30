@@ -8,7 +8,7 @@
 #include "common.h"
 #include "params.h"
 
-extern __constant__ HashParams kHashParams;
+extern __constant__ SDFParams kSDFParams;
 extern __constant__ SensorParams kSensorParams;
 
 ///////////////////////////////////////////////////
@@ -18,11 +18,11 @@ extern __constant__ SensorParams kSensorParams;
 /// float is only used to do interpolation
 __device__
 inline float3 WorldToVoxelf(const float3& world_pos) {
-  return world_pos / kHashParams.voxel_size;
+  return world_pos / kSDFParams.voxel_size;
 }
 __device__
 inline int3 WorldToVoxeli(const float3& world_pos) {
-  const float3 p = world_pos / kHashParams.voxel_size;
+  const float3 p = world_pos / kSDFParams.voxel_size;
   return make_int3(p + make_float3(sign(p)) * 0.5f);
 }
 
@@ -46,7 +46,7 @@ inline int3 BlockToVoxel(const int3& block_pos) {
 
 __device__
 inline float3 VoxelToWorld(const int3& voxel_pos) {
-  return make_float3(voxel_pos) * kHashParams.voxel_size;
+  return make_float3(voxel_pos) * kSDFParams.voxel_size;
 }
 
 __device__
@@ -163,14 +163,14 @@ static inline bool IsInCameraFrustumApprox(const float4x4& c_T_w, const float3& 
 //! returns the truncation of the SDF for a given distance value
 __device__
 static inline float truncate_distance(float z) {
-  return kHashParams.truncation_distance
-         + kHashParams.truncation_distance_scale * z;
+  return kSDFParams.truncation_distance
+         + kSDFParams.truncation_distance_scale * z;
 }
 
 // TODO(wei): a better implementation?
 __device__
 static inline bool IsBlockInCameraFrustum(float4x4 c_T_w, const int3& block_pos) {
-  float3 world_pos = VoxelToWorld(BlockToVoxel(block_pos)) + kHashParams.voxel_size * 0.5f * (SDF_BLOCK_SIZE - 1.0f);
+  float3 world_pos = VoxelToWorld(BlockToVoxel(block_pos)) + kSDFParams.voxel_size * 0.5f * (SDF_BLOCK_SIZE - 1.0f);
   return IsInCameraFrustumApprox(c_T_w, world_pos);
 }
 

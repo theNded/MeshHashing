@@ -2,11 +2,11 @@
 
 #include <helper_cuda.h>
 
-__constant__ HashParams kHashParams;
-void SetConstantHashParams(const HashParams& params) {
+__constant__ SDFParams kSDFParams;
+void SetConstantSDFParams(const SDFParams& params) {
   size_t size;
-  checkCudaErrors(cudaGetSymbolSize(&size, kHashParams));
-  checkCudaErrors(cudaMemcpyToSymbol(kHashParams, &params, size, 0, cudaMemcpyHostToDevice));
+  checkCudaErrors(cudaGetSymbolSize(&size, kSDFParams));
+  checkCudaErrors(cudaMemcpyToSymbol(kSDFParams, &params, size, 0, cudaMemcpyHostToDevice));
 }
 
 __constant__ SensorParams kSensorParams;

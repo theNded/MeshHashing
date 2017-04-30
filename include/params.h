@@ -34,6 +34,21 @@ struct __ALIGN__(16) HashParams {
 
   uint  weight_sample;              // 10,  TODO(wei): change it dynamically!
   uint  weight_upper_bound;         // 255
+
+  uint3 dummy;
+};
+
+struct __ALIGN__(16) SDFParams {
+  float	voxel_size;                 // 0.004 (m)
+
+  float	truncation_distance_scale;  // 0.01 (m / m)
+  float	truncation_distance;        // 0.02 (m)
+  float	sdf_upper_bound;            // 4.0 (m)
+
+  uint  weight_sample;              // 10,  TODO(wei): change it dynamically!
+  uint  weight_upper_bound;         // 255
+
+  uint2 padding;
 };
 
 struct __ALIGN__(16) RayCasterParams {
@@ -51,7 +66,7 @@ struct __ALIGN__(16) RayCasterParams {
   float sdf_threshold;               /// 50.0f * s_rayIncrement
   bool  enable_gradients;
 
-  uint dummy0;
+  uchar3 dummy0;
 };
 
 /// We may generate a virtual camera for LiDAR

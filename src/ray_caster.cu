@@ -31,7 +31,7 @@ __device__
 bool TrilinearInterpolation(const HashTableGPU<Block>& hash_table,
                             const float3& pos,
                             float& sdf, uchar3& color) {
-  const float offset = kHashParams.voxel_size;
+  const float offset = kSDFParams.voxel_size;
   const float3 pos_corner = pos - 0.5f * offset;
   float3 ratio = frac(WorldToVoxelf(pos));
 
@@ -149,7 +149,7 @@ bool BisectionIntersection(const HashTableGPU<Block>& hash_table,
 __device__
 float3 GradientAtPoint(const HashTableGPU<Block>& hash_table,
                        const float3& pos) {
-  const float voxelSize = kHashParams.voxel_size;
+  const float voxelSize = kSDFParams.voxel_size;
   float3 offset = make_float3(voxelSize, voxelSize, voxelSize);
 
   /// negative

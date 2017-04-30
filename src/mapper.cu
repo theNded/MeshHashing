@@ -14,7 +14,6 @@ extern texture<float4, cudaTextureType2D, cudaReadModeElementType> color_texture
 /// Kernel functions
 __global__
 void IntegrateCudaKernel(HashTableGPU<Block> hash_table, SensorData sensor_data, float4x4 c_T_w) {
-  const HashParams &hash_params = kHashParams;
   const SensorParams &sensor_params = kSensorParams;
 
   //TODO check if we should load this in shared memory
@@ -34,7 +33,7 @@ void IntegrateCudaKernel(HashTableGPU<Block> hash_table, SensorData sensor_data,
 
   /// 3. Find correspondent depth observation
   float depth = tex2D(depth_texture, image_pos.x, image_pos.y);
-  if (depth == MINF || depth == 0.0f || depth >= hash_params.sdf_upper_bound)
+  if (depth == MINF || depth == 0.0f || depth >= kSDFParams.sdf_upper_bound)
     return;
 
   /// 4. Truncate
@@ -51,7 +50,7 @@ void IntegrateCudaKernel(HashTableGPU<Block> hash_table, SensorData sensor_data,
   /// 5. Update
   Voxel delta;
   delta.sdf = sdf;
-  delta.weight = max(hash_params.weight_sample * 1.5f * (1.0f - NormalizeDepth(depth)), 1.0f);
+  delta.weight = max(kSDFParams.weight_sample * 1.5f * (1.0f - NormalizeDepth(depth)), 1.0f);
   if (sensor_data.color_image_) {
     float4 color = tex2D(color_texture, image_pos.x, image_pos.y);
     delta.color = make_uchar3(255 * color.x, 255 * color.y, 255 * color.z);
@@ -112,7 +111,6 @@ void Mapper::IntegrateDepthMap(Map* map, Sensor *sensor) {
 __global__
 void AllocBlocksKernel(HashTableGPU<Block> hash_table, SensorData sensor_data,
                        float4x4 w_T_c, const uint* is_streamed_mask) {
-  const HashParams &hash_params = kHashParams;
   const SensorParams &sensor_params = kSensorParams;
 
   const uint x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -125,12 +123,12 @@ void AllocBlocksKernel(HashTableGPU<Block> hash_table, SensorData sensor_data,
   /// 1. Get observed data
   float depth = tex2D(depth_texture, x, y);
   if (depth == MINF || depth == 0.0f
-      || depth >= hash_params.sdf_upper_bound)
+      || depth >= kSDFParams.sdf_upper_bound)
     return;
 
   float truncation = truncate_distance(depth);
-  float near_depth = min(hash_params.sdf_upper_bound, depth - truncation);
-  float far_depth = min(hash_params.sdf_upper_bound, depth + truncation);
+  float near_depth = min(kSDFParams.sdf_upper_bound, depth - truncation);
+  float far_depth = min(kSDFParams.sdf_upper_bound, depth + truncation);
   if (near_depth >= far_depth) return;
 
   float3 camera_pos_near = ImageReprojectToCamera(x, y, near_depth);
@@ -148,9 +146,9 @@ void AllocBlocksKernel(HashTableGPU<Block> hash_table, SensorData sensor_data,
   /// 3. Init zig-zag steps
   float3 world_pos_nearest_voxel_center
           = BlockToWorld(block_pos_near + make_int3(clamp(block_step, 0.0, 1.0f)))
-            - 0.5f * hash_params.voxel_size;
+            - 0.5f * kSDFParams.voxel_size;
   float3 t = (world_pos_nearest_voxel_center - world_pos_near) / world_ray_dir;
-  float3 dt = (block_step * SDF_BLOCK_SIZE * hash_params.voxel_size) / world_ray_dir;
+  float3 dt = (block_step * SDF_BLOCK_SIZE * kSDFParams.voxel_size) / world_ray_dir;
   int3 block_pos_bound = make_int3(make_float3(block_pos_far) + block_step);
 
   if (world_ray_dir.x == 0.0f) {
