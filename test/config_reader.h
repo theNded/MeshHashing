@@ -30,6 +30,28 @@ void LoadHashParams(std::string path, HashParams& params) {
   params.value_capacity   = (int)fs["value_capacity"];
 }
 
+void LoadRayCasterParams(std::string path, RayCasterParams& params) {
+  cv::FileStorage fs(path, cv::FileStorage::READ);
+  params.width                = (int)  fs["width"];
+  params.height               = (int)  fs["height"];
+  params.min_raycast_depth    = (float)fs["min_raycast_depth"];
+  params.max_raycast_depth    = (float)fs["max_raycast_depth"];
+  params.raycast_step         = (float)fs["raycast_step"];
+  params.sample_sdf_threshold = (float)fs["sample_sdf_threshold"];
+  params.sdf_threshold        = (float)fs["sdf_threshold"];
+}
+
+void LoadSensorParams(std::string path, SensorParams& params) {
+  cv::FileStorage fs(path, cv::FileStorage::READ);
+  params.fx = (float)fs["fx"];
+  params.fy = (float)fs["fy"];
+  params.cx = (float)fs["cx"];
+  params.cy = (float)fs["cy"];
+  params.min_depth_range = (float)fs["min_depth_range"];
+  params.max_depth_range = (float)fs["max_depth_range"];
+  params.width  = (int)fs["width"];
+  params.height = (int)fs["height"];
+}
 
 void LoadICLImageList(std::string dataset_path,
                       std::vector<std::string> &depth_image_list,

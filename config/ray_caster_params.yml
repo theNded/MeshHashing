@@ -1,0 +1,8 @@
+%YAML:1.0
+width:                640
+height:               480
+min_raycast_depth:    0.5
+max_raycast_depth:    5.5
+raycast_step:         0.016
+sample_sdf_threshold: 0.808
+sdf_threshold:        0.800

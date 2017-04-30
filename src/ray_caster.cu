@@ -207,7 +207,7 @@ void CastKernel(const HashTableGPU<Block> hash_table,
   ray_caster_data.depth_image [pixel_idx] = MINF;
   ray_caster_data.vertex_image[pixel_idx] = make_float4(MINF, MINF, MINF, MINF);
   ray_caster_data.normal_image[pixel_idx] = make_float4(MINF, MINF, MINF, MINF);
-  ray_caster_data.color_image [pixel_idx] = make_float4(MINF, MINF, MINF, MINF);
+  ray_caster_data.color_image [pixel_idx] = make_float4(1, 1, 1, 1);
 
   /// 1. Determine ray direction
   float3 camera_dir = normalize(ImageReprojectToCamera(x, y, 1.0f,
