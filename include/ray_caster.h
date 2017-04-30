@@ -18,10 +18,6 @@ struct RayCasterSample {
   uint weight;
 };
 
-/// constant.cu
-extern __constant__ RayCasterParams kRayCasterParams;
-extern void SetConstantRayCasterParams(const RayCasterParams &ray_caster_params);
-
 struct RayCasterData {
   float  *depth_image_;
   float4 *vertex_image_;

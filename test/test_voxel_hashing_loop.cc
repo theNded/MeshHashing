@@ -241,7 +241,6 @@ int main() {
   ray_cast_params.raycast_step = 0.8f * hash_params.truncation_distance;
   ray_cast_params.sample_sdf_threshold = 50.5f * ray_cast_params.raycast_step;
   ray_cast_params.sdf_threshold = 50.0f * ray_cast_params.raycast_step;
-  SetConstantRayCasterParams(ray_cast_params);
   RayCaster ray_caster(ray_cast_params);
 
   Mapper mapper;

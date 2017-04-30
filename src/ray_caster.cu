@@ -189,12 +189,11 @@ float3 GradientAtPoint(const HashTableGPU<Block>& hash_table,
 __global__
 void CastKernel(const HashTableGPU<Block> hash_table,
                 RayCasterData ray_caster_data,
+                RayCasterParams ray_caster_params,
                 const float4x4 c_T_w,
                 const float4x4 w_T_c) {
   const uint x = blockIdx.x * blockDim.x + threadIdx.x;
   const uint y = blockIdx.y * blockDim.y + threadIdx.y;
-
-  const RayCasterParams &ray_caster_params = kRayCasterParams;
 
 
   if (x >= ray_caster_params.width || y >= ray_caster_params.height)
@@ -307,7 +306,8 @@ void RayCaster::Cast(Map* map, const float4x4& c_T_w) {
                        (ray_caster_params_.height + threads_per_block - 1)/threads_per_block);
   const dim3 block_size(threads_per_block, threads_per_block);
 
-  CastKernel<<<grid_size, block_size>>>(map->hash_table(), ray_caster_data_, c_T_w, w_T_c);
+  CastKernel<<<grid_size, block_size>>>(map->hash_table(),
+          ray_caster_data_, ray_caster_params_, c_T_w, w_T_c);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }
