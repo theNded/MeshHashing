@@ -7,33 +7,20 @@
 /// Update it ONLY in hash_table
 // TODO(wei): put rigid transform elsewhere
 
-#ifndef VH_HASH_PARAM_H
-#define VH_HASH_PARAM_H
+#ifndef VH_PARAMS_H
+#define VH_PARAMS_H
 
 #include "common.h"
 #include <matrix.h>
 
 struct __ALIGN__(16) HashParams {
-  //////////////////////////////////////////////////
-  /// Currently used parameters
   uint  bucket_count;               // 500000
   uint  bucket_size;                // 10 (entries)
+
   uint  entry_count;                // bucket_count * bucket_size
   uint  linked_list_size;           // 7
 
-  uint  value_capacity;                // 1000000
-
-  int   block_size;                 // 8 (voxels)
-
-  uint  voxel_count;                // block_count * block_size^3
-  float	voxel_size;                 // 0.004 (m)
-
-  float	truncation_distance_scale;  // 0.01 (m / m)
-  float	truncation_distance;        // 0.02 (m)
-  float	sdf_upper_bound;            // 4.0 (m)
-
-  uint  weight_sample;              // 10,  TODO(wei): change it dynamically!
-  uint  weight_upper_bound;         // 255
+  uint  value_capacity;             // 1000000
 
   uint3 dummy;
 };
@@ -52,22 +39,23 @@ struct __ALIGN__(16) SDFParams {
 };
 
 struct __ALIGN__(16) RayCasterParams {
-  float fx;
-  float fy;
-  float cx;
-  float cy;
+  float  fx;
+  float  fy;
+  float  cx;
+  float  cy;
 
-  uint width;                /// 640
-  uint height;               /// 480
+  uint   width;                /// 640
+  uint   height;               /// 480
 
-  float min_raycast_depth;
-  float max_raycast_depth;
-  float raycast_step;                /// 0.8f * SDF_Truncation
+  float  min_raycast_depth;
+  float  max_raycast_depth;
+  float  raycast_step;         /// 0.8f * SDF_Truncation
 
-  float sample_sdf_threshold;        /// 50.5f * s_rayIncrement
-  float sdf_threshold;               /// 50.0f * s_rayIncrement
-  bool  enable_gradients;
+  float  sample_sdf_threshold; /// 50.5f * s_rayIncrement
+  float  sdf_threshold;        /// 50.0f * s_rayIncrement
+  bool   enable_gradients;
 
+  /// Strange alignment requirement
   uchar3 dummy0;
   float4 dummy1;
 };
@@ -87,4 +75,4 @@ struct __ALIGN__(16) SensorParams {
   float max_depth_range; /// 5.0f, might need modify for LiDAR
 };
 
-#endif //VH_HASH_PARAM_H
+#endif //VH_PARAMS_H

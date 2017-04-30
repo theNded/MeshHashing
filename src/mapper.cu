@@ -55,7 +55,7 @@ void IntegrateCudaKernel(HashTableGPU<Block> hash_table,
   Voxel delta;
   delta.sdf = sdf;
   delta.weight = max(kSDFParams.weight_sample * 1.5f * (1.0f - NormalizeDepth(depth, sensor_params.min_depth_range, sensor_params.max_depth_range)), 1.0f);
-  if (sensor_data.color_image_) {
+  if (sensor_data.color_image) {
     float4 color = tex2D(color_texture, image_pos.x, image_pos.y);
     delta.color = make_uchar3(255 * color.x, 255 * color.y, 255 * color.z);
   } else {
@@ -64,53 +64,6 @@ void IntegrateCudaKernel(HashTableGPU<Block> hash_table,
 
   hash_table.values[entry.ptr].Update(local_idx, delta);
 }
-
-/// Member functions
-Mapper::Mapper() {}
-Mapper::~Mapper(){}
-
-void Mapper::Integrate(Map *map, Sensor* sensor, uint *is_streamed_mask) {
-
-  //make the rigid transform available on the GPU
-  //map->hash_table().updateParams(map->hash_params());
-  /// seems OK
-
-  //allocate all hash blocks which are corresponding to depth map entries
-  AllocBlocks(map, sensor);
-  /// DIFFERENT: is_streamed_mask now empty
-  /// seems OK now, supported by MATLAB scatter3
-
-  //generate a linear hash array with only occupied entries
-  map->CompactHashEntries(sensor->c_T_w());
-  /// seems OK, supported by MATLAB scatter3
-
-  //volumetrically integrate the depth data into the depth SDFBlocks
-  IntegrateDepthMap(map, sensor);
-  /// cuda kernel launching ok
-  /// seems ok according to CUDA output
-
-  map->Recycle();
-
-  map->frame_count() ++;
-}
-
-__host__
-void Mapper::IntegrateDepthMap(Map* map, Sensor *sensor) {
-  const uint threads_per_block = SDF_BLOCK_SIZE*SDF_BLOCK_SIZE*SDF_BLOCK_SIZE;
-
-  uint occupied_block_count;
-  checkCudaErrors(cudaMemcpy(&occupied_block_count, map->hash_table().compacted_hash_entry_counter,
-                  sizeof(uint), cudaMemcpyDeviceToHost));
-  const dim3 grid_size(occupied_block_count, 1);
-  const dim3 block_size(threads_per_block, 1);
-
-  if (occupied_block_count <= 0) return;
-
-  IntegrateCudaKernel << <grid_size, block_size >> >(map->hash_table(), sensor->sensor_data(), sensor->sensor_params(), sensor->c_T_w());
-  checkCudaErrors(cudaDeviceSynchronize());
-  checkCudaErrors(cudaGetLastError());
-}
-
 
 __global__
 void AllocBlocksKernel(HashTableGPU<Block> hash_table, SensorData sensor_data,
@@ -152,7 +105,7 @@ void AllocBlocksKernel(HashTableGPU<Block> hash_table, SensorData sensor_data,
           = BlockToWorld(block_pos_near + make_int3(clamp(block_step, 0.0, 1.0f)))
             - 0.5f * kSDFParams.voxel_size;
   float3 t = (world_pos_nearest_voxel_center - world_pos_near) / world_ray_dir;
-  float3 dt = (block_step * SDF_BLOCK_SIZE * kSDFParams.voxel_size) / world_ray_dir;
+  float3 dt = (block_step * BLOCK_SIDE_LENGTH * kSDFParams.voxel_size) / world_ray_dir;
   int3 block_pos_bound = make_int3(make_float3(block_pos_far) + block_step);
 
   if (world_ray_dir.x == 0.0f) {
@@ -196,14 +149,64 @@ void AllocBlocksKernel(HashTableGPU<Block> hash_table, SensorData sensor_data,
   }
 }
 
-__host__
+/// Member functions (CPU code)
+Mapper::Mapper() {}
+Mapper::~Mapper(){}
+
+void Mapper::Integrate(Map *map, Sensor* sensor, uint *is_streamed_mask) {
+
+  //make the rigid transform available on the GPU
+  //map->gpu_data().updateParams(map->hash_params());
+  /// seems OK
+
+  //allocate all hash blocks which are corresponding to depth map entries
+  AllocBlocks(map, sensor);
+  /// DIFFERENT: is_streamed_mask now empty
+  /// seems OK now, supported by MATLAB scatter3
+
+  //generate a linear hash array with only occupied entries
+  map->CompactHashEntries(sensor->c_T_w());
+  /// seems OK, supported by MATLAB scatter3
+
+  //volumetrically integrate the depth data into the depth SDFBlocks
+  IntegrateDepthMap(map, sensor);
+  /// cuda kernel launching ok
+  /// seems ok according to CUDA output
+
+  map->Recycle();
+
+  map->frame_count() ++;
+}
+
+/// Member functions (CPU calling GPU kernels)
+void Mapper::IntegrateDepthMap(Map* map, Sensor *sensor) {
+  const uint threads_per_block = BLOCK_SIZE;
+
+  uint occupied_block_count;
+  checkCudaErrors(cudaMemcpy(&occupied_block_count,
+                             map->gpu_data().compacted_hash_entry_counter,
+                             sizeof(uint), cudaMemcpyDeviceToHost));
+  if (occupied_block_count <= 0)
+    return;
+
+  const dim3 grid_size(occupied_block_count, 1);
+  const dim3 block_size(threads_per_block, 1);
+  IntegrateCudaKernel <<<grid_size, block_size>>>(map->gpu_data(),
+          sensor->sensor_data(), sensor->sensor_params(), sensor->c_T_w());
+  checkCudaErrors(cudaDeviceSynchronize());
+  checkCudaErrors(cudaGetLastError());
+}
+
 void Mapper::AllocBlocks(Map* map, Sensor* sensor) {
   const uint threads_per_block = 8;
-  const dim3 grid_size((sensor->sensor_params().width + threads_per_block - 1)/threads_per_block,
-                       (sensor->sensor_params().height + threads_per_block - 1)/threads_per_block);
+  const dim3 grid_size((sensor->sensor_params().width + threads_per_block - 1)
+                       /threads_per_block,
+                       (sensor->sensor_params().height + threads_per_block - 1)
+                       /threads_per_block);
   const dim3 block_size(threads_per_block, threads_per_block);
 
-  AllocBlocksKernel<<<grid_size, block_size>>>(map->hash_table(), sensor->sensor_data(), sensor->sensor_params(), sensor->w_T_c(), NULL);
+  AllocBlocksKernel<<<grid_size, block_size>>>(map->gpu_data(),
+          sensor->sensor_data(), sensor->sensor_params(), sensor->w_T_c(), NULL);
 
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());

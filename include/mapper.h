@@ -2,8 +2,8 @@
 // Created by wei on 17-3-16.
 //
 
-#ifndef MRF_VH_HASH_TABLE_MANAGER_H
-#define MRF_VH_HASH_TABLE_MANAGER_H
+#ifndef VH_MAPPER_H
+#define VH_MAPPER_H
 
 #include "common.h"
 
@@ -13,18 +13,16 @@
 #include "map.h"
 #include "sensor.h"
 
-
-/// CUDA / C++ shared class
 class Mapper {
+private:
+  void IntegrateDepthMap(Map* map, Sensor* sensor);
+  void AllocBlocks(Map* map, Sensor* sensor);
+
 public:
   Mapper();
   ~Mapper();
 
   void Integrate(Map* map, Sensor *sensor, unsigned int* is_streamed_mask);
-
-private:
-  void IntegrateDepthMap(Map* map, Sensor* sensor);
-  void AllocBlocks(Map* map, Sensor* sensor);
 };
 
-#endif //MRF_VH_HASH_TABLE_MANAGER_H
+#endif //VH_MAPPER_H

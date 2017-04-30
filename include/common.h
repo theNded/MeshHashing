@@ -1,7 +1,6 @@
 //
 // Created by wei on 17-3-12.
 //
-/// Header for .h that are both included by .cc and .cu
 #ifndef VH_COMMON_H
 #define VH_COMMON_H
 
@@ -38,11 +37,14 @@ typedef signed char schar;
 #include <cuda_runtime.h>
 #endif
 
+/// Enable linked list in the hash table
 #define HANDLE_COLLISIONS
 
-#define HASH_BUCKET_SIZE  10
-#define SDF_BLOCK_SIZE    8
+/// Block size in voxel unit
+#define BLOCK_SIDE_LENGTH  8
+#define BLOCK_SIZE         512 // 8x8x8
 
+/// Entry state
 #define LOCK_ENTRY -1
 #define FREE_ENTRY -2
 #define NO_OFFSET   0

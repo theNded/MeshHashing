@@ -1,16 +1,18 @@
 //
 // Created by wei on 17-4-28.
 //
+// Host (CPU) wrapper for the hash table data allocated on the GPU
+// Host operations: alloc, free, and reset
 
-#ifndef VOXEL_HASHING_HASH_TABLE_H
-#define VOXEL_HASHING_HASH_TABLE_H
+#ifndef VH_HASH_TABLE_H
+#define VH_HASH_TABLE_H
 
 #include "hash_table_gpu.h"
 
 /// Generally, the template should be implemented entirely in a header
 /// However, we need CUDA code that has to be in .cu
 /// Hence, we separate the declaration and implementation
-/// And specifically instantiate it in the .cu
+/// And specifically instantiate it with @typename Block in the .cu
 template <typename T>
 class HashTable {
 private:
@@ -25,13 +27,15 @@ public:
   HashTable(const HashParams &params);
   ~HashTable();
 
-  HashTableGPU<T>& gpu_data();
-
   void Resize(const HashParams &params);
   void Reset();
   void ResetMutexes();
 
   void Debug();
+
+  HashTableGPU<T>& gpu_data() {
+    return gpu_data_;
+  }
 };
 
-#endif //VOXEL_HASHING_HASH_TABLE_H
+#endif //VH_HASH_TABLE_H

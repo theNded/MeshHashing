@@ -2,8 +2,8 @@
 // Created by wei on 17-3-17.
 //
 
-#ifndef MRF_VH_RAY_CASTER_H
-#define MRF_VH_RAY_CASTER_H
+#ifndef VH_RAY_CASTER_H
+#define VH_RAY_CASTER_H
 
 #include "common.h"
 
@@ -11,22 +11,24 @@
 #include "params.h"
 #include "sensor.h"
 
-
 struct RayCasterSample {
-  float sdf;
-  float t;
-  uint weight;
+  float  sdf;
+  float  t;
+  uint   weight;
 };
 
 struct RayCasterData {
-  float  *depth_image_;
-  float4 *vertex_image_;
-  float4 *normal_image_;
-  float4 *color_image_;
+  float  *depth_image;
+  float4 *vertex_image;
+  float4 *normal_image;
+  float4 *color_image;
 };
 
-
 class RayCaster {
+private:
+  RayCasterData ray_caster_data_;
+  RayCasterParams ray_caster_params_;
+
 public:
   RayCaster(const RayCasterParams& params);
   ~RayCaster(void);
@@ -39,11 +41,6 @@ public:
   const RayCasterParams& ray_caster_params() const {
     return ray_caster_params_;
   }
-
-private:
-  RayCasterParams ray_caster_params_;
-  RayCasterData ray_caster_data_;
-
 };
 
-#endif //MRF_VH_RAY_CASTER_H
+#endif //VH_RAY_CASTER_H

@@ -6,15 +6,17 @@
 
 #define MINF __int_as_float(0xff800000)
 
+//////////
+/// Special: texture - data binding
 texture<float, cudaTextureType2D, cudaReadModeElementType> depth_texture;
 texture<float4, cudaTextureType2D, cudaReadModeElementType> color_texture;
 __host__
 void Sensor::BindSensorDataToTexture() {
   checkCudaErrors(cudaBindTextureToArray(depth_texture,
-                                         sensor_data_.depth_array_,
+                                         sensor_data_.depth_array,
                                          sensor_data_.depth_channel_desc));
   checkCudaErrors(cudaBindTextureToArray(color_texture,
-                                         sensor_data_.color_array_,
+                                         sensor_data_.color_array,
                                          sensor_data_.color_channel_desc));
   depth_texture.filterMode = cudaFilterModePoint;
   color_texture.filterMode = cudaFilterModePoint;
@@ -120,37 +122,37 @@ void DepthToRGBKernel(float4* d_output, float* d_input,
   }
 }
 
-/// Member function
+/// Member functions: (CPU code)
 Sensor::Sensor(SensorParams &sensor_params) {
   colored_depth_image_ = NULL;
   const uint image_size = sensor_params.height * sensor_params.width;
 
   checkCudaErrors(cudaMalloc(&colored_depth_image_, sizeof(float4) * image_size));
-  checkCudaErrors(cudaMalloc(&depth_image_buffer_, sizeof(short) * image_size));
-  checkCudaErrors(cudaMalloc(&color_image_buffer_, 4 * sizeof(uchar) * image_size));
+  checkCudaErrors(cudaMalloc(&depth_imagebuffer_, sizeof(short) * image_size));
+  checkCudaErrors(cudaMalloc(&color_imagebuffer_, 4 * sizeof(uchar) * image_size));
 
   /// Parameter settings
   sensor_params_ = sensor_params; // Is it copy constructing?
-  checkCudaErrors(cudaMalloc(&sensor_data_.depth_image_, sizeof(float) * image_size));
-  checkCudaErrors(cudaMalloc(&sensor_data_.color_image_, sizeof(float4) * image_size));
+  checkCudaErrors(cudaMalloc(&sensor_data_.depth_image, sizeof(float) * image_size));
+  checkCudaErrors(cudaMalloc(&sensor_data_.color_image, sizeof(float4) * image_size));
 
   sensor_data_.depth_channel_desc = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
-  checkCudaErrors(cudaMallocArray(&sensor_data_.depth_array_, &sensor_data_.depth_channel_desc,
+  checkCudaErrors(cudaMallocArray(&sensor_data_.depth_array, &sensor_data_.depth_channel_desc,
                                   sensor_params_.width, sensor_params_.height));
   sensor_data_.color_channel_desc = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
-  checkCudaErrors(cudaMallocArray(&sensor_data_.color_array_, &sensor_data_.color_channel_desc,
+  checkCudaErrors(cudaMallocArray(&sensor_data_.color_array, &sensor_data_.color_channel_desc,
                                   sensor_params_.width, sensor_params_.height));
 }
 
 Sensor::~Sensor() {
   checkCudaErrors(cudaFree(colored_depth_image_));
-  checkCudaErrors(cudaFree(depth_image_buffer_));
-  checkCudaErrors(cudaFree(color_image_buffer_));
+  checkCudaErrors(cudaFree(depth_imagebuffer_));
+  checkCudaErrors(cudaFree(color_imagebuffer_));
 
-  checkCudaErrors(cudaFree(sensor_data_.depth_image_));
-  checkCudaErrors(cudaFree(sensor_data_.color_image_));
-  checkCudaErrors(cudaFreeArray(sensor_data_.depth_array_));
-  checkCudaErrors(cudaFreeArray(sensor_data_.color_array_));
+  checkCudaErrors(cudaFree(sensor_data_.depth_image));
+  checkCudaErrors(cudaFree(sensor_data_.color_image));
+  checkCudaErrors(cudaFreeArray(sensor_data_.depth_array));
+  checkCudaErrors(cudaFreeArray(sensor_data_.color_array));
 }
 
 int Sensor::Process(cv::Mat &depth, cv::Mat &color) {
@@ -166,32 +168,32 @@ int Sensor::Process(cv::Mat &depth, cv::Mat &color) {
   ColorCPUtoGPU(color);
 
   /// Array used as texture in mapper
-  checkCudaErrors(cudaMemcpyToArray(sensor_data_.depth_array_, 0, 0, sensor_data_.depth_image_,
+  checkCudaErrors(cudaMemcpyToArray(sensor_data_.depth_array, 0, 0, sensor_data_.depth_image,
                                     sizeof(float)*sensor_params_.height*sensor_params_.width,
                                     cudaMemcpyDeviceToDevice));
-  checkCudaErrors(cudaMemcpyToArray(sensor_data_.color_array_, 0, 0, sensor_data_.color_image_,
+  checkCudaErrors(cudaMemcpyToArray(sensor_data_.color_array, 0, 0, sensor_data_.color_image,
                                     sizeof(float4)*sensor_params_.height*sensor_params_.width,
                                     cudaMemcpyDeviceToDevice));
   return 0;
 }
 
-__host__
+//////////
+/// Member function: (CPU calling GPU kernels)
 void Sensor::DepthCPUtoGPU(cv::Mat& depth) {
   /// First copy cpu data in to cuda short
   uint width = sensor_params_.width;
   uint height = sensor_params_.height;
   uint image_size = width * height;
 
-  checkCudaErrors(cudaMemcpy(depth_image_buffer_, (short *)depth.data,
+  checkCudaErrors(cudaMemcpy(depth_imagebuffer_, (short *)depth.data,
                              sizeof(short) * image_size, cudaMemcpyHostToDevice));
 
   const uint threads_per_block = 16;
   const dim3 grid_size((width + threads_per_block - 1)/threads_per_block,
                        (height + threads_per_block - 1)/threads_per_block);
   const dim3 block_size(threads_per_block, threads_per_block);
-
   DepthCPUtoGPUKernel<<<grid_size, block_size>>>(
-          sensor_data_.depth_image_, depth_image_buffer_,
+          sensor_data_.depth_image, depth_imagebuffer_,
           width, height,
           sensor_params_.min_depth_range,
           sensor_params_.max_depth_range);
@@ -203,7 +205,7 @@ void Sensor::ColorCPUtoGPU(cv::Mat &color) {
   uint height = sensor_params_.height;
   uint image_size = width * height;
 
-  checkCudaErrors(cudaMemcpy(color_image_buffer_, sensor_data_.color_image_,
+  checkCudaErrors(cudaMemcpy(color_imagebuffer_, sensor_data_.color_image,
                              4 * sizeof(uchar) * image_size, cudaMemcpyHostToDevice));
 
   const int threads_per_block = 16;
@@ -212,7 +214,7 @@ void Sensor::ColorCPUtoGPU(cv::Mat &color) {
   const dim3 block_size(threads_per_block, threads_per_block);
 
   ColorCPUtoGPUKernel<<<grid_size, block_size>>>(
-          sensor_data_.color_image_, color_image_buffer_, width, height);
+          sensor_data_.color_image, color_imagebuffer_, width, height);
 }
 
 float4* Sensor::ColorizeDepthImage() const {
@@ -222,7 +224,7 @@ float4* Sensor::ColorizeDepthImage() const {
   const dim3 block_size(threads_per_block, threads_per_block);
 
   DepthToRGBKernel<<<grid_size, block_size>>>(
-          colored_depth_image_, sensor_data_.depth_image_,
+          colored_depth_image_, sensor_data_.depth_image,
           sensor_params_.width, sensor_params_.height,
           sensor_params_.min_depth_range,
           sensor_params_.max_depth_range);

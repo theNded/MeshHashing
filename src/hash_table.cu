@@ -4,6 +4,7 @@
 #include "hash_table.h"
 #include <glog/logging.h>
 
+//////////
 /// Kernel functions
 __global__
 void ResetBucketMutexesKernel(HashTableGPU<Block> hash_table) {
@@ -29,14 +30,15 @@ void ResetHeapKernel(HashTableGPU<Block> hash_table) {
 
 __global__
 void ResetEntriesKernel(HashTableGPU<Block> hash_table) {
-  const uint idx = blockIdx.x*blockDim.x + threadIdx.x;
+  const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (idx < *hash_table.entry_count) {
-    hash_table.ClearHashEntry(hash_table.hash_entries[idx]);
-    hash_table.ClearHashEntry(hash_table.compacted_hash_entries[idx]);
+    hash_table.hash_entries[idx].Clear();
+    hash_table.compacted_hash_entries[idx].Clear();
   }
 }
 
-/// Member functions (pure CPU code)
+//////////
+/// Member functions (CPU code)
 template <typename T>
 HashTable<T>::HashTable() {}
 
@@ -50,11 +52,6 @@ HashTable<T>::HashTable(const HashParams &params) {
 template <typename T>
 HashTable<T>::~HashTable() {
   Free();
-}
-
-template <typename T>
-HashTableGPU<T>& HashTable<T>::gpu_data() {
-  return gpu_data_;
 }
 
 template <typename T>
@@ -88,17 +85,26 @@ void HashTable<T>::Alloc(const HashParams &params) {
                              sizeof(uint), cudaMemcpyHostToDevice));
 
   /// Values
-  checkCudaErrors(cudaMalloc(&gpu_data_.heap, sizeof(uint) * params.value_capacity));
-  checkCudaErrors(cudaMalloc(&gpu_data_.heap_counter, sizeof(uint)));
-  checkCudaErrors(cudaMalloc(&gpu_data_.values, sizeof(T) * params.value_capacity));
+  checkCudaErrors(cudaMalloc(&gpu_data_.heap,
+                             sizeof(uint) * params.value_capacity));
+  checkCudaErrors(cudaMalloc(&gpu_data_.heap_counter,
+                             sizeof(uint)));
+  checkCudaErrors(cudaMalloc(&gpu_data_.values,
+                             sizeof(T) * params.value_capacity));
 
   /// Entries
-  checkCudaErrors(cudaMalloc(&gpu_data_.hash_entries, sizeof(HashEntry) * params.entry_count));
-  checkCudaErrors(cudaMalloc(&gpu_data_.compacted_hash_entries, sizeof(HashEntry) * params.entry_count));
-  checkCudaErrors(cudaMalloc(&gpu_data_.compacted_hash_entry_counter, sizeof(int)));
-  checkCudaErrors(cudaMalloc(&gpu_data_.hash_entry_remove_flags, sizeof(int) * params.entry_count));
+  checkCudaErrors(cudaMalloc(&gpu_data_.hash_entries,
+                             sizeof(HashEntry) * params.entry_count));
+  checkCudaErrors(cudaMalloc(&gpu_data_.compacted_hash_entries,
+                             sizeof(HashEntry) * params.entry_count));
+  checkCudaErrors(cudaMalloc(&gpu_data_.compacted_hash_entry_counter,
+                             sizeof(int)));
+  checkCudaErrors(cudaMalloc(&gpu_data_.hash_entry_remove_flags,
+                             sizeof(int) * params.entry_count));
 
-  checkCudaErrors(cudaMalloc(&gpu_data_.bucket_mutexes, sizeof(int) * params.bucket_count));
+  /// Mutexes
+  checkCudaErrors(cudaMalloc(&gpu_data_.bucket_mutexes,
+                             sizeof(int) * params.bucket_count));
   gpu_data_.is_on_gpu = true;
 }
 
@@ -125,13 +131,13 @@ void HashTable<T>::Free() {
   }
 }
 
-/// Member functions (kernel callers on CPU)
+/// Member functions (CPU calling GPU kernels)
 // (__host__)
 template <typename T>
 void HashTable<T>::ResetMutexes() {
   const int threads_per_block = 64;
   const dim3 grid_size((hash_params_.bucket_count + threads_per_block - 1)
-                       /threads_per_block, 1);
+                       / threads_per_block, 1);
   const dim3 block_size(threads_per_block, 1);
 
   ResetBucketMutexesKernel<<<grid_size, block_size>>>(gpu_data_);
@@ -148,7 +154,7 @@ void HashTable<T>::Reset() {
   {
     /// Reset entries
     const int threads_per_block = 64;
-    const dim3 grid_size((HASH_BUCKET_SIZE * hash_params_.bucket_count + threads_per_block - 1)
+    const dim3 grid_size((hash_params_.entry_count + threads_per_block - 1)
                          / threads_per_block, 1);
     const dim3 block_size(threads_per_block, 1);
 
@@ -170,7 +176,7 @@ void HashTable<T>::Reset() {
   }
 }
 
-/// Member function: Debug only
+/// Member function: Others
 template <typename T>
 void HashTable<T>::Debug() {
   HashEntry *entries = new HashEntry[hash_params_.bucket_size * hash_params_.bucket_count];
@@ -292,5 +298,5 @@ void HashTable<T>::Debug() {
   delete [] heap;
 }
 
-/// Instantiate for correctly compilation
+/// Instantiate for a correct compilation
 template class HashTable<Block>;

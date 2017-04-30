@@ -20,100 +20,13 @@
 #include "mapper.h"
 #include "renderer.h"
 
-#define ICL
+#include "config_reader.h"
+
+#define ICL_
 #ifdef ICL
 const std::string kDefaultDatasetPath = "/home/wei/data/ICL/kt2/";
-
-void DepthToRGBCudaHost(float4* d_output, float* d_input,
-                unsigned int width, unsigned int height,
-                float minDepth, float maxDepth);
-
-void LoadImageList(std::string dataset_path, std::string dataset_txt,
-                   std::vector<std::string> &image_name_list) {
-  std::ifstream list_stream(dataset_path + "associations.txt");
-  std::string file_name, rgb_file_name;
-
-  std::string time_stamp;
-  while (list_stream >> time_stamp >> file_name
-                     >> time_stamp >> rgb_file_name) {
-    image_name_list.push_back(dataset_path + "/" + file_name);
-  }
-}
-
-void LoadTrajectory(std::string dataset_path, std::vector<float4x4> &wTc_list) {
-  std::ifstream list_stream(dataset_path + "trajectory.txt");
-  std::string ts_img, img_path, ts_gt;
-  float tx, ty, tz, qx, qy, qz, qw;
-  while (list_stream >> ts_img //>> img_path >> ts_gt
-                     >> tx >> ty >> tz
-                     >> qx >> qy >> qz >> qw) {
-    float4x4 wTc;
-    wTc.setIdentity();
-
-    wTc.m11 = 1 - 2 * qy * qy - 2 * qz * qz;
-    wTc.m12 = 2 * qx * qy - 2 * qz * qw;
-    wTc.m13 = 2 * qx * qz + 2 * qy * qw;
-    wTc.m14 = tx;
-    wTc.m21 = 2 * qx * qy + 2 * qz * qw;
-    wTc.m22 = 1 - 2 * qx * qx - 2 * qz * qz;
-    wTc.m23 = 2 * qy * qz - 2 * qx * qw;
-    wTc.m24 = ty;
-    wTc.m31 = 2 * qx * qz - 2 * qy * qw;
-    wTc.m32 = 2 * qy * qz + 2 * qx * qw;
-    wTc.m33 = 1 - 2 * qx * qx - 2 * qy * qy;
-    wTc.m34 = tz;
-    wTc.m44 = 1;
-    wTc_list.push_back(wTc);
-  }
-}
 #else
-const std::string kDefaultDatasetPath = "/home/wei/data/TUM/rgbd_dataset_freiburg1_xyz/";
-
-void DepthToRGBCudaHost(float4* d_output, float* d_input,
-                unsigned int width, unsigned int height,
-                float minDepth, float maxDepth);
-
-void LoadImageList(std::string dataset_path, std::string dataset_txt,
-                   std::vector<std::string> &image_name_list) {
-  std::ifstream list_stream(dataset_path + dataset_txt);
-  std::string file_name;
-
-  std::getline(list_stream, file_name);
-  std::getline(list_stream, file_name);
-  std::getline(list_stream, file_name);
-
-  std::string time_stamp;
-  while (list_stream >> time_stamp >> file_name) {
-    image_name_list.push_back(dataset_path + "/" + file_name);
-  }
-}
-
-void LoadTrajectory(std::string dataset_path, std::vector<float4x4> &wTc_list) {
-  std::ifstream list_stream(dataset_path + "depth_gt_associations.txt");
-  std::string ts_img, img_path, ts_gt;
-  float tx, ty, tz, qx, qy, qz, qw;
-  while (list_stream >> ts_img >> img_path >> ts_gt
-                     >> tx >> ty >> tz
-                     >> qx >> qy >> qz >> qw) {
-    float4x4 wTc;
-    wTc.setIdentity();
-
-    wTc.m11 = 1 - 2 * qy * qy - 2 * qz * qz;
-    wTc.m12 = 2 * qx * qy - 2 * qz * qw;
-    wTc.m13 = 2 * qx * qz + 2 * qy * qw;
-    wTc.m14 = tx;
-    wTc.m21 = 2 * qx * qy + 2 * qz * qw;
-    wTc.m22 = 1 - 2 * qx * qx - 2 * qz * qz;
-    wTc.m23 = 2 * qy * qz - 2 * qx * qw;
-    wTc.m24 = ty;
-    wTc.m31 = 2 * qx * qz - 2 * qy * qw;
-    wTc.m32 = 2 * qy * qz + 2 * qx * qw;
-    wTc.m33 = 1 - 2 * qx * qx - 2 * qy * qy;
-    wTc.m34 = tz;
-    wTc.m44 = 1;
-    wTc_list.push_back(wTc);
-  }
-}
+const std::string kDefaultDatasetPath = "/home/wei/data/TUM/rgbd_dataset_freiburg2_xyz/";
 #endif
 
 void checkCudaFloatMemory(float *cuda_memory) {
@@ -163,45 +76,20 @@ int main() {
   std::vector<std::string> color_img_list;
   std::vector<float4x4>    wTc;
 
-  LoadImageList(kDefaultDatasetPath, "depth.txt", depth_img_list);
-  LoadImageList(kDefaultDatasetPath, "rgb.txt", color_img_list);
-  LoadTrajectory(kDefaultDatasetPath, wTc);
-
+#ifdef ICL
+  LoadICLImageList(kDefaultDatasetPath, depth_img_list, color_img_list);
+  LoadICLTrajectory(kDefaultDatasetPath, wTc);
+#else
+  LoadTUMImageList(kDefaultDatasetPath, depth_img_list, color_img_list);
+  LoadTUMTrajectory(kDefaultDatasetPath, wTc);
+#endif
 
   SDFParams sdf_params;
-  sdf_params.voxel_size = 0.01;
-
-  sdf_params.sdf_upper_bound = 4.0;
-  sdf_params.truncation_distance_scale = 0.01;
-  sdf_params.truncation_distance = 0.02;
-  sdf_params.weight_sample = 10;
-  sdf_params.weight_upper_bound = 255;
-
+  LoadSDFParams("../test/sdf_params.yml", sdf_params);
   SetConstantSDFParams(sdf_params);
 
-  /// Mapper
   HashParams hash_params;
-  hash_params.bucket_count = 500000;
-  hash_params.bucket_size = 10;
-  hash_params.entry_count = hash_params.bucket_count * hash_params.bucket_size;
-  hash_params.linked_list_size = 7;
-
-  hash_params.value_capacity = 1000000;
-  hash_params.block_size = 8;
-  hash_params.voxel_count = hash_params.value_capacity
-                            * (hash_params.block_size * hash_params.block_size * hash_params.block_size);
-  hash_params.voxel_size = 0.01;
-
-  hash_params.sdf_upper_bound = 4.0;
-  hash_params.truncation_distance_scale = 0.01;
-  hash_params.truncation_distance = 0.02;
-  hash_params.weight_sample = 10;
-  hash_params.weight_upper_bound = 255;
-
-
-
-  //mapper.debugHash();
-  /// Only to alloc cuda memory, suppose its ok
+  LoadHashParams("../test/hash_params.yml", hash_params);
 
   /// Sensor
   SensorParams sensor_params;
@@ -221,35 +109,26 @@ int main() {
   sensor_params.height = 480;
   sensor_params.width = 640;
 
-  float4x4 T;
-  float4x4 K;
-  K.m11 = sensor_params.fx;
-  K.m13 = sensor_params.cx;
-  K.m22 = sensor_params.fy;
-  K.m23 = sensor_params.cy;
-
-  /// Ray Caster
   RayCasterParams ray_cast_params;
   ray_cast_params.fx = sensor_params.fx;
   ray_cast_params.fy = sensor_params.fy;
   ray_cast_params.cx = sensor_params.cx;
   ray_cast_params.cy = sensor_params.cy;
-
   ray_cast_params.width = 640;
   ray_cast_params.height = 480;
   ray_cast_params.min_raycast_depth = 0.5f;
   ray_cast_params.max_raycast_depth = 5.5f;
-  ray_cast_params.raycast_step = 0.8f * hash_params.truncation_distance;
+  ray_cast_params.raycast_step = 0.8f * 0.02f;
   ray_cast_params.sample_sdf_threshold = 50.5f * ray_cast_params.raycast_step;
   ray_cast_params.sdf_threshold = 50.0f * ray_cast_params.raycast_step;
-  RayCaster ray_caster(ray_cast_params);
+
 
   Map voxel_map(hash_params);
-
+  voxel_map.sensor_params() = sensor_params;
   Mapper mapper;
 
+  RayCaster ray_caster(ray_cast_params);
   Sensor sensor(sensor_params);
-  //voxel_map.sensor_params_ = sensor_params;
   sensor.BindSensorDataToTexture();
 
   /// Process
@@ -261,7 +140,6 @@ int main() {
   LOG(INFO) << sizeof(HashParams);
   LOG(INFO) << sizeof(SDFParams);
 
-  voxel_map.sensor_params_ = sensor_params;
 
   //cv::VideoWriter writer("icl-vh.avi", CV_FOURCC('X','V','I','D'), 30, cv::Size(640, 480));
   std::chrono::time_point<std::chrono::system_clock> start, end;
@@ -276,7 +154,7 @@ int main() {
     cv::cvtColor(color, color, CV_BGR2BGRA);
 
     sensor.Process(depth, color);
-    T = wTc[0].getInverse() * wTc[i];
+    float4x4 T = wTc[0].getInverse() * wTc[i];
     sensor.set_transform(T);
     //T = T.getInverse();
 
@@ -284,9 +162,7 @@ int main() {
 
     ray_caster.Cast(&voxel_map, T.getInverse());
 
-    //DepthToRGBCudaHost(cuda_hsv, ray_caster.ray_caster_data().depth_image_, 640, 480, 0.5f, 3.5f);
-    //checkCudaFloat4Memory(cuda_hsv);
-    checkCudaFloat4Memory(ray_caster.ray_caster_data().normal_image_);
+    checkCudaFloat4Memory(ray_caster.ray_caster_data().normal_image);
 
     cv::waitKey(1);
   }
@@ -296,12 +172,5 @@ int main() {
   LOG(INFO) << "Fps: " << frames / seconds.count();
 
   checkCudaErrors(cudaFree(cuda_hsv));
-  //cv::waitKey(-1);
-  voxel_map.hash_table_.Debug();
-  /// seems ok
-  /// output blocks seems correct
-
-  LOG(INFO) << "Render";
-
-  //checkCudaFloat4Memory(ray_caster.ray_caster_data().color_image_);
+  voxel_map.Debug();
 }

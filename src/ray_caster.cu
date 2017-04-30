@@ -4,6 +4,8 @@
 #include "hash_table_gpu.h"
 #include "ray_caster.h"
 
+//////////
+/// Device code required by kernel functions
 __device__
 inline float frac(float val) {
   return (val - floorf(val));
@@ -187,6 +189,8 @@ float3 GradientAtPoint(const HashTableGPU<Block>& hash_table,
   return grad/l;
 }
 
+//////////
+/// Kernel function
 __global__
 void CastKernel(const HashTableGPU<Block> hash_table,
                 RayCasterData ray_caster_data,
@@ -196,20 +200,21 @@ void CastKernel(const HashTableGPU<Block> hash_table,
   const uint x = blockIdx.x * blockDim.x + threadIdx.x;
   const uint y = blockIdx.y * blockDim.y + threadIdx.y;
 
-
   if (x >= ray_caster_params.width || y >= ray_caster_params.height)
     return;
 
   int pixel_idx = y * ray_caster_params.width + x;
-  ray_caster_data.depth_image_ [pixel_idx] = MINF;
-  ray_caster_data.vertex_image_[pixel_idx] = make_float4(MINF, MINF, MINF, MINF);
-  ray_caster_data.normal_image_[pixel_idx] = make_float4(MINF, MINF, MINF, MINF);
-  ray_caster_data.color_image_ [pixel_idx] = make_float4(MINF, MINF, MINF, MINF);
+  ray_caster_data.depth_image [pixel_idx] = MINF;
+  ray_caster_data.vertex_image[pixel_idx] = make_float4(MINF, MINF, MINF, MINF);
+  ray_caster_data.normal_image[pixel_idx] = make_float4(MINF, MINF, MINF, MINF);
+  ray_caster_data.color_image [pixel_idx] = make_float4(MINF, MINF, MINF, MINF);
 
-  /// Fix this! this uses the sensor's parameter instead of the viewer's
   /// 1. Determine ray direction
   float3 camera_dir = normalize(ImageReprojectToCamera(x, y, 1.0f,
-  ray_caster_params.fx, ray_caster_params.fy, ray_caster_params.cx, ray_caster_params.cy));
+                                                       ray_caster_params.fx,
+                                                       ray_caster_params.fy,
+                                                       ray_caster_params.cx,
+                                                       ray_caster_params.cy));
 
   float ray_length_per_depth_unit = 1.0f / camera_dir.z;
   float t_min = ray_caster_params.min_raycast_depth / camera_dir.z;
@@ -246,7 +251,9 @@ void CastKernel(const HashTableGPU<Block> hash_table,
                 prev_sample.sdf, prev_sample.t, sdf, t,
                 interpolated_t, interpolated_color);
 
-        float3 world_pos_isosurface = world_pos_camera_origin + interpolated_t * world_dir;
+        float3 world_pos_isosurface =
+                world_pos_camera_origin + interpolated_t * world_dir;
+
         /// Good enough sample
         if (is_isosurface_found
             && abs(prev_sample.sdf - sdf) < ray_caster_params.sample_sdf_threshold) {
@@ -254,13 +261,16 @@ void CastKernel(const HashTableGPU<Block> hash_table,
           if (abs(sdf) < ray_caster_params.sdf_threshold) {
             float depth = interpolated_t / ray_length_per_depth_unit;
 
-            ray_caster_data.depth_image_ [pixel_idx] = depth;
-            ray_caster_data.vertex_image_[pixel_idx]
-                    = make_float4(ImageReprojectToCamera(x, y, depth,
-                                                         ray_caster_params.fx, ray_caster_params.fy,
-                                                         ray_caster_params.cx, ray_caster_params.cy),
-                                  1.0f);
-            ray_caster_data.color_image_ [pixel_idx]
+            ray_caster_data.depth_image [pixel_idx] = depth;
+            ray_caster_data.vertex_image[pixel_idx]
+                    = make_float4(ImageReprojectToCamera(
+                    x, y, depth,
+                    ray_caster_params.fx,
+                    ray_caster_params.fy,
+                    ray_caster_params.cx,
+                    ray_caster_params.cy), 1.0f);
+
+            ray_caster_data.color_image [pixel_idx]
                     = make_float4(interpolated_color.x / 255.f,
                                   interpolated_color.y / 255.f,
                                   interpolated_color.z / 255.f, 1.0f);
@@ -269,7 +279,7 @@ void CastKernel(const HashTableGPU<Block> hash_table,
               float3 normal = GradientAtPoint(hash_table, world_pos_isosurface);
               normal = -normal;
               float4 n = c_T_w * make_float4(normal, 0.0f);
-              ray_caster_data.normal_image_[pixel_idx]
+              ray_caster_data.normal_image[pixel_idx]
                       = make_float4(n.x, n.y, n.z, 1.0f);
             }
 
@@ -286,33 +296,37 @@ void CastKernel(const HashTableGPU<Block> hash_table,
   }
 }
 
-
+/// Member function: (CPU code)
 RayCaster::RayCaster(const RayCasterParams& params) {
   ray_caster_params_ = params;
   uint image_size = params.width * params.height;
-  checkCudaErrors(cudaMalloc(&ray_caster_data_.depth_image_, sizeof(float) * image_size));
-  checkCudaErrors(cudaMalloc(&ray_caster_data_.vertex_image_, sizeof(float4) * image_size));
-  checkCudaErrors(cudaMalloc(&ray_caster_data_.normal_image_, sizeof(float4) * image_size));
-  checkCudaErrors(cudaMalloc(&ray_caster_data_.color_image_, sizeof(float4) * image_size));
+  checkCudaErrors(cudaMalloc(&ray_caster_data_.depth_image, sizeof(float) * image_size));
+  checkCudaErrors(cudaMalloc(&ray_caster_data_.vertex_image, sizeof(float4) * image_size));
+  checkCudaErrors(cudaMalloc(&ray_caster_data_.normal_image, sizeof(float4) * image_size));
+  checkCudaErrors(cudaMalloc(&ray_caster_data_.color_image, sizeof(float4) * image_size));
 }
 
 RayCaster::~RayCaster() {
-  checkCudaErrors(cudaFree(ray_caster_data_.depth_image_));
-  checkCudaErrors(cudaFree(ray_caster_data_.vertex_image_));
-  checkCudaErrors(cudaFree(ray_caster_data_.normal_image_));
-  checkCudaErrors(cudaFree(ray_caster_data_.color_image_));
+  checkCudaErrors(cudaFree(ray_caster_data_.depth_image));
+  checkCudaErrors(cudaFree(ray_caster_data_.vertex_image));
+  checkCudaErrors(cudaFree(ray_caster_data_.normal_image));
+  checkCudaErrors(cudaFree(ray_caster_data_.color_image));
 }
 
+//////////
+/// Member function: (CPU calling GPU kernels)
 /// Major function, extract surface and normal from the volumes
 void RayCaster::Cast(Map* map, const float4x4& c_T_w) {
   const uint threads_per_block = 8;
   const float4x4 w_T_c = c_T_w.getInverse();
 
-  const dim3 grid_size((ray_caster_params_.width + threads_per_block - 1)/threads_per_block,
-                       (ray_caster_params_.height + threads_per_block - 1)/threads_per_block);
+  const dim3 grid_size((ray_caster_params_.width + threads_per_block - 1)
+                       /threads_per_block,
+                       (ray_caster_params_.height + threads_per_block - 1)
+                       /threads_per_block);
   const dim3 block_size(threads_per_block, threads_per_block);
 
-  CastKernel<<<grid_size, block_size>>>(map->hash_table(),
+  CastKernel<<<grid_size, block_size>>>(map->gpu_data(),
           ray_caster_data_, ray_caster_params_, c_T_w, w_T_c);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
