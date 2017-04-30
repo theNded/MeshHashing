@@ -22,7 +22,6 @@ struct SensorData {
   cudaChannelFormatDesc color_channel_desc;
 };
 
-
 class Sensor {
 private:
   /// sensor data

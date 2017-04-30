@@ -205,7 +205,7 @@ void Sensor::ColorCPUtoGPU(cv::Mat &color) {
   uint height = sensor_params_.height;
   uint image_size = width * height;
 
-  checkCudaErrors(cudaMemcpy(color_imagebuffer_, sensor_data_.color_image,
+  checkCudaErrors(cudaMemcpy(color_imagebuffer_, color.data,
                              4 * sizeof(uchar) * image_size, cudaMemcpyHostToDevice));
 
   const int threads_per_block = 16;
