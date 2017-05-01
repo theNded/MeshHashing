@@ -131,7 +131,6 @@ Map::~Map() {}
 
 void Map::Reset() {
   integrated_frame_count_ = 0;
-  processing_block_count_ = 0;
   hash_table_.Reset();
 }
 

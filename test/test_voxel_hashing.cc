@@ -21,7 +21,7 @@
 
 #include "config_reader.h"
 
-#define ICL_
+#define ICL
 #ifdef ICL
 const std::string kDefaultDatasetPath = "/home/wei/data/ICL/kt2/";
 #else
@@ -37,7 +37,6 @@ cv::Mat GPUFloatToMat(float* cuda_memory) {
                              cudaMemcpyDeviceToHost));
   return matf;
 }
-
 cv::Mat GPUFloat4ToMat(float4 *cuda_memory) {
   static float cpu_memory[640 * 480 * 4];
   cv::Mat matf = cv::Mat(480, 640, CV_32FC4, cpu_memory);
@@ -67,7 +66,7 @@ cv::Mat GPUFloat4ToMat(float4 *cuda_memory) {
 #endif
 }
 
-void SetConstantSDFParams(const SDFParams& params);
+extern void SetConstantSDFParams(const SDFParams& params);
 
 int main() {
   /// Load images
@@ -114,10 +113,11 @@ int main() {
 
   RayCaster ray_caster(ray_cast_params);
 
-  //cv::VideoWriter writer("icl-vh.avi", CV_FOURCC('X','V','I','D'), 30, cv::Size(640, 480));
+  //cv::VideoWriter writer("icl-vh.avi", CV_FOURCC('X','V','I','D'),
+  //                       30, cv::Size(640, 480));
   std::chrono::time_point<std::chrono::system_clock> start, end;
   start = std::chrono::system_clock::now();
-  int frames = 8;
+  int frames = depth_img_list.size();
   for (int i = 0; i < frames; ++i) {
     LOG(INFO) << i;
     cv::Mat depth = cv::imread(depth_img_list[i], -1);
@@ -131,7 +131,7 @@ int main() {
     mapper.Integrate(&voxel_map, &sensor, NULL);
 
     ray_caster.Cast(&voxel_map, T.getInverse());
-    cv::Mat display = GPUFloat4ToMat(ray_caster.ray_caster_data().color_image);
+    cv::Mat display = GPUFloat4ToMat(ray_caster.ray_caster_data().normal_image);
     cv::imshow("display", display);
     cv::waitKey(1);
   }

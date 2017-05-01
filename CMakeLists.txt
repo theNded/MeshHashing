@@ -126,8 +126,8 @@ TARGET_LINK_LIBRARIES(test_cuda_gl GL_UTILS
         glog ${CUDA_DEPENDENCIES} ${OTHER_DEPENDENCIES})
 
 ### Loop over
-ADD_EXECUTABLE(test_voxel_hashing_loop test/test_voxel_hashing_loop.cc)
-TARGET_LINK_LIBRARIES(test_voxel_hashing_loop GL_UTILS
+ADD_EXECUTABLE(test_voxel_hashing test/test_voxel_hashing.cc)
+TARGET_LINK_LIBRARIES(test_voxel_hashing GL_UTILS
         voxel-hashing cuda-voxel-hashing
         glog ${CUDA_DEPENDENCIES} ${OTHER_DEPENDENCIES})
 

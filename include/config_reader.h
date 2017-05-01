@@ -66,7 +66,7 @@ void LoadICLImageList(std::string dataset_path,
 }
 void LoadICLTrajectory(std::string dataset_path,
                        std::vector<float4x4> &wTc_list) {
-  std::ifstream list_stream(dataset_path + "trajectory.txt");
+  std::ifstream list_stream(dataset_path + "traj0.gt.freiburg");
   std::string ts_img, img_path, ts_gt;
   float tx, ty, tz, qx, qy, qz, qw;
   while (list_stream >> ts_img

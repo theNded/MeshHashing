@@ -18,7 +18,6 @@ private:
   SensorParams sensor_params_;
 
   uint integrated_frame_count_;
-  uint processing_block_count_;
 
   /// Garbage collection
   void StarveOccupiedVoxels();
