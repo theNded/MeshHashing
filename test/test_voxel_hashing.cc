@@ -16,12 +16,12 @@
 #include <sensor.h>
 #include <ray_caster.h>
 
-#include "mapper.h"
+#include "fuser.h"
 #include "renderer.h"
 
 #include "config_reader.h"
 
-#define ICL_
+#define ICL
 #ifdef ICL
 const std::string kDefaultDatasetPath = "/home/wei/data/ICL/kt2/";
 #else
@@ -104,12 +104,11 @@ int main() {
   ray_cast_params.cy = sensor_params.cy;
 
   Map voxel_map(hash_params);
-  voxel_map.sensor_params() = sensor_params;
 
   Sensor sensor(sensor_params);
   sensor.BindSensorDataToTexture();
 
-  Mapper mapper;
+  Fuser fuser;
 
   RayCaster ray_caster(ray_cast_params);
 
@@ -128,7 +127,7 @@ int main() {
     float4x4 T = wTc[0].getInverse() * wTc[i];
     sensor.set_transform(T);
 
-    mapper.Integrate(&voxel_map, &sensor, NULL);
+    fuser.Integrate(&voxel_map, &sensor, NULL);
 
     ray_caster.Cast(&voxel_map, T.getInverse());
     cv::Mat display = GPUFloat4ToMat(ray_caster.ray_caster_data().normal_image);

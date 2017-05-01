@@ -51,7 +51,7 @@ struct __ALIGN__(8) Voxel {
 
 /// Block
 /// Typically Block is a 8x8x8 voxel cluster
-struct __ALIGN__(8) Block {
+struct __ALIGN__(8) VoxelBlock {
   Voxel voxels[BLOCK_SIZE];
 
   __device__
@@ -59,7 +59,7 @@ struct __ALIGN__(8) Block {
 #ifdef __CUDACC__
 #pragma unroll 1
 #endif
-    for (int i = 0; i < 512; ++i) {
+    for (int i = 0; i < BLOCK_SIZE; ++i) {
       voxels[i].Clear();
     }
   }
@@ -82,6 +82,46 @@ struct __ALIGN__(8) Block {
     in.sdf = (in.sdf * (float)in.weight + update.sdf * (float)update.weight)
              / ((float)in.weight + (float)update.weight);
     in.weight = min(255, (uint)in.weight + (uint)update.weight);
+  }
+};
+
+
+/// Used by mesh
+struct __ALIGN__(8) Vertex {
+  float3 pos;
+
+  __device__
+  void Clear() {
+    pos = make_float3(0.0);
+  }
+};
+
+struct __ALIGN__(8) Triangle {
+  /// Point to 3 valid vertex indices
+  int3 indices;
+
+  __device__
+  void Clear() {
+    indices = make_int3(-1, -1, -1);
+  }
+};
+
+struct __ALIGN__(8) TriangleBlock {
+  Triangle triangles[BLOCK_SIZE];
+
+  __device__
+  Triangle& operator() (int i) {
+    return triangles[i];
+  }
+
+  __device__
+  void Clear() {
+#ifdef __CUDACC__
+#pragma unroll 1
+#endif
+    for (int i = 0; i < BLOCK_SIZE; ++i) {
+      triangles->Clear();
+    }
   }
 };
 #endif //VH_CORE_H

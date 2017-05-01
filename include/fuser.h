@@ -13,14 +13,15 @@
 #include "map.h"
 #include "sensor.h"
 
-class Mapper {
+class Fuser {
 private:
-  void IntegrateDepthMap(Map* map, Sensor* sensor);
+  void UpdateBlocks(Map* map, Sensor* sensor);
   void AllocBlocks(Map* map, Sensor* sensor);
+  void CollectTargetBlocks(Map* map, Sensor *sensor);
 
 public:
-  Mapper();
-  ~Mapper();
+  Fuser();
+  ~Fuser();
 
   void Integrate(Map* map, Sensor *sensor, unsigned int* is_streamed_mask);
 };

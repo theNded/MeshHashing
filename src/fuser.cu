@@ -1,8 +1,10 @@
 /// Input depth image as texture
 /// Easier interpolation
 
+#include <helper_cuda.h>
+#include <glog/logging.h>
 #include "sensor.h"
-#include "mapper.h"
+#include "fuser.h"
 #include "hash_table_gpu.h"
 
 #define PINF  __int_as_float(0x7f800000)
@@ -13,7 +15,41 @@ extern texture<float4, cudaTextureType2D, cudaReadModeElementType> color_texture
 
 /// Kernel functions
 __global__
-void IntegrateCudaKernel(HashTableGPU<Block> hash_table,
+void CollectTargetBlocksKernel(HashTableGPU<VoxelBlock> hash_table,
+                              SensorParams sensor_params,
+                              float4x4 c_T_w) {
+  const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+  __shared__ int local_counter;
+  if (threadIdx.x == 0) local_counter = 0;
+  __syncthreads();
+
+  int addr_local = -1;
+  if (idx < *hash_table.entry_count) {
+    if (hash_table.hash_entries[idx].ptr != FREE_ENTRY) {
+      if (IsBlockInCameraFrustum(c_T_w, hash_table.hash_entries[idx].pos,
+                                 sensor_params)) {
+        addr_local = atomicAdd(&local_counter, 1);
+      }
+    }
+  }
+
+  __syncthreads();
+
+  __shared__ int addr_global;
+  if (threadIdx.x == 0 && local_counter > 0) {
+    addr_global = atomicAdd(hash_table.compacted_hash_entry_counter, local_counter);
+  }
+  __syncthreads();
+
+  if (addr_local != -1) {
+    const uint addr = addr_global + addr_local;
+    hash_table.compacted_hash_entries[addr] = hash_table.hash_entries[idx];
+  }
+}
+
+__global__
+void IntegrateCudaKernel(HashTableGPU<VoxelBlock> hash_table,
                          SensorData sensor_data,
                          SensorParams sensor_params,
                          float4x4 c_T_w) {
@@ -70,7 +106,7 @@ void IntegrateCudaKernel(HashTableGPU<Block> hash_table,
 }
 
 __global__
-void AllocBlocksKernel(HashTableGPU<Block> hash_table, SensorData sensor_data,
+void AllocBlocksKernel(HashTableGPU<VoxelBlock> hash_table, SensorData sensor_data,
                        SensorParams sensor_params,
                        float4x4 w_T_c, const uint* is_streamed_mask) {
 
@@ -158,10 +194,10 @@ void AllocBlocksKernel(HashTableGPU<Block> hash_table, SensorData sensor_data,
 }
 
 /// Member functions (CPU code)
-Mapper::Mapper() {}
-Mapper::~Mapper(){}
+Fuser::Fuser() {}
+Fuser::~Fuser(){}
 
-void Mapper::Integrate(Map *map, Sensor* sensor, uint *is_streamed_mask) {
+void Fuser::Integrate(Map *map, Sensor* sensor, uint *is_streamed_mask) {
 
   //make the rigid transform available on the GPU
   //map->gpu_data().updateParams(map->hash_params());
@@ -173,11 +209,11 @@ void Mapper::Integrate(Map *map, Sensor* sensor, uint *is_streamed_mask) {
   /// seems OK now, supported by MATLAB scatter3
 
   //generate a linear hash array with only occupied entries
-  map->CompactHashEntries(sensor->c_T_w());
+  CollectTargetBlocks(map, sensor);
   /// seems OK, supported by MATLAB scatter3
 
   //volumetrically integrate the depth data into the depth SDFBlocks
-  IntegrateDepthMap(map, sensor);
+  UpdateBlocks(map, sensor);
   /// cuda kernel launching ok
   /// seems ok according to CUDA output
 
@@ -187,7 +223,7 @@ void Mapper::Integrate(Map *map, Sensor* sensor, uint *is_streamed_mask) {
 }
 
 /// Member functions (CPU calling GPU kernels)
-void Mapper::IntegrateDepthMap(Map* map, Sensor *sensor) {
+void Fuser::UpdateBlocks(Map* map, Sensor *sensor) {
   const uint threads_per_block = BLOCK_SIZE;
 
   uint occupied_block_count;
@@ -205,7 +241,32 @@ void Mapper::IntegrateDepthMap(Map* map, Sensor *sensor) {
   checkCudaErrors(cudaGetLastError());
 }
 
-void Mapper::AllocBlocks(Map* map, Sensor* sensor) {
+void Fuser::CollectTargetBlocks(Map* map, Sensor *sensor){
+  const uint threads_per_block = 256;
+
+  uint entry_count;
+  checkCudaErrors(cudaMemcpy(&entry_count, map->gpu_data().entry_count,
+                             sizeof(uint), cudaMemcpyDeviceToHost));
+
+  const dim3 grid_size((entry_count + threads_per_block - 1)
+                       / threads_per_block, 1);
+  const dim3 block_size(threads_per_block, 1);
+
+  checkCudaErrors(cudaMemset(map->gpu_data().compacted_hash_entry_counter,
+                             0, sizeof(int)));
+  CollectTargetBlocksKernel<<<grid_size, block_size >>>(map->gpu_data(),
+          sensor->sensor_params(), sensor->c_T_w());
+  checkCudaErrors(cudaDeviceSynchronize());
+  checkCudaErrors(cudaGetLastError());
+
+  uint res = 0;
+  checkCudaErrors(cudaMemcpy(&res, map->gpu_data().compacted_hash_entry_counter,
+                             sizeof(uint), cudaMemcpyDeviceToHost));
+  LOG(INFO) << "Block count in view frustum: " << res;
+}
+
+void Fuser::AllocBlocks(Map* map, Sensor* sensor) {
+  map->hash_table().ResetMutexes();
   const uint threads_per_block = 8;
   const dim3 grid_size((sensor->sensor_params().width + threads_per_block - 1)
                        /threads_per_block,

@@ -15,44 +15,9 @@
 
 //////////
 /// Kernel functions
-__global__
-void CompactHashEntriesKernel(HashTableGPU<Block> hash_table,
-                              SensorParams sensor_params,
-                              float4x4 c_T_w) {
-  const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-  __shared__ int local_counter;
-  if (threadIdx.x == 0) local_counter = 0;
-  __syncthreads();
-
-  int addr_local = -1;
-  if (idx < *hash_table.entry_count) {
-    if (hash_table.hash_entries[idx].ptr != FREE_ENTRY) {
-      if (IsBlockInCameraFrustum(c_T_w, hash_table.hash_entries[idx].pos,
-                                 sensor_params)) {
-        addr_local = atomicAdd(&local_counter, 1);
-      }
-    }
-  }
-
-  __syncthreads();
-
-  __shared__ int addr_global;
-  if (threadIdx.x == 0 && local_counter > 0) {
-    addr_global = atomicAdd(hash_table.compacted_hash_entry_counter, local_counter);
-  }
-  __syncthreads();
-
-  if (addr_local != -1) {
-    const uint addr = addr_global + addr_local;
-    hash_table.compacted_hash_entries[addr] = hash_table.hash_entries[idx];
-  }
-}
-
-
 /// Starve voxels (to determine outliers)
 __global__
-void StarveOccupiedVoxelsKernel(HashTableGPU<Block> hash_table) {
+void StarveOccupiedVoxelsKernel(HashTableGPU<VoxelBlock> hash_table) {
 
   const uint idx = blockIdx.x;
   const HashEntry& entry = hash_table.compacted_hash_entries[idx];
@@ -64,7 +29,7 @@ void StarveOccupiedVoxelsKernel(HashTableGPU<Block> hash_table) {
 
 /// Collect dead voxels
 __global__
-void CollectInvalidBlockInfoKernel(HashTableGPU<Block> hash_table) {
+void CollectInvalidBlockInfoKernel(HashTableGPU<VoxelBlock> hash_table) {
 
   const uint idx = blockIdx.x;
   const HashEntry& entry = hash_table.compacted_hash_entries[idx];
@@ -106,7 +71,7 @@ void CollectInvalidBlockInfoKernel(HashTableGPU<Block> hash_table) {
 }
 
 __global__
-void RecycleInvalidBlockKernel(HashTableGPU<Block> hash_table) {
+void RecycleInvalidBlockKernel(HashTableGPU<VoxelBlock> hash_table) {
   const uint idx = blockIdx.x*blockDim.x + threadIdx.x;
 
   if (idx < (*hash_table.compacted_hash_entry_counter)
@@ -121,8 +86,7 @@ void RecycleInvalidBlockKernel(HashTableGPU<Block> hash_table) {
 //////////
 /// Member functions (CPU code)
 Map::Map(const HashParams &hash_params) {
-  hash_params_ = hash_params;
-  hash_table_.Resize(hash_params_);
+  hash_table_.Resize(hash_params);
 
   Reset();
 }
@@ -150,24 +114,6 @@ void Map::Recycle() {
 }
 
 /// Member functions (CPU calling GPU kernels)
-void Map::CompactHashEntries(float4x4 c_T_w){
-  const uint threads_per_block = 256;
-  const dim3 grid_size((hash_params_.entry_count + threads_per_block - 1)
-                       / threads_per_block, 1);
-  const dim3 block_size(threads_per_block, 1);
-
-  checkCudaErrors(cudaMemset(gpu_data().compacted_hash_entry_counter,
-                             0, sizeof(int)));
-  CompactHashEntriesKernel<<<grid_size, block_size >>>(gpu_data(), sensor_params_, c_T_w);
-  checkCudaErrors(cudaDeviceSynchronize());
-  checkCudaErrors(cudaGetLastError());
-
-  uint res = 0;
-  checkCudaErrors(cudaMemcpy(&res, gpu_data().compacted_hash_entry_counter,
-                             sizeof(uint), cudaMemcpyDeviceToHost));
-  LOG(INFO) << "Block count in view frustum: " << res;
-}
-
 /// (__host__)
 void Map::StarveOccupiedVoxels() {
   const uint threads_per_block = BLOCK_SIZE;

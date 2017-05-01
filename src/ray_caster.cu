@@ -17,7 +17,7 @@ inline float3 frac(const float3& val)  {
 
 // TODO(wei): refine it
 __device__
-Voxel GetVoxel(const HashTableGPU<Block>& hash_table, float3 world_pos) {
+Voxel GetVoxel(const HashTableGPU<VoxelBlock>& hash_table, float3 world_pos) {
   HashEntry hash_entry = hash_table.GetEntry(WorldToBlock(world_pos));
   Voxel v;
   if (hash_entry.ptr == FREE_ENTRY) {
@@ -31,7 +31,7 @@ Voxel GetVoxel(const HashTableGPU<Block>& hash_table, float3 world_pos) {
 }
 
 __device__
-bool TrilinearInterpolation(const HashTableGPU<Block>& hash_table,
+bool TrilinearInterpolation(const HashTableGPU<VoxelBlock>& hash_table,
                             const float3& pos,
                             float& sdf, uchar3& color) {
   const float offset = kSDFParams.voxel_size;
@@ -122,7 +122,7 @@ float LinearIntersection(float t_near, float t_far, float sdf_near, float sdf_fa
 // d0 near, d1 far
 __device__
 /// Iteratively
-bool BisectionIntersection(const HashTableGPU<Block>& hash_table,
+bool BisectionIntersection(const HashTableGPU<VoxelBlock>& hash_table,
                            const float3& world_pos_camera_origin,
                            const float3& world_dir,
                            float sdf_near, float t_near,
@@ -150,7 +150,7 @@ bool BisectionIntersection(const HashTableGPU<Block>& hash_table,
 }
 
 __device__
-float3 GradientAtPoint(const HashTableGPU<Block>& hash_table,
+float3 GradientAtPoint(const HashTableGPU<VoxelBlock>& hash_table,
                        const float3& pos) {
   const float voxelSize = kSDFParams.voxel_size;
   float3 offset = make_float3(voxelSize, voxelSize, voxelSize);
@@ -192,7 +192,7 @@ float3 GradientAtPoint(const HashTableGPU<Block>& hash_table,
 //////////
 /// Kernel function
 __global__
-void CastKernel(const HashTableGPU<Block> hash_table,
+void CastKernel(const HashTableGPU<VoxelBlock> hash_table,
                 RayCasterData ray_caster_data,
                 RayCasterParams ray_caster_params,
                 const float4x4 c_T_w,

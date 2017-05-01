@@ -1,7 +1,7 @@
 //
 // Created by wei on 17-4-5.
 //
-// Map: managing HashTable<Block> and might be other structs later
+// Map: managing HashTable<VoxelBlock> and might be other structs later
 
 #ifndef VH_MAP_H
 #define VH_MAP_H
@@ -10,13 +10,8 @@
 #include "sensor.h"
 
 class Map {
-
 private:
-  HashTable<Block> hash_table_;
-
-  HashParams   hash_params_;
-  SensorParams sensor_params_;
-
+  HashTable<VoxelBlock> hash_table_;
   uint integrated_frame_count_;
 
   /// Garbage collection
@@ -30,15 +25,14 @@ public:
 
   void Reset();
   void Recycle();
-  void CompactHashEntries(float4x4 c_T_w);
 
   /// Only classes with Kernel function should call it
   /// The other part of the hash_table should be hidden
-  HashTableGPU<Block> &gpu_data() {
-    return hash_table_.gpu_data();
+  HashTable<VoxelBlock> &hash_table() {
+    return hash_table_;
   }
-  SensorParams& sensor_params() {
-    return sensor_params_;
+  HashTableGPU<VoxelBlock> &gpu_data() {
+    return hash_table_.gpu_data();
   }
   uint& frame_count() {
     return integrated_frame_count_;

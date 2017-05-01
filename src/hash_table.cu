@@ -6,16 +6,18 @@
 
 //////////
 /// Kernel functions
+template <typename T>
 __global__
-void ResetBucketMutexesKernel(HashTableGPU<Block> hash_table) {
+void ResetBucketMutexesKernel(HashTableGPU<T> hash_table) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (idx < *hash_table.bucket_count) {
     hash_table.bucket_mutexes[idx] = FREE_ENTRY;
   }
 }
 
+template <typename T>
 __global__
-void ResetHeapKernel(HashTableGPU<Block> hash_table) {
+void ResetHeapKernel(HashTableGPU<T> hash_table) {
   uint idx = blockIdx.x * blockDim.x + threadIdx.x;
 
   if (idx == 0) {
@@ -28,8 +30,9 @@ void ResetHeapKernel(HashTableGPU<Block> hash_table) {
   }
 }
 
+template <typename T>
 __global__
-void ResetEntriesKernel(HashTableGPU<Block> hash_table) {
+void ResetEntriesKernel(HashTableGPU<T> hash_table) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (idx < *hash_table.entry_count) {
     hash_table.hash_entries[idx].Clear();
@@ -299,4 +302,5 @@ void HashTable<T>::Debug() {
 }
 
 /// Instantiate for a correct compilation
-template class HashTable<Block>;
+template class HashTable<VoxelBlock>;
+template class HashTable<TriangleBlock>;
