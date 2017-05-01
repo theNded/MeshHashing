@@ -21,7 +21,7 @@
 
 #include "config_reader.h"
 
-#define ICL
+#define ICL_
 #ifdef ICL
 const std::string kDefaultDatasetPath = "/home/wei/data/ICL/kt2/";
 #else
@@ -83,21 +83,21 @@ int main() {
 #endif
 
   SDFParams sdf_params;
-  LoadSDFParams("../config/sdf_params.yml", sdf_params);
+  LoadSDFParams("../config/sdf.yml", sdf_params);
   SetConstantSDFParams(sdf_params);
 
   HashParams hash_params;
-  LoadHashParams("../config/hash_params.yml", hash_params);
+  LoadHashParams("../config/hash.yml", hash_params);
 
   SensorParams sensor_params;
 #ifdef ICL
-  LoadSensorParams("../config/sensor_params_icl.yml", sensor_params);
+  LoadSensorParams("../config/sensor_icl.yml", sensor_params);
 #else
-  LoadSensorParams("../config/sensor_params_tum.yml", sensor_params);
+  LoadSensorParams("../config/sensor_tum.yml", sensor_params);
 #endif
 
   RayCasterParams ray_cast_params;
-  LoadRayCasterParams("../config/ray_caster_params.yml", ray_cast_params);
+  LoadRayCasterParams("../config/ray_caster.yml", ray_cast_params);
   ray_cast_params.fx = sensor_params.fx;
   ray_cast_params.fy = sensor_params.fy;
   ray_cast_params.cx = sensor_params.cx;

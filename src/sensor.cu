@@ -156,8 +156,8 @@ Sensor::~Sensor() {
 }
 
 int Sensor::Process(cv::Mat &depth, cv::Mat &color) {
-  /// Distortion is not yet dealt with yet
-  /// Disable all filter at current
+  // TODO(wei): deal with distortion
+  /// Disable all filters at current
 
   /// Input:  CPU short*
   /// Output: GPU float *

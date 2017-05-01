@@ -18,8 +18,7 @@ void IntegrateCudaKernel(HashTableGPU<Block> hash_table,
                          SensorParams sensor_params,
                          float4x4 c_T_w) {
 
-  //TODO check if we should load this in shared memory
-
+  //TODO check if we should load this in shared memory (compacted_entries)
   /// 1. Select voxel
   const HashEntry &entry = hash_table.compacted_hash_entries[blockIdx.x];
   int3 voxel_base_pos = BlockToVoxel(entry.pos);
@@ -32,7 +31,8 @@ void IntegrateCudaKernel(HashTableGPU<Block> hash_table,
   uint2 image_pos = make_uint2(CameraProjectToImagei(camera_pos,
                                                      sensor_params.fx, sensor_params.fy,
                                                      sensor_params.cx, sensor_params.cy));
-  if (image_pos.x >= sensor_params.width || image_pos.y >= sensor_params.height)
+  if (image_pos.x >= sensor_params.width
+      || image_pos.y >= sensor_params.height)
     return;
 
   /// 3. Find correspondent depth observation
@@ -54,7 +54,11 @@ void IntegrateCudaKernel(HashTableGPU<Block> hash_table,
   /// 5. Update
   Voxel delta;
   delta.sdf = sdf;
-  delta.weight = max(kSDFParams.weight_sample * 1.5f * (1.0f - NormalizeDepth(depth, sensor_params.min_depth_range, sensor_params.max_depth_range)), 1.0f);
+  delta.weight = max(kSDFParams.weight_sample * 1.5f *
+                             (1.0f - NormalizeDepth(depth,
+                                                    sensor_params.min_depth_range,
+                                                    sensor_params.max_depth_range)),
+                     1.0f);
   if (sensor_data.color_image) {
     float4 color = tex2D(color_texture, image_pos.x, image_pos.y);
     delta.color = make_uchar3(255 * color.x, 255 * color.y, 255 * color.z);
@@ -88,8 +92,12 @@ void AllocBlocksKernel(HashTableGPU<Block> hash_table, SensorData sensor_data,
   float far_depth = min(kSDFParams.sdf_upper_bound, depth + truncation);
   if (near_depth >= far_depth) return;
 
-  float3 camera_pos_near = ImageReprojectToCamera(x, y, near_depth, sensor_params.fx, sensor_params.fy, sensor_params.cx, sensor_params.cy);
-  float3 camera_pos_far  = ImageReprojectToCamera(x, y, far_depth, sensor_params.fx, sensor_params.fy, sensor_params.cx, sensor_params.cy);
+  float3 camera_pos_near = ImageReprojectToCamera(x, y, near_depth,
+                                                  sensor_params.fx, sensor_params.fy,
+                                                  sensor_params.cx, sensor_params.cy);
+  float3 camera_pos_far  = ImageReprojectToCamera(x, y, far_depth,
+                                                  sensor_params.fx, sensor_params.fy,
+                                                  sensor_params.cx, sensor_params.cy);
 
   /// 2. Set range where blocks are allocated
   float3 world_pos_near  = w_T_c * camera_pos_near;
