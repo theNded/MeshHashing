@@ -81,7 +81,7 @@ uint3 IdxToVoxelLocalPos(uint idx) {
 /// Computes the linearized index of a local virtual voxel pos; pos \in [0, 8)^3
 __device__
 static inline
-uint VoxelLocalPosToIdx(const int3& voxel_local_pos) {
+uint VoxelLocalPosToIdx(const uint3& voxel_local_pos) {
   return voxel_local_pos.z * BLOCK_SIDE_LENGTH * BLOCK_SIDE_LENGTH +
          voxel_local_pos.y * BLOCK_SIDE_LENGTH +
          voxel_local_pos.x;
@@ -98,7 +98,7 @@ int VoxelPosToIdx(const int3& voxel_pos) {
   if (voxel_local_pos.y < 0) voxel_local_pos.y += BLOCK_SIDE_LENGTH;
   if (voxel_local_pos.z < 0) voxel_local_pos.z += BLOCK_SIDE_LENGTH;
 
-  return VoxelLocalPosToIdx(voxel_local_pos);
+  return VoxelLocalPosToIdx(make_uint3(voxel_local_pos));
 }
 __device__
 static inline

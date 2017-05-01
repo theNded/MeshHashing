@@ -1,5 +1,6 @@
 /// Input depth image as texture
 /// Easier interpolation
+#include <device_launch_parameters.h>
 
 #include <helper_cuda.h>
 #include <glog/logging.h>
@@ -49,7 +50,7 @@ void CollectTargetBlocksKernel(HashTableGPU<VoxelBlock> hash_table,
 }
 
 __global__
-void IntegrateCudaKernel(HashTableGPU<VoxelBlock> hash_table,
+void UpdateBlocksKernel(HashTableGPU<VoxelBlock> hash_table,
                          SensorData sensor_data,
                          SensorParams sensor_params,
                          float4x4 c_T_w) {
@@ -235,7 +236,7 @@ void Fuser::UpdateBlocks(Map* map, Sensor *sensor) {
 
   const dim3 grid_size(occupied_block_count, 1);
   const dim3 block_size(threads_per_block, 1);
-  IntegrateCudaKernel <<<grid_size, block_size>>>(map->gpu_data(),
+  UpdateBlocksKernel <<<grid_size, block_size>>>(map->gpu_data(),
           sensor->sensor_data(), sensor->sensor_params(), sensor->c_T_w());
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());

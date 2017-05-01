@@ -96,7 +96,7 @@ struct __ALIGN__(8) Vertex {
   }
 };
 
-struct __ALIGN__(8) Triangle {
+struct __ALIGN__(8) VertexIndices {
   /// Point to 3 valid vertex indices
   int3 indices;
 
@@ -106,12 +106,14 @@ struct __ALIGN__(8) Triangle {
   }
 };
 
-struct __ALIGN__(8) TriangleBlock {
-  Triangle triangles[BLOCK_SIZE];
+typedef VertexIndices Triangle;
+
+struct __ALIGN__(8) VertexIndicesBlock {
+  VertexIndices indices[BLOCK_SIZE];
 
   __device__
-  Triangle& operator() (int i) {
-    return triangles[i];
+  VertexIndices& operator() (int i) {
+    return indices[i];
   }
 
   __device__
@@ -120,7 +122,7 @@ struct __ALIGN__(8) TriangleBlock {
 #pragma unroll 1
 #endif
     for (int i = 0; i < BLOCK_SIZE; ++i) {
-      triangles->Clear();
+      indices[i].Clear();
     }
   }
 };

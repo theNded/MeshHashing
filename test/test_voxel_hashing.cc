@@ -15,6 +15,7 @@
 #include <opencv2/opencv.hpp>
 #include <sensor.h>
 #include <ray_caster.h>
+#include <mesh.h>
 
 #include "fuser.h"
 #include "renderer.h"
@@ -23,7 +24,7 @@
 
 #define ICL
 #ifdef ICL
-const std::string kDefaultDatasetPath = "/home/wei/data/ICL/kt2/";
+const std::string kDefaultDatasetPath = "/home/wei/data/ICL/office0/";
 #else
 const std::string kDefaultDatasetPath = "/home/wei/data/TUM/rgbd_dataset_freiburg2_xyz/";
 #endif
@@ -104,6 +105,10 @@ int main() {
   ray_cast_params.cy = sensor_params.cy;
 
   Map voxel_map(hash_params);
+  LOG(INFO) << "map allocated";
+
+  Mesh mesh(hash_params);
+  //LOG(INFO) << "mesh allocated";
 
   Sensor sensor(sensor_params);
   sensor.BindSensorDataToTexture();

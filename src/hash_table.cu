@@ -243,7 +243,7 @@ void HashTable<T>::Debug() {
 
   /// Iterate over entries
   std::list<Entry> l;
-  uint entry_count = hash_params_.bucket_size * hash_params_.bucket_count;
+  uint entry_count = hash_params_.entry_count;
   for (uint i = 0; i < entry_count; i++) {
     if (entries[i].ptr != LOCK_ENTRY) {
       not_locked_entry_count++;
@@ -291,10 +291,10 @@ void HashTable<T>::Debug() {
 
   LOG(INFO) << "Duplicated entry count: " << size_before - size_after;
   LOG(INFO) << "Not locked entry count: " << not_locked_entry_count;
-  LOG(INFO) << "Not free entry count: " << not_free_entry_count
-            << "\t free entry count: " << heap_counter;
+  LOG(INFO) << "Not free value count: " << not_free_value_count
+            << "; free value count: " << free_value_count;
   LOG(INFO) << "not_free + free entry count: "
-            << not_free_entry_count + heap_counter;
+            << not_free_value_count + free_value_count;
 
   delete [] entries;
   delete [] values;
@@ -303,4 +303,4 @@ void HashTable<T>::Debug() {
 
 /// Instantiate for a correct compilation
 template class HashTable<VoxelBlock>;
-template class HashTable<TriangleBlock>;
+template class HashTable<VertexIndicesBlock>;

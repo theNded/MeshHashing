@@ -15,37 +15,63 @@ struct MeshData {
   // Dynamic memory management for vertices
   // We need compact operation,
   // as MC during updating might release some triangles
-  uint*   heap;
-  uint*   heap_counter;
+  uint*   vertex_heap;
+  uint*   vertex_heap_counter;
   Vertex* vertices;
+
+  uint*     triangle_heap;
+  uint*     triangle_heap_counter;
+  Triangle* triangles;
+
+#ifdef __CUDACC__
+  __device__
+  uint AllocVertexHeap() {
+    uint addr = atomicSub(&vertex_heap_counter[0], 1);
+    //TODO MATTHIAS check some error handling?
+    return vertex_heap[addr];
+  }
+  __device__
+  void FreeVertexHeap(uint ptr) {
+    uint addr = atomicAdd(&vertex_heap_counter[0], 1);
+    //TODO MATTHIAS check some error handling?
+    vertex_heap[addr + 1] = ptr;
+  }
+
+  __device__
+  uint AllocTriangleHeap() {
+    uint addr = atomicSub(&triangle_heap_counter[0], 1);
+    //TODO MATTHIAS check some error handling?
+    return triangle_heap[addr];
+  }
+  __device__
+  void FreeTriangleHeap(uint ptr) {
+    uint addr = atomicAdd(&triangle_heap_counter[0], 1);
+    //TODO MATTHIAS check some error handling?
+    triangle_heap[addr + 1] = ptr;
+  }
+#endif // __CUDACC__
 };
+
+static const int kMaxVertexCount = 2500000;
 
 class Mesh {
 private:
-  HashTable<TriangleBlock> hash_table_;
+  HashTable<VertexIndicesBlock> hash_table_;
   MeshData mesh_data_;
-
-  HashParams   hash_params_;
-  SensorParams sensor_params_;
 
 public:
   Mesh(const HashParams &params);
   ~Mesh();
 
   void Reset();
-  /// A naive version (per frame version)
-  void CollectTargetBlocks(float4x4 c_T_w);
-
   void MarchingCubes(Map* map);
+  void SaveMesh(std::string path);
 
-  HashTable<TriangleBlock> &hash_table() {
+  HashTable<VertexIndicesBlock> &hash_table() {
     return hash_table_;
   }
-  HashTableGPU<TriangleBlock> &gpu_data() {
+  HashTableGPU<VertexIndicesBlock> &gpu_data() {
     return hash_table_.gpu_data();
-  }
-  SensorParams& sensor_params() {
-    return sensor_params_;
   }
 };
 
