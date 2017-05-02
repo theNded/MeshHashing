@@ -1,3 +1,4 @@
+#include <glog/logging.h>
 #include "mesh.h"
 
 #include "mc_tables.h"
@@ -28,12 +29,13 @@ float3 VertexIntersection(const float3& p1, const float3 p2,
   if (fabs(v1 - isolevel) < 0.00001) return p1;
   if (fabs(v2 - isolevel) < 0.00001) return p2;
   float mu = (isolevel - v1) / (v2 - v1);
-  float3 p = make_float3(p1.x + mu * p2.x,
-                         p1.y + mu * p2.y,
-                         p1.z + mu * p2.z);
+  float3 p = make_float3(p1.x + mu * (p2.x - p1.x),
+                         p1.y + mu * (p2.y - p1.y),
+                         p1.z + mu * (p2.z - p1.z));
   return p;
 }
 
+// TODO(wei): add locks
 __global__
 void MarchingCubesKernel(HashTableGPU<VoxelBlock> scalar_table,
                          HashTableGPU<VertexIndicesBlock> mesh_table,
@@ -227,7 +229,7 @@ void MarchingCubesKernel(HashTableGPU<VoxelBlock> scalar_table,
     ptr = mesh_table.values[mesh_entry.ptr](i).indices.x;
     ptr = (ptr == -1) ? mesh_data.AllocVertexHeap() : ptr;
     mesh_data.vertices[ptr].pos = vertex_pos;
-    vertex_ptr[2] = ptr;
+    vertex_ptr[6] = ptr;
   }
   if (kEdgeTable[cube_index] & 128) {
     vertex_pos = VertexIntersection(p[7], p[4], d[7], d[4], isolevel);
@@ -238,7 +240,6 @@ void MarchingCubesKernel(HashTableGPU<VoxelBlock> scalar_table,
     mesh_data.vertices[ptr].pos = vertex_pos;
     vertex_ptr[7] = ptr;
   }
-
 
   /// vertical
   if (kEdgeTable[cube_index] & 256) {
@@ -301,6 +302,7 @@ Mesh::Mesh(const HashParams &params) {
                              sizeof(Triangle) * kMaxVertexCount));
 
   hash_table_.Resize(params);
+
   Reset();
 }
 
@@ -320,25 +322,70 @@ void Mesh::Reset() {
   const dim3 block_size(threads_per_block, 1);
 
   ResetHeapKernel<<<grid_size, block_size>>>(mesh_data_);
+  checkCudaErrors(cudaDeviceSynchronize());
+  checkCudaErrors(cudaGetLastError());
+
+  hash_table_.Reset();
 }
 
+/// Assume hash_table_ is compactified
 void Mesh::MarchingCubes(Map *map) {
-  /// Assume hash_table_ is compactified
+  uint occupied_block_count;
+  checkCudaErrors(cudaMemcpy(&occupied_block_count,
+                             gpu_data().compacted_hash_entry_counter,
+                             sizeof(uint), cudaMemcpyDeviceToHost));
+  if (occupied_block_count <= 0)
+    return;
 
+  const uint threads_per_block = BLOCK_SIZE;
+  const dim3 grid_size(occupied_block_count, 1);
+  const dim3 block_size(threads_per_block, 1);
+  MarchingCubesKernel<<<grid_size, block_size>>>(map->gpu_data(), gpu_data(),
+          mesh_data_);
+  checkCudaErrors(cudaDeviceSynchronize());
+  checkCudaErrors(cudaGetLastError());
 }
 
 void Mesh::SaveMesh(std::string path) {
   /// get data from GPU
+  LOG(INFO) << "Copying data from GPU";
+  Vertex* vertices = new Vertex[kMaxVertexCount];
+  Triangle *triangles = new Triangle[kMaxVertexCount];
+  checkCudaErrors(cudaMemcpy(vertices, mesh_data_.vertices,
+                             sizeof(Vertex) * kMaxVertexCount,
+                             cudaMemcpyDeviceToHost));
+  checkCudaErrors(cudaMemcpy(triangles, mesh_data_.triangles,
+                             sizeof(Triangle) * kMaxVertexCount,
+                             cudaMemcpyDeviceToHost));
+
+  LOG(INFO) << "Writing data";
   std::ofstream out(path);
+  std::stringstream ss;
   for (int i = 0; i < kMaxVertexCount; ++i) {
-    out << "v " << mesh_data_.vertices[i].pos.x << " "
-                << mesh_data_.vertices[i].pos.y << " "
-                << mesh_data_.vertices[i].pos.z << "\n";
+    ss.str("");
+    ss <<  "v " << vertices[i].pos.x << " "
+       << vertices[i].pos.y << " "
+       << vertices[i].pos.z << "\n";
+    //LOG(INFO) << ss.str();
+    if (vertices[i].pos.x == 0.0f
+            && vertices[i].pos.y == 0.0f
+            && vertices[i].pos.z == 0.0f) break;
+    out << ss.str();
   }
 
   for (int i = 0; i < kMaxVertexCount; ++i) {
-    out << "f " << mesh_data_.triangles[i].indices.x << " "
-                << mesh_data_.triangles[i].indices.y << " "
-                << mesh_data_.triangles[i].indices.z << "\n";
+    ss.str("");
+    ss << "f " <<  triangles[i].indices.x + 1 << " "
+                << triangles[i].indices.y + 1 << " "
+                << triangles[i].indices.z + 1 << "\n";
+    //LOG(INFO) << ss.str();
+    if (triangles[i].indices.x == -1
+            || triangles[i].indices.y == -1
+            || triangles[i].indices.z == -1)
+      break;
+    out << ss.str();
   }
+
+  delete[] vertices;
+  delete[] triangles;
 }

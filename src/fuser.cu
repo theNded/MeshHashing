@@ -15,8 +15,9 @@ extern texture<float, cudaTextureType2D, cudaReadModeElementType> depth_texture;
 extern texture<float4, cudaTextureType2D, cudaReadModeElementType> color_texture;
 
 /// Kernel functions
+template <typename T>
 __global__
-void CollectTargetBlocksKernel(HashTableGPU<VoxelBlock> hash_table,
+void CollectTargetBlocksKernel(HashTableGPU<T> hash_table,
                               SensorParams sensor_params,
                               float4x4 c_T_w) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -51,9 +52,9 @@ void CollectTargetBlocksKernel(HashTableGPU<VoxelBlock> hash_table,
 
 __global__
 void UpdateBlocksKernel(HashTableGPU<VoxelBlock> hash_table,
-                         SensorData sensor_data,
-                         SensorParams sensor_params,
-                         float4x4 c_T_w) {
+                        SensorData sensor_data,
+                        SensorParams sensor_params,
+                        float4x4 c_T_w) {
 
   //TODO check if we should load this in shared memory (compacted_entries)
   /// 1. Select voxel
@@ -107,7 +108,9 @@ void UpdateBlocksKernel(HashTableGPU<VoxelBlock> hash_table,
 }
 
 __global__
-void AllocBlocksKernel(HashTableGPU<VoxelBlock> hash_table, SensorData sensor_data,
+void AllocBlocksKernel(HashTableGPU<VoxelBlock> hash_table,
+                       HashTableGPU<VertexIndicesBlock> mesh_table,
+                       SensorData sensor_data,
                        SensorParams sensor_params,
                        float4x4 w_T_c, const uint* is_streamed_mask) {
 
@@ -175,6 +178,8 @@ void AllocBlocksKernel(HashTableGPU<VoxelBlock> hash_table, SensorData sensor_da
       /// Disable streaming at current
       // && !isSDFBlockStreamedOut(idCurrentVoxel, hash_table, is_streamed_mask)) {
       hash_table.AllocEntry(block_pos_curr);
+      /// Added at 5.2
+      mesh_table.AllocEntry(block_pos_curr);
     }
 
     // Traverse voxel grid
@@ -198,23 +203,24 @@ void AllocBlocksKernel(HashTableGPU<VoxelBlock> hash_table, SensorData sensor_da
 Fuser::Fuser() {}
 Fuser::~Fuser(){}
 
-void Fuser::Integrate(Map *map, Sensor* sensor, uint *is_streamed_mask) {
+void Fuser::Integrate(Map *map, Mesh* mesh, Sensor* sensor, uint *is_streamed_mask) {
 
   //make the rigid transform available on the GPU
   //map->gpu_data().updateParams(map->hash_params());
   /// seems OK
 
   //allocate all hash blocks which are corresponding to depth map entries
-  AllocBlocks(map, sensor);
+  AllocBlocks(map, mesh, sensor);
+
   /// DIFFERENT: is_streamed_mask now empty
   /// seems OK now, supported by MATLAB scatter3
 
   //generate a linear hash array with only occupied entries
-  CollectTargetBlocks(map, sensor);
+  CollectTargetBlocks(map, mesh, sensor);
   /// seems OK, supported by MATLAB scatter3
 
   //volumetrically integrate the depth data into the depth SDFBlocks
-  UpdateBlocks(map, sensor);
+  UpdateBlocks(map, mesh, sensor);
   /// cuda kernel launching ok
   /// seems ok according to CUDA output
 
@@ -224,25 +230,25 @@ void Fuser::Integrate(Map *map, Sensor* sensor, uint *is_streamed_mask) {
 }
 
 /// Member functions (CPU calling GPU kernels)
-void Fuser::UpdateBlocks(Map* map, Sensor *sensor) {
-  const uint threads_per_block = BLOCK_SIZE;
+void Fuser::AllocBlocks(Map* map, Mesh* mesh, Sensor* sensor) {
+  map->hash_table().ResetMutexes();
+  mesh->hash_table().ResetMutexes();
 
-  uint occupied_block_count;
-  checkCudaErrors(cudaMemcpy(&occupied_block_count,
-                             map->gpu_data().compacted_hash_entry_counter,
-                             sizeof(uint), cudaMemcpyDeviceToHost));
-  if (occupied_block_count <= 0)
-    return;
+  const uint threads_per_block = 8;
+  const dim3 grid_size((sensor->sensor_params().width + threads_per_block - 1)
+                       /threads_per_block,
+                       (sensor->sensor_params().height + threads_per_block - 1)
+                       /threads_per_block);
+  const dim3 block_size(threads_per_block, threads_per_block);
 
-  const dim3 grid_size(occupied_block_count, 1);
-  const dim3 block_size(threads_per_block, 1);
-  UpdateBlocksKernel <<<grid_size, block_size>>>(map->gpu_data(),
-          sensor->sensor_data(), sensor->sensor_params(), sensor->c_T_w());
+  AllocBlocksKernel<<<grid_size, block_size>>>(map->gpu_data(), mesh->gpu_data(),
+          sensor->sensor_data(), sensor->sensor_params(), sensor->w_T_c(), NULL);
+
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }
 
-void Fuser::CollectTargetBlocks(Map* map, Sensor *sensor){
+void Fuser::CollectTargetBlocks(Map* map, Mesh* mesh, Sensor *sensor){
   const uint threads_per_block = 256;
 
   uint entry_count;
@@ -257,6 +263,12 @@ void Fuser::CollectTargetBlocks(Map* map, Sensor *sensor){
                              0, sizeof(int)));
   CollectTargetBlocksKernel<<<grid_size, block_size >>>(map->gpu_data(),
           sensor->sensor_params(), sensor->c_T_w());
+
+  /// Added at 5.2
+  checkCudaErrors(cudaMemset(mesh->gpu_data().compacted_hash_entry_counter,
+                             0, sizeof(int)));
+  CollectTargetBlocksKernel<<<grid_size, block_size >>> (mesh->gpu_data(),
+          sensor->sensor_params(), sensor->c_T_w());
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 
@@ -264,20 +276,27 @@ void Fuser::CollectTargetBlocks(Map* map, Sensor *sensor){
   checkCudaErrors(cudaMemcpy(&res, map->gpu_data().compacted_hash_entry_counter,
                              sizeof(uint), cudaMemcpyDeviceToHost));
   LOG(INFO) << "Block count in view frustum: " << res;
+
+  /// Added at 5.2
+  checkCudaErrors(cudaMemcpy(&res, mesh->gpu_data().compacted_hash_entry_counter,
+                             sizeof(uint), cudaMemcpyDeviceToHost));
+  LOG(INFO) << "Mesh block count in view frustum: " << res;
 }
 
-void Fuser::AllocBlocks(Map* map, Sensor* sensor) {
-  map->hash_table().ResetMutexes();
-  const uint threads_per_block = 8;
-  const dim3 grid_size((sensor->sensor_params().width + threads_per_block - 1)
-                       /threads_per_block,
-                       (sensor->sensor_params().height + threads_per_block - 1)
-                       /threads_per_block);
-  const dim3 block_size(threads_per_block, threads_per_block);
+void Fuser::UpdateBlocks(Map* map, Mesh* mesh, Sensor *sensor) {
+  const uint threads_per_block = BLOCK_SIZE;
 
-  AllocBlocksKernel<<<grid_size, block_size>>>(map->gpu_data(),
-          sensor->sensor_data(), sensor->sensor_params(), sensor->w_T_c(), NULL);
+  uint occupied_block_count;
+  checkCudaErrors(cudaMemcpy(&occupied_block_count,
+                             map->gpu_data().compacted_hash_entry_counter,
+                             sizeof(uint), cudaMemcpyDeviceToHost));
+  if (occupied_block_count <= 0)
+    return;
 
+  const dim3 grid_size(occupied_block_count, 1);
+  const dim3 block_size(threads_per_block, 1);
+  UpdateBlocksKernel <<<grid_size, block_size>>>(map->gpu_data(),
+          sensor->sensor_data(), sensor->sensor_params(), sensor->c_T_w());
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }

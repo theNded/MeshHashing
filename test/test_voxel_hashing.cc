@@ -24,7 +24,7 @@
 
 #define ICL
 #ifdef ICL
-const std::string kDefaultDatasetPath = "/home/wei/data/ICL/office0/";
+const std::string kDefaultDatasetPath = "/home/wei/data/ICL/kt2/";
 #else
 const std::string kDefaultDatasetPath = "/home/wei/data/TUM/rgbd_dataset_freiburg2_xyz/";
 #endif
@@ -122,7 +122,7 @@ int main() {
   std::chrono::time_point<std::chrono::system_clock> start, end;
   start = std::chrono::system_clock::now();
   int frames = depth_img_list.size();
-  for (int i = 0; i < frames; ++i) {
+  for (int i = 0; i < 100; ++i) {
     LOG(INFO) << i;
     cv::Mat depth = cv::imread(depth_img_list[i], -1);
     cv::Mat color = cv::imread(color_img_list[i]);
@@ -132,13 +132,15 @@ int main() {
     float4x4 T = wTc[0].getInverse() * wTc[i];
     sensor.set_transform(T);
 
-    fuser.Integrate(&voxel_map, &sensor, NULL);
+    fuser.Integrate(&voxel_map, &mesh, &sensor, NULL);
 
     ray_caster.Cast(&voxel_map, T.getInverse());
     cv::Mat display = GPUFloat4ToMat(ray_caster.ray_caster_data().normal_image);
     cv::imshow("display", display);
     cv::waitKey(1);
   }
+  mesh.MarchingCubes(&voxel_map);
+  mesh.SaveMesh("test.obj");
 
   end = std::chrono::system_clock::now();
   std::chrono::duration<double> seconds = end - start;
