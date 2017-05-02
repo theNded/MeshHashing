@@ -9,7 +9,7 @@ void ResetHeapKernel(MeshData mesh_data) {
   uint idx = blockIdx.x * blockDim.x + threadIdx.x;
 
   if (idx == 0) {
-    mesh_data.vertex_heap_counter[0] = max_vertice_count - 1;	//points to the last element of
+    mesh_data.vertex_heap_counter[0] = max_vertice_count - 1;
     mesh_data.triangle_heap_counter[0] = max_vertice_count - 1;
   }
 
@@ -196,7 +196,7 @@ void MarchingCubesKernel(HashTableGPU<VoxelBlock> scalar_table,
 
   //////////
   /// 3. Determine vertices (ptr allocated via (shared) edges
-  /// If the program reach here, than voxels holding edges must exist
+  /// If the program reach here, the voxels holding edges must exist
   // 0 -> 011.x, (0, 1)
   // 1 -> 110.z, (1, 2)
   // 2 -> 010.x, (2, 3)
@@ -315,14 +315,17 @@ void MarchingCubesKernel(HashTableGPU<VoxelBlock> scalar_table,
     vertex_ptr[11] = ptr;
   }
 
+  int triangle_ptr = mesh_table.values[mesh_entry.ptr](local_idx).ptr;
+  triangle_ptr = (triangle_ptr == FREE_ENTRY)
+                 ? mesh_data.AllocTriangleHeap() : triangle_ptr;
+  Triangles triangle;
+  triangle.Clear();
   for (int t = 0; kTriangleTable[cube_index][t] != -1; t += 3) {
-    Triangle triangle;
-    triangle.indices.x = vertex_ptr[kTriangleTable[cube_index][t + 0]];
-    triangle.indices.y = vertex_ptr[kTriangleTable[cube_index][t + 1]];
-    triangle.indices.z = vertex_ptr[kTriangleTable[cube_index][t + 2]];
-    int triangle_ptr = mesh_data.AllocTriangleHeap();
-    mesh_data.triangles[triangle_ptr] = triangle;
+    triangle.indices[t/3].x = vertex_ptr[kTriangleTable[cube_index][t + 0]];
+    triangle.indices[t/3].y = vertex_ptr[kTriangleTable[cube_index][t + 1]];
+    triangle.indices[t/3].z = vertex_ptr[kTriangleTable[cube_index][t + 2]];
   }
+  mesh_data.triangles[triangle_ptr] = triangle;
 }
 
 Mesh::Mesh(const HashParams &params) {
@@ -335,7 +338,7 @@ Mesh::Mesh(const HashParams &params) {
                              sizeof(uint) * kMaxVertexCount));
   checkCudaErrors(cudaMalloc(&mesh_data_.triangle_heap_counter, sizeof(uint)));
   checkCudaErrors(cudaMalloc(&mesh_data_.triangles,
-                             sizeof(Triangle) * kMaxVertexCount));
+                             sizeof(Triangles) * kMaxVertexCount));
 
   hash_table_.Resize(params);
 
@@ -386,17 +389,19 @@ void Mesh::SaveMesh(std::string path) {
   /// get data from GPU
   LOG(INFO) << "Copying data from GPU";
   Vertex* vertices = new Vertex[kMaxVertexCount];
-  Triangle *triangles = new Triangle[kMaxVertexCount];
+  Triangles *triangles = new Triangles[kMaxVertexCount];
   checkCudaErrors(cudaMemcpy(vertices, mesh_data_.vertices,
                              sizeof(Vertex) * kMaxVertexCount,
                              cudaMemcpyDeviceToHost));
   checkCudaErrors(cudaMemcpy(triangles, mesh_data_.triangles,
-                             sizeof(Triangle) * kMaxVertexCount,
+                             sizeof(Triangles) * kMaxVertexCount,
                              cudaMemcpyDeviceToHost));
 
   LOG(INFO) << "Writing data";
   std::ofstream out(path);
   std::stringstream ss;
+
+  int vertex_count = 0;
   for (int i = 0; i < kMaxVertexCount; ++i) {
     ss.str("");
     ss <<  "v " << vertices[i].pos.x << " "
@@ -405,22 +410,29 @@ void Mesh::SaveMesh(std::string path) {
     //LOG(INFO) << ss.str();
     if (vertices[i].pos.x == 0.0f
             && vertices[i].pos.y == 0.0f
-            && vertices[i].pos.z == 0.0f) break;
+            && vertices[i].pos.z == 0.0f) continue;
+    ++vertex_count;
     out << ss.str();
   }
+  LOG(INFO) << "vertex count: " << vertex_count;
 
+  int triangle_count = 0;
   for (int i = 0; i < kMaxVertexCount; ++i) {
-    ss.str("");
-    ss << "f " <<  triangles[i].indices.x + 1 << " "
-                << triangles[i].indices.y + 1 << " "
-                << triangles[i].indices.z + 1 << "\n";
-    //LOG(INFO) << ss.str();
-    if (triangles[i].indices.x == -1
-            || triangles[i].indices.y == -1
-            || triangles[i].indices.z == -1)
-      break;
-    out << ss.str();
+    for (int j = 0; j < 5; ++j) {
+      ss.str("");
+      ss << "f " << triangles[i].indices[j].x + 1 << " "
+         << triangles[i].indices[j].y + 1 << " "
+         << triangles[i].indices[j].z + 1 << "\n";
+      //LOG(INFO) << ss.str();
+      if (triangles[i].indices[j].x == -1
+          || triangles[i].indices[j].y == -1
+          || triangles[i].indices[j].z == -1)
+        continue;
+      ++triangle_count;
+      out << ss.str();
+    }
   }
+  LOG(INFO) << "triangle count: " << triangle_count;
 
   delete[] vertices;
   delete[] triangles;

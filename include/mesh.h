@@ -21,11 +21,12 @@ struct MeshData {
 
   uint*     triangle_heap;
   uint*     triangle_heap_counter;
-  Triangle* triangles;
+  Triangles* triangles;
 
 #ifdef __CUDACC__
   __device__
   uint AllocVertexHeap() {
+    if (vertex_heap_counter[0] < 10) printf("low on vertex heap\n");
     uint addr = atomicSub(&vertex_heap_counter[0], 1);
     //TODO MATTHIAS check some error handling?
     return vertex_heap[addr];
@@ -39,6 +40,7 @@ struct MeshData {
 
   __device__
   uint AllocTriangleHeap() {
+    if (triangle_heap_counter[0] < 10) printf("low on triangle heap\n");
     uint addr = atomicSub(&triangle_heap_counter[0], 1);
     //TODO MATTHIAS check some error handling?
     return triangle_heap[addr];

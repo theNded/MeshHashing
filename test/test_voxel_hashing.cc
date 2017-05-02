@@ -22,7 +22,7 @@
 
 #include "config_reader.h"
 
-#define ICL_
+#define ICL
 #ifdef ICL
 const std::string kDefaultDatasetPath = "/home/wei/data/ICL/kt2/";
 #else
@@ -121,8 +121,8 @@ int main() {
   //                       30, cv::Size(640, 480));
   std::chrono::time_point<std::chrono::system_clock> start, end;
   start = std::chrono::system_clock::now();
-  int frames = depth_img_list.size();
-  for (int i = 0; i < 100; ++i) {
+  int frames = 2;
+  for (int i = 0; i < frames; ++i) {
     LOG(INFO) << i;
     cv::Mat depth = cv::imread(depth_img_list[i], -1);
     cv::Mat color = cv::imread(color_img_list[i]);
@@ -133,19 +133,23 @@ int main() {
     sensor.set_transform(T);
 
     fuser.Integrate(&voxel_map, &mesh, &sensor, NULL);
+    mesh.MarchingCubes(&voxel_map);
 
-    ray_caster.Cast(&voxel_map, T.getInverse());
-    cv::Mat display = GPUFloat4ToMat(ray_caster.ray_caster_data().normal_image);
-    cv::imshow("display", display);
-    cv::waitKey(1);
+    //ray_caster.Cast(&voxel_map, T.getInverse());
+    //cv::Mat display = GPUFloat4ToMat(ray_caster.ray_caster_data().normal_image);
+    //cv::imshow("display", display);
+    //cv::waitKey(1);
   }
-  mesh.MarchingCubes(&voxel_map);
-  mesh.SaveMesh("test.obj");
-
   end = std::chrono::system_clock::now();
   std::chrono::duration<double> seconds = end - start;
   LOG(INFO) << "Total time: " << seconds.count();
   LOG(INFO) << "Fps: " << frames / seconds.count();
+
+  //mesh.MarchingCubes(&voxel_map);
+  mesh.SaveMesh("test.obj");
+
+
+
 
   voxel_map.Debug();
 }

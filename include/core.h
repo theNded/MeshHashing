@@ -99,14 +99,27 @@ struct __ALIGN__(8) Vertex {
 struct __ALIGN__(8) VertexIndices {
   /// Point to 3 valid vertex indices
   int3 indices;
+  int  ptr;
 
   __device__
   void Clear() {
     indices = make_int3(-1, -1, -1);
+    ptr = FREE_ENTRY;
   }
 };
 
-typedef VertexIndices Triangle;
+struct __ALIGN__(8) Triangles {
+  int3 indices[5];
+
+  __device__
+  void Clear() {
+    indices[0] = make_int3(-1);
+    indices[1] = make_int3(-1);
+    indices[2] = make_int3(-1);
+    indices[3] = make_int3(-1);
+    indices[4] = make_int3(-1);
+  }
+};
 
 struct __ALIGN__(8) VertexIndicesBlock {
   VertexIndices indices[BLOCK_SIZE];
