@@ -303,4 +303,4 @@ void HashTable<T>::Debug() {
 
 /// Instantiate for a correct compilation
 template class HashTable<VoxelBlock>;
-template class HashTable<VertexIndicesBlock>;
+template class HashTable<MeshCubeBlock>;

@@ -96,36 +96,35 @@ struct __ALIGN__(8) Vertex {
   }
 };
 
-struct __ALIGN__(8) VertexIndices {
+struct __ALIGN__(8) MeshCube {
   /// Point to 3 valid vertex indices
-  int3 indices;
-  int  ptr;
+  int3 vertex_ptrs;
+  int  triangle_ptr[5];
+  int  cube_index;
 
   __device__
   void Clear() {
-    indices = make_int3(-1, -1, -1);
-    ptr = FREE_ENTRY;
+    vertex_ptrs = make_int3(-1, -1, -1);
+    for (int i = 0; i < 5; ++i)
+      triangle_ptr[i] = -1;
+    cube_index = 0;
   }
 };
 
-struct __ALIGN__(8) Triangles {
-  int3 indices[5];
+struct __ALIGN__(8) Triangle {
+  int3 vertex_ptrs;
 
   __device__
   void Clear() {
-    indices[0] = make_int3(-1);
-    indices[1] = make_int3(-1);
-    indices[2] = make_int3(-1);
-    indices[3] = make_int3(-1);
-    indices[4] = make_int3(-1);
+    vertex_ptrs = make_int3(-1, -1, -1);
   }
 };
 
-struct __ALIGN__(8) VertexIndicesBlock {
-  VertexIndices indices[BLOCK_SIZE];
+struct __ALIGN__(8) MeshCubeBlock {
+  MeshCube indices[BLOCK_SIZE];
 
   __device__
-  VertexIndices& operator() (int i) {
+  MeshCube& operator() (int i) {
     return indices[i];
   }
 

@@ -21,34 +21,28 @@ struct MeshData {
 
   uint*     triangle_heap;
   uint*     triangle_heap_counter;
-  Triangles* triangles;
+  Triangle* triangles;
 
 #ifdef __CUDACC__
   __device__
   uint AllocVertexHeap() {
-    if (vertex_heap_counter[0] < 10) printf("low on vertex heap\n");
     uint addr = atomicSub(&vertex_heap_counter[0], 1);
-    //TODO MATTHIAS check some error handling?
     return vertex_heap[addr];
   }
   __device__
   void FreeVertexHeap(uint ptr) {
     uint addr = atomicAdd(&vertex_heap_counter[0], 1);
-    //TODO MATTHIAS check some error handling?
     vertex_heap[addr + 1] = ptr;
   }
 
   __device__
   uint AllocTriangleHeap() {
-    if (triangle_heap_counter[0] < 10) printf("low on triangle heap\n");
     uint addr = atomicSub(&triangle_heap_counter[0], 1);
-    //TODO MATTHIAS check some error handling?
     return triangle_heap[addr];
   }
   __device__
   void FreeTriangleHeap(uint ptr) {
     uint addr = atomicAdd(&triangle_heap_counter[0], 1);
-    //TODO MATTHIAS check some error handling?
     triangle_heap[addr + 1] = ptr;
   }
 #endif // __CUDACC__
@@ -58,7 +52,7 @@ static const int kMaxVertexCount = 2500000;
 
 class Mesh {
 private:
-  HashTable<VertexIndicesBlock> hash_table_;
+  HashTable<MeshCubeBlock> hash_table_;
   MeshData mesh_data_;
 
 public:
@@ -69,10 +63,10 @@ public:
   void MarchingCubes(Map* map);
   void SaveMesh(std::string path);
 
-  HashTable<VertexIndicesBlock> &hash_table() {
+  HashTable<MeshCubeBlock> &hash_table() {
     return hash_table_;
   }
-  HashTableGPU<VertexIndicesBlock> &gpu_data() {
+  HashTableGPU<MeshCubeBlock> &gpu_data() {
     return hash_table_.gpu_data();
   }
 };

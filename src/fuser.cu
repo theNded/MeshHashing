@@ -109,7 +109,7 @@ void UpdateBlocksKernel(HashTableGPU<VoxelBlock> hash_table,
 
 __global__
 void AllocBlocksKernel(HashTableGPU<VoxelBlock> hash_table,
-                       HashTableGPU<VertexIndicesBlock> mesh_table,
+                       HashTableGPU<MeshCubeBlock> mesh_table,
                        SensorData sensor_data,
                        SensorParams sensor_params,
                        float4x4 w_T_c, const uint* is_streamed_mask) {
