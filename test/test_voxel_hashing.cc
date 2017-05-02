@@ -22,7 +22,7 @@
 
 #include "config_reader.h"
 
-#define ICL
+#define ICL_
 #ifdef ICL
 const std::string kDefaultDatasetPath = "/home/wei/data/ICL/kt2/";
 #else

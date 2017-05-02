@@ -35,6 +35,65 @@ float3 VertexIntersection(const float3& p1, const float3 p2,
   return p;
 }
 
+__device__
+inline Voxel GetVoxel(HashTableGPU<VoxelBlock>& scalar_table,
+                      const HashEntry& curr_entry,
+                      uint3 voxel_local_pos,
+                      const uint3 local_offset) {
+  Voxel v; v.Clear();
+
+  voxel_local_pos = voxel_local_pos + local_offset;
+  int3 block_offset = make_int3(voxel_local_pos.x / BLOCK_SIDE_LENGTH,
+                                voxel_local_pos.y / BLOCK_SIDE_LENGTH,
+                                voxel_local_pos.z / BLOCK_SIDE_LENGTH);
+  if (block_offset.x == 0
+      && block_offset.y == 0
+      && block_offset.z == 0) {
+    v = scalar_table.values[curr_entry.ptr](VoxelLocalPosToIdx(voxel_local_pos));
+  } else {
+    HashEntry entry = scalar_table.GetEntry(curr_entry.pos + block_offset);
+    if (entry.ptr == FREE_ENTRY) return v;
+    int3 voxel_local_pos_ = make_int3(voxel_local_pos.x % BLOCK_SIDE_LENGTH,
+                                      voxel_local_pos.y % BLOCK_SIDE_LENGTH,
+                                      voxel_local_pos.z % BLOCK_SIDE_LENGTH);
+    int i = VoxelPosToIdx(voxel_local_pos_);
+    v = scalar_table.values[entry.ptr](i);
+  }
+
+  return v;
+}
+
+__device__
+inline VertexIndices GetVertexIndice(HashTableGPU<VertexIndicesBlock>& mesh_table,
+                                     MeshData &mesh_data,
+                                     const HashEntry& curr_entry,
+                                     uint3 voxel_local_pos,
+                                     uint3 local_offset) {
+  VertexIndices indices;
+
+  voxel_local_pos = voxel_local_pos + local_offset;
+  int3 block_offset = make_int3(voxel_local_pos.x / BLOCK_SIDE_LENGTH,
+                                voxel_local_pos.y / BLOCK_SIDE_LENGTH,
+                                voxel_local_pos.z / BLOCK_SIDE_LENGTH);
+
+  if (block_offset.x == 0
+      && block_offset.y == 0
+      && block_offset.z == 0) {
+    indices = mesh_table.values[curr_entry.ptr](VoxelLocalPosToIdx(voxel_local_pos));
+  } else {
+    HashEntry entry = mesh_table.GetEntry(curr_entry.pos + block_offset);
+    /// this should never happen
+    /// if (entry.ptr == FREE_ENTRY) return indices;
+    int3 voxel_local_pos_ = make_int3(voxel_local_pos.x % BLOCK_SIDE_LENGTH,
+                                      voxel_local_pos.y % BLOCK_SIDE_LENGTH,
+                                      voxel_local_pos.z % BLOCK_SIDE_LENGTH);
+    int i = VoxelPosToIdx(voxel_local_pos_);
+    indices = mesh_table.values[entry.ptr](i);
+  }
+
+  return indices;
+}
+
 // TODO(wei): add locks
 __global__
 void MarchingCubesKernel(HashTableGPU<VoxelBlock> scalar_table,
@@ -49,11 +108,7 @@ void MarchingCubesKernel(HashTableGPU<VoxelBlock> scalar_table,
   int3  voxel_base_pos = BlockToVoxel(scalar_entry.pos);
   const uint local_idx = threadIdx.x;  //inside of an SDF block
   uint3 voxel_local_pos = IdxToVoxelLocalPos(local_idx);
-  // TODO(wei): ignore border case at current
-  if (voxel_local_pos.x == BLOCK_SIDE_LENGTH-1
-      || voxel_local_pos.y == BLOCK_SIDE_LENGTH-1
-      || voxel_local_pos.z == BLOCK_SIDE_LENGTH-1)
-    return;
+  // TODO(wei): deal with border condition alone to save processing time?
 
   int3 voxel_pos = voxel_base_pos + make_int3(voxel_local_pos);
   float3 world_pos = VoxelToWorld(voxel_pos);
@@ -79,56 +134,47 @@ void MarchingCubesKernel(HashTableGPU<VoxelBlock> scalar_table,
   // 5 -> 101
   // 6 -> 100
   // 7 -> 000
-  int    i;
   Voxel  v;
   float  d[8];
   float3 p[8];
 
   float voxel_size = kSDFParams.voxel_size;
-  i = VoxelLocalPosToIdx(voxel_local_pos + make_uint3(0, 1, 1));
-  v = scalar_table.values[scalar_entry.ptr](i);
+  v = GetVoxel(scalar_table, scalar_entry, voxel_local_pos, make_uint3(0, 1, 1));
   if (v.weight == 0) return;
   p[0] = world_pos + voxel_size * make_float3(0, 1, 1);
   d[0] = v.sdf;
 
-  i = VoxelLocalPosToIdx(voxel_local_pos + make_uint3(1, 1, 1));
-  v = scalar_table.values[scalar_entry.ptr](i);
+  v = GetVoxel(scalar_table, scalar_entry, voxel_local_pos, make_uint3(1, 1, 1));
   if (v.weight == 0) return;
   p[1] = world_pos + voxel_size * make_float3(1, 1, 1);
   d[1] = v.sdf;
 
-  i = VoxelLocalPosToIdx(voxel_local_pos + make_uint3(1, 1, 0));
-  v = scalar_table.values[scalar_entry.ptr](i);
+  v = GetVoxel(scalar_table, scalar_entry, voxel_local_pos, make_uint3(1, 1, 0));
   if (v.weight == 0) return;
   p[2] = world_pos + voxel_size * make_float3(1, 1, 0);
   d[2] = v.sdf;
 
-  i = VoxelLocalPosToIdx(voxel_local_pos + make_uint3(0, 1, 0));
-  v = scalar_table.values[scalar_entry.ptr](i);
+  v = GetVoxel(scalar_table, scalar_entry, voxel_local_pos, make_uint3(0, 1, 0));
   if (v.weight == 0) return;
   p[3] = world_pos + voxel_size * make_float3(0, 1, 0);
   d[3] = v.sdf;
 
-  i = VoxelLocalPosToIdx(voxel_local_pos + make_uint3(0, 0, 1));
-  v = scalar_table.values[scalar_entry.ptr](i);
+  v = GetVoxel(scalar_table, scalar_entry, voxel_local_pos, make_uint3(0, 0, 1));
   if (v.weight == 0) return;
   p[4] = world_pos + voxel_size * make_float3(0, 0, 1);
   d[4] = v.sdf;
 
-  i = VoxelLocalPosToIdx(voxel_local_pos + make_uint3(1, 0, 1));
-  v = scalar_table.values[scalar_entry.ptr](i);
+  v = GetVoxel(scalar_table, scalar_entry, voxel_local_pos, make_uint3(1, 0, 1));
   if (v.weight == 0) return;
   p[5] = world_pos + voxel_size * make_float3(1, 0, 1);
   d[5] = v.sdf;
 
-  i = VoxelLocalPosToIdx(voxel_local_pos + make_uint3(1, 0, 0));
-  v = scalar_table.values[scalar_entry.ptr](i);
+  v = GetVoxel(scalar_table, scalar_entry, voxel_local_pos, make_uint3(1, 0, 0));
   if (v.weight == 0) return;
   p[6] = world_pos + voxel_size * make_float3(1, 0, 0);
   d[6] = v.sdf;
 
-  i = VoxelLocalPosToIdx(voxel_local_pos + make_uint3(0, 0, 0));
-  v = scalar_table.values[scalar_entry.ptr](i);
+  v = GetVoxel(scalar_table, scalar_entry, voxel_local_pos, make_uint3(0, 0, 0));
   if (v.weight == 0) return;
   p[7] = world_pos + voxel_size * make_float3(0, 0, 0);
   d[7] = v.sdf;
@@ -149,7 +195,8 @@ void MarchingCubesKernel(HashTableGPU<VoxelBlock> scalar_table,
     return;
 
   //////////
-  /// 3. Determine vertices (ptr allocated via (shared) edges)
+  /// 3. Determine vertices (ptr allocated via (shared) edges
+  /// If the program reach here, than voxels holding edges must exist
   // 0 -> 011.x, (0, 1)
   // 1 -> 110.z, (1, 2)
   // 2 -> 010.x, (2, 3)
@@ -164,13 +211,13 @@ void MarchingCubesKernel(HashTableGPU<VoxelBlock> scalar_table,
   //11 -> 000.y, (7, 3)
   int vertex_ptr[12];
   float3 vertex_pos;
+  VertexIndices indices;
   int ptr;
   /// plane y = 1
   if (kEdgeTable[cube_index] & 1) {
     vertex_pos = VertexIntersection(p[0], p[1], d[0], d[1], isolevel);
 
-    i = VoxelLocalPosToIdx(voxel_local_pos + make_uint3(0, 1, 1));
-    ptr = mesh_table.values[mesh_entry.ptr](i).indices.x;
+    ptr = GetVertexIndice(mesh_table, mesh_data, mesh_entry, voxel_local_pos, make_uint3(0, 1, 1)).indices.x;
     ptr = (ptr == -1) ? mesh_data.AllocVertexHeap() : ptr;
     mesh_data.vertices[ptr].pos = vertex_pos;
     vertex_ptr[0] = ptr;
@@ -178,8 +225,7 @@ void MarchingCubesKernel(HashTableGPU<VoxelBlock> scalar_table,
   if (kEdgeTable[cube_index] & 2) {
     vertex_pos = VertexIntersection(p[1], p[2], d[1], d[2], isolevel);
 
-    i = VoxelLocalPosToIdx(voxel_local_pos + make_uint3(1, 1, 0));
-    ptr = mesh_table.values[mesh_entry.ptr](i).indices.z;
+    ptr = GetVertexIndice(mesh_table, mesh_data, mesh_entry, voxel_local_pos, make_uint3(1, 1, 0)).indices.z;
     ptr = (ptr == -1) ? mesh_data.AllocVertexHeap() : ptr;
     mesh_data.vertices[ptr].pos = vertex_pos;
     vertex_ptr[1] = ptr;
@@ -187,8 +233,7 @@ void MarchingCubesKernel(HashTableGPU<VoxelBlock> scalar_table,
   if (kEdgeTable[cube_index] & 4) {
     vertex_pos = VertexIntersection(p[2], p[3], d[2], d[3], isolevel);
 
-    i = VoxelLocalPosToIdx(voxel_local_pos + make_uint3(0, 1, 0));
-    ptr = mesh_table.values[mesh_entry.ptr](i).indices.x;
+    ptr = GetVertexIndice(mesh_table, mesh_data, mesh_entry, voxel_local_pos, make_uint3(0, 1, 0)).indices.x;
     ptr = (ptr == -1) ? mesh_data.AllocVertexHeap() : ptr;
     mesh_data.vertices[ptr].pos = vertex_pos;
     vertex_ptr[2] = ptr;
@@ -196,8 +241,7 @@ void MarchingCubesKernel(HashTableGPU<VoxelBlock> scalar_table,
   if (kEdgeTable[cube_index] & 8) {
     vertex_pos = VertexIntersection(p[3], p[0], d[3], d[0], isolevel);
 
-    i = VoxelLocalPosToIdx(voxel_local_pos + make_uint3(0, 1, 0));
-    ptr = mesh_table.values[mesh_entry.ptr](i).indices.z;
+    ptr = GetVertexIndice(mesh_table, mesh_data, mesh_entry, voxel_local_pos, make_uint3(0, 1, 0)).indices.z;
     ptr = (ptr == -1) ? mesh_data.AllocVertexHeap() : ptr;
     mesh_data.vertices[ptr].pos = vertex_pos;
     vertex_ptr[3] = ptr;
@@ -207,8 +251,7 @@ void MarchingCubesKernel(HashTableGPU<VoxelBlock> scalar_table,
   if (kEdgeTable[cube_index] & 16) {
     vertex_pos = VertexIntersection(p[4], p[5], d[4], d[5], isolevel);
 
-    i = VoxelLocalPosToIdx(voxel_local_pos + make_uint3(0, 0, 1));
-    ptr = mesh_table.values[mesh_entry.ptr](i).indices.x;
+    ptr = GetVertexIndice(mesh_table, mesh_data, mesh_entry, voxel_local_pos, make_uint3(0, 0, 1)).indices.x;
     ptr = (ptr == -1) ? mesh_data.AllocVertexHeap() : ptr;
     mesh_data.vertices[ptr].pos = vertex_pos;
     vertex_ptr[4] = ptr;
@@ -216,8 +259,7 @@ void MarchingCubesKernel(HashTableGPU<VoxelBlock> scalar_table,
   if (kEdgeTable[cube_index] & 32) {
     vertex_pos = VertexIntersection(p[5], p[6], d[5], d[6], isolevel);
 
-    i = VoxelLocalPosToIdx(voxel_local_pos + make_uint3(1, 0, 0));
-    ptr = mesh_table.values[mesh_entry.ptr](i).indices.z;
+    ptr = GetVertexIndice(mesh_table, mesh_data, mesh_entry, voxel_local_pos, make_uint3(1, 0, 0)).indices.z;
     ptr = (ptr == -1) ? mesh_data.AllocVertexHeap() : ptr;
     mesh_data.vertices[ptr].pos = vertex_pos;
     vertex_ptr[5] = ptr;
@@ -225,8 +267,7 @@ void MarchingCubesKernel(HashTableGPU<VoxelBlock> scalar_table,
   if (kEdgeTable[cube_index] & 64) {
     vertex_pos = VertexIntersection(p[6], p[7], d[6], d[7], isolevel);
 
-    i = VoxelLocalPosToIdx(voxel_local_pos + make_uint3(0, 0, 0));
-    ptr = mesh_table.values[mesh_entry.ptr](i).indices.x;
+    ptr = GetVertexIndice(mesh_table, mesh_data, mesh_entry, voxel_local_pos, make_uint3(0, 0, 0)).indices.x;
     ptr = (ptr == -1) ? mesh_data.AllocVertexHeap() : ptr;
     mesh_data.vertices[ptr].pos = vertex_pos;
     vertex_ptr[6] = ptr;
@@ -234,8 +275,7 @@ void MarchingCubesKernel(HashTableGPU<VoxelBlock> scalar_table,
   if (kEdgeTable[cube_index] & 128) {
     vertex_pos = VertexIntersection(p[7], p[4], d[7], d[4], isolevel);
 
-    i = VoxelLocalPosToIdx(voxel_local_pos + make_uint3(0, 0, 0));
-    ptr = mesh_table.values[mesh_entry.ptr](i).indices.z;
+    ptr = GetVertexIndice(mesh_table, mesh_data, mesh_entry, voxel_local_pos, make_uint3(0, 0, 0)).indices.z;
     ptr = (ptr == -1) ? mesh_data.AllocVertexHeap() : ptr;
     mesh_data.vertices[ptr].pos = vertex_pos;
     vertex_ptr[7] = ptr;
@@ -245,8 +285,7 @@ void MarchingCubesKernel(HashTableGPU<VoxelBlock> scalar_table,
   if (kEdgeTable[cube_index] & 256) {
     vertex_pos = VertexIntersection(p[4], p[0], d[4], d[0], isolevel);
 
-    i = VoxelLocalPosToIdx(voxel_local_pos + make_uint3(0, 0, 1));
-    ptr = mesh_table.values[mesh_entry.ptr](i).indices.y;
+    ptr = GetVertexIndice(mesh_table, mesh_data, mesh_entry, voxel_local_pos, make_uint3(0, 0, 1)).indices.y;
     ptr = (ptr == -1) ? mesh_data.AllocVertexHeap() : ptr;
     mesh_data.vertices[ptr].pos = vertex_pos;
     vertex_ptr[8] = ptr;
@@ -254,8 +293,7 @@ void MarchingCubesKernel(HashTableGPU<VoxelBlock> scalar_table,
   if (kEdgeTable[cube_index] & 512) {
     vertex_pos = VertexIntersection(p[5], p[1], d[5], d[1], isolevel);
 
-    i = VoxelLocalPosToIdx(voxel_local_pos + make_uint3(1, 0, 1));
-    ptr = mesh_table.values[mesh_entry.ptr](i).indices.y;
+    ptr = GetVertexIndice(mesh_table, mesh_data, mesh_entry, voxel_local_pos, make_uint3(1, 0, 1)).indices.y;
     ptr = (ptr == -1) ? mesh_data.AllocVertexHeap() : ptr;
     mesh_data.vertices[ptr].pos = vertex_pos;
     vertex_ptr[9] = ptr;
@@ -263,8 +301,7 @@ void MarchingCubesKernel(HashTableGPU<VoxelBlock> scalar_table,
   if (kEdgeTable[cube_index] & 1024) {
     vertex_pos = VertexIntersection(p[6], p[2], d[6], d[2], isolevel);
 
-    i = VoxelLocalPosToIdx(voxel_local_pos + make_uint3(1, 0, 0));
-    ptr = mesh_table.values[mesh_entry.ptr](i).indices.y;
+    ptr = GetVertexIndice(mesh_table, mesh_data, mesh_entry, voxel_local_pos, make_uint3(1, 0, 0)).indices.y;
     ptr = (ptr == -1) ? mesh_data.AllocVertexHeap() : ptr;
     mesh_data.vertices[ptr].pos = vertex_pos;
     vertex_ptr[10] = ptr;
@@ -272,8 +309,7 @@ void MarchingCubesKernel(HashTableGPU<VoxelBlock> scalar_table,
   if (kEdgeTable[cube_index] & 2048) {
     vertex_pos = VertexIntersection(p[7], p[3], d[7], d[3], isolevel);
 
-    i = VoxelLocalPosToIdx(voxel_local_pos + make_uint3(0, 0, 0));
-    ptr = mesh_table.values[mesh_entry.ptr](i).indices.y;
+    ptr = GetVertexIndice(mesh_table, mesh_data, mesh_entry, voxel_local_pos, make_uint3(0, 0, 0)).indices.y;
     ptr = (ptr == -1) ? mesh_data.AllocVertexHeap() : ptr;
     mesh_data.vertices[ptr].pos = vertex_pos;
     vertex_ptr[11] = ptr;
