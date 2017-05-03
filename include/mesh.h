@@ -48,7 +48,7 @@ struct MeshData {
 #endif // __CUDACC__
 };
 
-static const int kMaxVertexCount = 2500000;
+static const int kMaxVertexCount = 10000000;
 
 class Mesh {
 private:
