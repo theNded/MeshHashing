@@ -122,6 +122,7 @@ int main() {
   std::chrono::time_point<std::chrono::system_clock> start, end;
   start = std::chrono::system_clock::now();
   int frames = depth_img_list.size();
+//#define OFFLINE
   for (int i = 0; i < frames; ++i) {
     LOG(INFO) << i;
     cv::Mat depth = cv::imread(depth_img_list[i], -1);
@@ -151,6 +152,7 @@ int main() {
   mesh.CollectAllBlocks();
   mesh.MarchingCubes(&voxel_map);
 #endif
+
   mesh.SaveMesh("test.obj");
 
   voxel_map.Debug();

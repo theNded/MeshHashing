@@ -250,6 +250,7 @@ void Fuser::AllocBlocks(Map* map, Mesh* mesh, Sensor* sensor) {
 
 void Fuser::CollectTargetBlocks(Map* map, Mesh* mesh, Sensor *sensor){
   const uint threads_per_block = 256;
+  uint res = 0;
 
   uint entry_count;
   checkCudaErrors(cudaMemcpy(&entry_count, map->gpu_data().entry_count,
@@ -263,6 +264,11 @@ void Fuser::CollectTargetBlocks(Map* map, Mesh* mesh, Sensor *sensor){
                              0, sizeof(int)));
   CollectTargetBlocksKernel<<<grid_size, block_size >>>(map->gpu_data(),
           sensor->sensor_params(), sensor->c_T_w());
+  checkCudaErrors(cudaDeviceSynchronize());
+  checkCudaErrors(cudaGetLastError());
+  checkCudaErrors(cudaMemcpy(&res, map->gpu_data().compacted_hash_entry_counter,
+                             sizeof(uint), cudaMemcpyDeviceToHost));
+  LOG(INFO) << "Block count in view frustum: " << res;
 
   /// Added at 5.2
   checkCudaErrors(cudaMemset(mesh->gpu_data().compacted_hash_entry_counter,
@@ -271,13 +277,6 @@ void Fuser::CollectTargetBlocks(Map* map, Mesh* mesh, Sensor *sensor){
           sensor->sensor_params(), sensor->c_T_w());
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
-
-  uint res = 0;
-  checkCudaErrors(cudaMemcpy(&res, map->gpu_data().compacted_hash_entry_counter,
-                             sizeof(uint), cudaMemcpyDeviceToHost));
-  LOG(INFO) << "Block count in view frustum: " << res;
-
-  /// Added at 5.2
   checkCudaErrors(cudaMemcpy(&res, mesh->gpu_data().compacted_hash_entry_counter,
                              sizeof(uint), cudaMemcpyDeviceToHost));
   LOG(INFO) << "Mesh block count in view frustum: " << res;
