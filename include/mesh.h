@@ -60,6 +60,9 @@ public:
   ~Mesh();
 
   void Reset();
+
+  /// For offline MC
+  void CollectAllBlocks();
   void MarchingCubes(Map* map);
   void SaveMesh(std::string path);
 

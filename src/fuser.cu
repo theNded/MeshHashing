@@ -224,7 +224,7 @@ void Fuser::Integrate(Map *map, Mesh* mesh, Sensor* sensor, uint *is_streamed_ma
   /// cuda kernel launching ok
   /// seems ok according to CUDA output
 
-  map->Recycle();
+  //map->Recycle();
 
   map->frame_count() ++;
 }

@@ -89,25 +89,12 @@ struct __ALIGN__(8) VoxelBlock {
 /// Used by mesh
 struct __ALIGN__(8) Vertex {
   float3 pos;
+  int    ref_count;
 
   __device__
   void Clear() {
     pos = make_float3(0.0);
-  }
-};
-
-struct __ALIGN__(8) MeshCube {
-  /// Point to 3 valid vertex indices
-  int3 vertex_ptrs;
-  int  triangle_ptr[5];
-  int  cube_index;
-
-  __device__
-  void Clear() {
-    vertex_ptrs = make_int3(-1, -1, -1);
-    for (int i = 0; i < 5; ++i)
-      triangle_ptr[i] = -1;
-    cube_index = 0;
+    ref_count = 0;
   }
 };
 
@@ -119,6 +106,23 @@ struct __ALIGN__(8) Triangle {
     vertex_ptrs = make_int3(-1, -1, -1);
   }
 };
+
+struct __ALIGN__(4) MeshCube {
+  static const int kTrianglePerCube = 5;
+  /// Point to 3 valid vertex indices
+  int3 vertex_ptrs;
+  int  triangle_ptr[kTrianglePerCube];
+  int  cube_index;
+
+  __device__
+  void Clear() {
+    vertex_ptrs = make_int3(-1, -1, -1);
+    for (int i = 0; i < kTrianglePerCube; ++i)
+      triangle_ptr[i] = -1;
+    cube_index = 0;
+  }
+};
+
 
 struct __ALIGN__(8) MeshCubeBlock {
   MeshCube indices[BLOCK_SIZE];

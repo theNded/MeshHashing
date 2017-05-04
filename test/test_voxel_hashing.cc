@@ -24,7 +24,7 @@
 
 #define ICL
 #ifdef ICL
-const std::string kDefaultDatasetPath = "/home/wei/data/ICL/kt2/";
+const std::string kDefaultDatasetPath = "/home/wei/data/ICL/office1/";
 #else
 const std::string kDefaultDatasetPath = "/home/wei/data/TUM/rgbd_dataset_freiburg2_xyz/";
 #endif
@@ -108,7 +108,7 @@ int main() {
   LOG(INFO) << "map allocated";
 
   Mesh mesh(hash_params);
-  //LOG(INFO) << "mesh allocated";
+  LOG(INFO) << "mesh allocated";
 
   Sensor sensor(sensor_params);
   sensor.BindSensorDataToTexture();
@@ -133,23 +133,25 @@ int main() {
     sensor.set_transform(T);
 
     fuser.Integrate(&voxel_map, &mesh, &sensor, NULL);
+#ifndef OFFLINE
     mesh.MarchingCubes(&voxel_map);
+#endif
 
-//    ray_caster.Cast(&voxel_map, T.getInverse());
-//    cv::Mat display = GPUFloat4ToMat(ray_caster.ray_caster_data().normal_image);
-//    cv::imshow("display", display);
-//    cv::waitKey(1);
+    ray_caster.Cast(&voxel_map, T.getInverse());
+    cv::Mat display = GPUFloat4ToMat(ray_caster.ray_caster_data().normal_image);
+    cv::imshow("display", display);
+    cv::waitKey(1);
   }
   end = std::chrono::system_clock::now();
   std::chrono::duration<double> seconds = end - start;
   LOG(INFO) << "Total time: " << seconds.count();
   LOG(INFO) << "Fps: " << frames / seconds.count();
 
-  //mesh.MarchingCubes(&voxel_map);
-  //mesh.SaveMesh("test.obj");
-
-
-
+#ifdef OFFLINE
+  mesh.CollectAllBlocks();
+  mesh.MarchingCubes(&voxel_map);
+#endif
+  mesh.SaveMesh("test.obj");
 
   voxel_map.Debug();
 }
