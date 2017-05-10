@@ -24,9 +24,9 @@
 
 #define ICL
 #ifdef ICL
-const std::string kDefaultDatasetPath = "/home/wei/data/ICL/office1/";
+const std::string kDefaultDatasetPath = "/home/wei/data/ICL/lv1/";
 #else
-const std::string kDefaultDatasetPath = "/home/wei/data/TUM/rgbd_dataset_freiburg2_xyz/";
+const std::string kDefaultDatasetPath = "/home/wei/data/TUM/rgbd_dataset_freiburg3_long_office_household/";
 #endif
 
 /// Only test over 480x640 images
@@ -94,7 +94,7 @@ int main() {
 #ifdef ICL
   LoadSensorParams("../config/sensor_icl.yml", sensor_params);
 #else
-  LoadSensorParams("../config/sensor_tum.yml", sensor_params);
+  LoadSensorParams("../config/sensor_tum3.yml", sensor_params);
 #endif
 
   RayCasterParams ray_cast_params;
@@ -153,7 +153,7 @@ int main() {
   mesh.MarchingCubes(&voxel_map);
 #endif
 
-  mesh.SaveMesh("test.obj");
+  mesh.SaveMesh("lv1.obj");
 
   voxel_map.Debug();
 }

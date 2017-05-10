@@ -1,0 +1,9 @@
+%YAML:1.0
+fx:              535.4
+fy:              539.2
+cx:              320.1
+cy:              247.6
+min_depth_range: 0.5
+max_depth_range: 5.0
+height:          480
+width:           640

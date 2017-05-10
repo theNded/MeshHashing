@@ -157,8 +157,9 @@ void MarchingCubesKernel(HashTableGPU<VoxelBlock> map_table,
   }
 
   int3  voxel_base_pos = BlockToVoxel(map_entry.pos);
-  for (uint local_idx = 0; local_idx < 512; ++local_idx) {
-  //const uint local_idx = threadIdx.x;
+
+  //for (uint local_idx = 0; local_idx < 512; ++local_idx) {
+  const uint local_idx = threadIdx.x;
     //const uint local_idx = i;//threadIdx.x;
     uint3 voxel_local_pos = IdxToVoxelLocalPos(local_idx);
     // TODO(wei): deal with border condition alone to save processing time?
@@ -169,7 +170,7 @@ void MarchingCubesKernel(HashTableGPU<VoxelBlock> map_table,
 //    if (voxel_local_pos.x == BLOCK_SIDE_LENGTH-1
 //            || voxel_local_pos.y == BLOCK_SIDE_LENGTH-1
 //            || voxel_local_pos.z == BLOCK_SIDE_LENGTH-1) {
-//      continue;
+//      return;
 //    }
 
     int3 voxel_pos = voxel_base_pos + make_int3(voxel_local_pos);
@@ -202,42 +203,42 @@ void MarchingCubesKernel(HashTableGPU<VoxelBlock> map_table,
 
     float voxel_size = kSDFParams.voxel_size;
     v = GetVoxel(map_table, map_entry, voxel_local_pos, make_uint3(0, 1, 1));
-    if (v.weight == 0) continue;
+    if (v.weight == 0) return;
     p[0] = world_pos + voxel_size * make_float3(0, 1, 1);
     d[0] = v.sdf;
 
     v = GetVoxel(map_table, map_entry, voxel_local_pos, make_uint3(1, 1, 1));
-    if (v.weight == 0) continue;
+    if (v.weight == 0) return;
     p[1] = world_pos + voxel_size * make_float3(1, 1, 1);
     d[1] = v.sdf;
 
     v = GetVoxel(map_table, map_entry, voxel_local_pos, make_uint3(1, 1, 0));
-    if (v.weight == 0) continue;
+    if (v.weight == 0) return;
     p[2] = world_pos + voxel_size * make_float3(1, 1, 0);
     d[2] = v.sdf;
 
     v = GetVoxel(map_table, map_entry, voxel_local_pos, make_uint3(0, 1, 0));
-    if (v.weight == 0) continue;
+    if (v.weight == 0) return;
     p[3] = world_pos + voxel_size * make_float3(0, 1, 0);
     d[3] = v.sdf;
 
     v = GetVoxel(map_table, map_entry, voxel_local_pos, make_uint3(0, 0, 1));
-    if (v.weight == 0) continue;
+    if (v.weight == 0) return;
     p[4] = world_pos + voxel_size * make_float3(0, 0, 1);
     d[4] = v.sdf;
 
     v = GetVoxel(map_table, map_entry, voxel_local_pos, make_uint3(1, 0, 1));
-    if (v.weight == 0) continue;
+    if (v.weight == 0) return;
     p[5] = world_pos + voxel_size * make_float3(1, 0, 1);
     d[5] = v.sdf;
 
     v = GetVoxel(map_table, map_entry, voxel_local_pos, make_uint3(1, 0, 0));
-    if (v.weight == 0) continue;
+    if (v.weight == 0) return;
     p[6] = world_pos + voxel_size * make_float3(1, 0, 0);
     d[6] = v.sdf;
 
     v = GetVoxel(map_table, map_entry, voxel_local_pos, make_uint3(0, 0, 0));
-    if (v.weight == 0) continue;
+    if (v.weight == 0) return;
     p[7] = world_pos + voxel_size * make_float3(0, 0, 0);
     d[7] = v.sdf;
 
@@ -254,26 +255,26 @@ void MarchingCubesKernel(HashTableGPU<VoxelBlock> map_table,
     if (d[7] < isolevel) cube_index |= 128;
 
     const float kThreshold = 0.2f;
-    if (fabs(d[0]) > kThreshold) continue;
-    if (fabs(d[1]) > kThreshold) continue;
-    if (fabs(d[2]) > kThreshold) continue;
-    if (fabs(d[3]) > kThreshold) continue;
-    if (fabs(d[4]) > kThreshold) continue;
-    if (fabs(d[5]) > kThreshold) continue;
-    if (fabs(d[6]) > kThreshold) continue;
-    if (fabs(d[7]) > kThreshold) continue;
+    if (fabs(d[0]) > kThreshold) return;
+    if (fabs(d[1]) > kThreshold) return;
+    if (fabs(d[2]) > kThreshold) return;
+    if (fabs(d[3]) > kThreshold) return;
+    if (fabs(d[4]) > kThreshold) return;
+    if (fabs(d[5]) > kThreshold) return;
+    if (fabs(d[6]) > kThreshold) return;
+    if (fabs(d[7]) > kThreshold) return;
     for (uint k = 0; k < 8; k++) {
       for (uint l = 0; l < 8; l++) {
         if (d[k] * d[l] < 0.0f) {
-          if (fabs(d[k]) + fabs(d[l]) > kThreshold) continue;
+          if (fabs(d[k]) + fabs(d[l]) > kThreshold) return;
         } else {
-          if (fabs(d[k] - d[l]) > kThreshold) continue;
+          if (fabs(d[k] - d[l]) > kThreshold) return;
         }
       }
     }
 
     if (kEdgeTable[cube_index] == 0 || kEdgeTable[cube_index] == 255)
-      continue;
+      return;
 
     //////////
     /// 3. Determine vertices (ptr allocated via (shared) edges
@@ -413,15 +414,15 @@ void MarchingCubesKernel(HashTableGPU<VoxelBlock> map_table,
 
       mesh_data.triangles[triangle_ptr] = triangle;
     }
-  }
+
 }
 
 __global__
 void RecycleTrianglesKernel(HashTableGPU<MeshCubeBlock> mesh_table, MeshData mesh_data) {
   const HashEntry &mesh_entry = mesh_table.compacted_hash_entries[blockIdx.x];
 
-  //const uint local_idx = threadIdx.x;  //inside of an SDF block
-  for (uint local_idx = 0; local_idx < 512; ++local_idx) {
+  const uint local_idx = threadIdx.x;  //inside of an SDF block
+  //for (uint local_idx = 0; local_idx < 512; ++local_idx) {
     MeshCube &cube = mesh_table.values[mesh_entry.ptr](local_idx);
 
     int i = 0;
@@ -446,15 +447,15 @@ void RecycleTrianglesKernel(HashTableGPU<MeshCubeBlock> mesh_table, MeshData mes
 
       mesh_data.triangles[triangle_ptr].Clear();
       mesh_data.FreeTriangleHeap(triangle_ptr);
-    }
+    //}
   }
 }
 
 __global__
 void RecycleVerticesKernel(HashTableGPU<MeshCubeBlock> mesh_table, MeshData mesh_data) {
   const HashEntry &mesh_entry = mesh_table.compacted_hash_entries[blockIdx.x];
-  //const uint local_idx = threadIdx.x;
-  for (uint local_idx = 0; local_idx < 512; ++local_idx) {
+  const uint local_idx = threadIdx.x;
+  //for (uint local_idx = 0; local_idx < 512; ++local_idx) {
 
     MeshCube &cube = mesh_table.values[mesh_entry.ptr](local_idx);
 
@@ -476,7 +477,7 @@ void RecycleVerticesKernel(HashTableGPU<MeshCubeBlock> mesh_table, MeshData mesh
       mesh_data.FreeVertexHeap(cube.vertex_ptrs.z);
       cube.vertex_ptrs.z = -1;
     }
-  }
+  //}
 }
 
 Mesh::Mesh(const HashParams &params) {
@@ -554,7 +555,7 @@ void Mesh::MarchingCubes(Map *map) {
 
   const uint threads_per_block = BLOCK_SIZE;
   const dim3 grid_size(occupied_block_count, 1);
-  const dim3 block_size(1, 1);
+  const dim3 block_size(threads_per_block, 1);
   MarchingCubesKernel<<<grid_size, block_size>>>(map->gpu_data(), gpu_data(),
           mesh_data_);
   checkCudaErrors(cudaDeviceSynchronize());
