@@ -18,7 +18,7 @@ extern texture<float4, cudaTextureType2D, cudaReadModeElementType> color_texture
 template <typename T>
 __global__
 void CollectTargetBlocksKernel(HashTableGPU<T> hash_table,
-                              SensorParams sensor_params,
+                              SensorParams sensor_params, // K && min/max depth
                               float4x4 c_T_w) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -51,14 +51,14 @@ void CollectTargetBlocksKernel(HashTableGPU<T> hash_table,
 }
 
 __global__
-void UpdateBlocksKernel(HashTableGPU<VoxelBlock> hash_table,
+void UpdateBlocksKernel(HashTableGPU<VoxelBlock> map_table,
                         SensorData sensor_data,
                         SensorParams sensor_params,
                         float4x4 c_T_w) {
 
   //TODO check if we should load this in shared memory (compacted_entries)
   /// 1. Select voxel
-  const HashEntry &entry = hash_table.compacted_hash_entries[blockIdx.x];
+  const HashEntry &entry = map_table.compacted_hash_entries[blockIdx.x];
   int3 voxel_base_pos = BlockToVoxel(entry.pos);
   uint local_idx = threadIdx.x;  //inside of an SDF block
   int3 voxel_pos = voxel_base_pos + make_int3(IdxToVoxelLocalPos(local_idx));
@@ -104,11 +104,11 @@ void UpdateBlocksKernel(HashTableGPU<VoxelBlock> hash_table,
     delta.color = make_uchar3(0, 255, 0);
   }
 
-  hash_table.values[entry.ptr].Update(local_idx, delta);
+  map_table.values[entry.ptr].Update(local_idx, delta);
 }
 
 __global__
-void AllocBlocksKernel(HashTableGPU<VoxelBlock> hash_table,
+void AllocBlocksKernel(HashTableGPU<VoxelBlock> map_table,
                        HashTableGPU<MeshCubeBlock> mesh_table,
                        SensorData sensor_data,
                        SensorParams sensor_params,
@@ -128,8 +128,8 @@ void AllocBlocksKernel(HashTableGPU<VoxelBlock> hash_table,
     return;
 
   float truncation = truncate_distance(depth);
-  float near_depth = min(kSDFParams.sdf_upper_bound, depth - truncation);
-  float far_depth = min(kSDFParams.sdf_upper_bound, depth + truncation);
+  float near_depth = fminf(kSDFParams.sdf_upper_bound, depth - truncation);
+  float far_depth = fminf(kSDFParams.sdf_upper_bound, depth + truncation);
   if (near_depth >= far_depth) return;
 
   float3 camera_pos_near = ImageReprojectToCamera(x, y, near_depth,
@@ -177,7 +177,7 @@ void AllocBlocksKernel(HashTableGPU<VoxelBlock> hash_table,
     if (IsBlockInCameraFrustum(w_T_c.getInverse(), block_pos_curr, sensor_params)) {
       /// Disable streaming at current
       // && !isSDFBlockStreamedOut(idCurrentVoxel, hash_table, is_streamed_mask)) {
-      hash_table.AllocEntry(block_pos_curr);
+      map_table.AllocEntry(block_pos_curr);
       /// Added at 5.2
       mesh_table.AllocEntry(block_pos_curr);
     }
@@ -224,7 +224,7 @@ void Fuser::Integrate(Map *map, Mesh* mesh, Sensor* sensor, uint *is_streamed_ma
   /// cuda kernel launching ok
   /// seems ok according to CUDA output
 
-  //map->Recycle();
+  map->Recycle();
 
   map->frame_count() ++;
 }
@@ -285,14 +285,11 @@ void Fuser::CollectTargetBlocks(Map* map, Mesh* mesh, Sensor *sensor){
 void Fuser::UpdateBlocks(Map* map, Mesh* mesh, Sensor *sensor) {
   const uint threads_per_block = BLOCK_SIZE;
 
-  uint occupied_block_count;
-  checkCudaErrors(cudaMemcpy(&occupied_block_count,
-                             map->gpu_data().compacted_hash_entry_counter,
-                             sizeof(uint), cudaMemcpyDeviceToHost));
-  if (occupied_block_count <= 0)
+  uint compacted_entry_count = map->hash_table().compacted_entry_count();
+  if (compacted_entry_count <= 0)
     return;
 
-  const dim3 grid_size(occupied_block_count, 1);
+  const dim3 grid_size(compacted_entry_count, 1);
   const dim3 block_size(threads_per_block, 1);
   UpdateBlocksKernel <<<grid_size, block_size>>>(map->gpu_data(),
           sensor->sensor_data(), sensor->sensor_params(), sensor->c_T_w());

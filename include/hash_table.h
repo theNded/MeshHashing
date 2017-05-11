@@ -27,9 +27,12 @@ public:
   HashTable(const HashParams &params);
   ~HashTable();
 
+  uint compacted_entry_count();
   void Resize(const HashParams &params);
   void Reset();
   void ResetMutexes();
+
+  void CollectAllEntries();
 
   void Debug();
 

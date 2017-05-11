@@ -960,6 +960,13 @@ inline __host__ __device__ void operator*=(uint4 &a, uint b)
 ////////////////////////////////////////////////////////////////////////////////
 // divide
 ////////////////////////////////////////////////////////////////////////////////
+// added by wei
+inline __host__ __device__ int3 operator/ (int3 a, int b) {
+  return make_int3(a.x / b, a.y / b, a.z / b);
+}
+inline __host__ __device__ uint3 operator/ (uint3 a, uint b) {
+  return make_uint3(a.x / b, a.y / b, a.z / b);
+}
 
 inline __host__ __device__ float2 operator/(float2 a, float2 b)
 {

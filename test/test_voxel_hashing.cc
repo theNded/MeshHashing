@@ -138,10 +138,10 @@ int main() {
     mesh.MarchingCubes(&voxel_map);
 #endif
 
-    ray_caster.Cast(&voxel_map, T.getInverse());
-    cv::Mat display = GPUFloat4ToMat(ray_caster.ray_caster_data().normal_image);
-    cv::imshow("display", display);
-    cv::waitKey(1);
+    //ray_caster.Cast(&voxel_map, T.getInverse());
+    //cv::Mat display = GPUFloat4ToMat(ray_caster.ray_caster_data().normal_image);
+    //cv::imshow("display", display);
+    //cv::waitKey(1);
   }
   end = std::chrono::system_clock::now();
   std::chrono::duration<double> seconds = end - start;
@@ -153,7 +153,7 @@ int main() {
   mesh.MarchingCubes(&voxel_map);
 #endif
 
-  mesh.SaveMesh("lv1.obj");
+  mesh.SaveMesh("ttt.obj");
 
   voxel_map.Debug();
 }

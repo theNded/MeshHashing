@@ -5,7 +5,7 @@
 #include "mc_tables.h"
 
 // TODO(wei): 1. a better allocation function (done)
-//            2. remove isolated vertices     (done with bugs)
+//            2. remove isolated vertices     (done)
 //            3. +/- detection for MarchingCubes
 __global__
 void ResetHeapKernel(MeshData mesh_data) {
@@ -21,36 +21,6 @@ void ResetHeapKernel(MeshData mesh_data) {
     mesh_data.triangle_heap[idx] = kMaxVertexCount - idx - 1;
     mesh_data.vertices[idx].Clear();
     mesh_data.triangles[idx].Clear();
-  }
-}
-
-template <typename T>
-__global__
-void CollectAllBlocksKernel(HashTableGPU<T> hash_table) {
-  const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-  __shared__ int local_counter;
-  if (threadIdx.x == 0) local_counter = 0;
-  __syncthreads();
-
-  int addr_local = -1;
-  if (idx < *hash_table.entry_count) {
-    if (hash_table.hash_entries[idx].ptr != FREE_ENTRY) {
-      addr_local = atomicAdd(&local_counter, 1);
-    }
-  }
-
-  __syncthreads();
-
-  __shared__ int addr_global;
-  if (threadIdx.x == 0 && local_counter > 0) {
-    addr_global = atomicAdd(hash_table.compacted_hash_entry_counter, local_counter);
-  }
-  __syncthreads();
-
-  if (addr_local != -1) {
-    const uint addr = addr_global + addr_local;
-    hash_table.compacted_hash_entries[addr] = hash_table.hash_entries[idx];
   }
 }
 
@@ -76,21 +46,22 @@ inline Voxel GetVoxel(HashTableGPU<VoxelBlock>& map_table,
                       const uint3 local_offset) {
   Voxel v; v.Clear();
 
-  voxel_local_pos = voxel_local_pos + local_offset;
-  int3 block_offset = make_int3(voxel_local_pos.x / BLOCK_SIDE_LENGTH,
-                                voxel_local_pos.y / BLOCK_SIDE_LENGTH,
-                                voxel_local_pos.z / BLOCK_SIDE_LENGTH);
-  if (block_offset.x == 0
-      && block_offset.y == 0
-      && block_offset.z == 0) {
-    v = map_table.values[curr_entry.ptr](VoxelLocalPosToIdx(voxel_local_pos));
-  } else {
+  uint3 voxel_local_pos_offset = voxel_local_pos + local_offset;
+  int3 block_offset = make_int3(voxel_local_pos_offset.x / BLOCK_SIDE_LENGTH,
+                                voxel_local_pos_offset.y / BLOCK_SIDE_LENGTH,
+                                voxel_local_pos_offset.z / BLOCK_SIDE_LENGTH);
+
+  /// Inside the block -- no need to look up in the table
+  if (block_offset.x == 0 && block_offset.y == 0 && block_offset.z == 0) {
+    uint i = VoxelLocalPosToIdx(voxel_local_pos_offset);
+    v = map_table.values[curr_entry.ptr](i);
+  } else { // Outside the block -- look for it
     HashEntry entry = map_table.GetEntry(curr_entry.pos + block_offset);
     if (entry.ptr == FREE_ENTRY) return v;
-    int3 voxel_local_pos_ = make_int3(voxel_local_pos.x % BLOCK_SIDE_LENGTH,
-                                      voxel_local_pos.y % BLOCK_SIDE_LENGTH,
-                                      voxel_local_pos.z % BLOCK_SIDE_LENGTH);
-    int i = VoxelPosToIdx(voxel_local_pos_);
+    uint i = VoxelLocalPosToIdx(make_uint3(
+            voxel_local_pos_offset.x % BLOCK_SIDE_LENGTH,
+            voxel_local_pos_offset.y % BLOCK_SIDE_LENGTH,
+            voxel_local_pos_offset.z % BLOCK_SIDE_LENGTH));
     v = map_table.values[entry.ptr](i);
   }
 
@@ -104,29 +75,26 @@ inline MeshCube& GetMeshCube(HashTableGPU<MeshCubeBlock>& mesh_table,
                              uint3 voxel_local_pos,
                              const uint3 local_offset) {
 
-  voxel_local_pos = voxel_local_pos + local_offset;
-  int3 block_offset = make_int3(voxel_local_pos.x / BLOCK_SIDE_LENGTH,
-                                voxel_local_pos.y / BLOCK_SIDE_LENGTH,
-                                voxel_local_pos.z / BLOCK_SIDE_LENGTH);
+  uint3 voxel_local_pos_offset = voxel_local_pos + local_offset;
+  int3 block_offset = make_int3(voxel_local_pos_offset.x / BLOCK_SIDE_LENGTH,
+                                voxel_local_pos_offset.y / BLOCK_SIDE_LENGTH,
+                                voxel_local_pos_offset.z / BLOCK_SIDE_LENGTH);
 
-  if (block_offset.x == 0
-      && block_offset.y == 0
-      && block_offset.z == 0) {
-    return mesh_table.values[curr_entry.ptr](VoxelLocalPosToIdx(voxel_local_pos));
+  if (block_offset.x == 0 && block_offset.y == 0 && block_offset.z == 0) {
+    uint i = VoxelLocalPosToIdx(voxel_local_pos_offset);
+    return mesh_table.values[curr_entry.ptr](i);
   } else {
     HashEntry entry = mesh_table.GetEntry(curr_entry.pos + block_offset);
     if (entry.ptr == FREE_ENTRY) {
-      printf("Should never reach here! %d %d %d\n",
+      printf("GetMeshCube: should never reach here! %d %d %d\n",
              voxel_local_pos.x,
              voxel_local_pos.y,
              voxel_local_pos.z);
     }
-    /// this should never happen
-    /// if (entry.ptr == FREE_ENTRY) return indices;
-    int3 voxel_local_pos_ = make_int3(voxel_local_pos.x % BLOCK_SIDE_LENGTH,
-                                      voxel_local_pos.y % BLOCK_SIDE_LENGTH,
-                                      voxel_local_pos.z % BLOCK_SIDE_LENGTH);
-    int i = VoxelPosToIdx(voxel_local_pos_);
+    uint i = VoxelLocalPosToIdx(make_uint3(
+            voxel_local_pos_offset.x % BLOCK_SIDE_LENGTH,
+            voxel_local_pos_offset.y % BLOCK_SIDE_LENGTH,
+            voxel_local_pos_offset.z % BLOCK_SIDE_LENGTH));
     return mesh_table.values[entry.ptr](i);
   }
 }
@@ -142,312 +110,305 @@ inline int AllocateVertex(MeshData& mesh_data,
   return ptr;
 }
 
+__device__
+inline bool CheckMask(uint3 pos, uchar3 mask) {
+  return ((pos.x & 1) == mask.x)
+         && ((pos.y & 1) == mask.y)
+         && ((pos.z & 1) == mask.z);
+}
+
 // TODO(wei): add locks
 __global__
 void MarchingCubesKernel(HashTableGPU<VoxelBlock> map_table,
                          HashTableGPU<MeshCubeBlock> mesh_table,
+                         uchar3 mask1, uchar3 mask2,// use this to avoid conflict
                          MeshData mesh_data) {
   const float isolevel = 0;
 
   const HashEntry &mesh_entry = mesh_table.compacted_hash_entries[blockIdx.x];
   const HashEntry &map_entry  = map_table.GetEntry(mesh_entry.pos);
   if (map_entry.ptr == FREE_ENTRY) {
-    printf("should never reach here.\n");
     return;
   }
 
   int3  voxel_base_pos = BlockToVoxel(map_entry.pos);
 
-  //for (uint local_idx = 0; local_idx < 512; ++local_idx) {
   const uint local_idx = threadIdx.x;
-    //const uint local_idx = i;//threadIdx.x;
-    uint3 voxel_local_pos = IdxToVoxelLocalPos(local_idx);
-    // TODO(wei): deal with border condition alone to save processing time?
+  uint3 voxel_local_pos = IdxToVoxelLocalPos(local_idx);
+  if (! CheckMask(voxel_local_pos, mask1)
+    && ! CheckMask(voxel_local_pos, mask2)) {
+    return;
+  }
 
-    MeshCube &this_cube = mesh_table.values[mesh_entry.ptr](local_idx);
-    this_cube.cube_index = 0;
+  MeshCube &this_cube = mesh_table.values[mesh_entry.ptr](local_idx);
+  this_cube.cube_index = 0;
 
-//    if (voxel_local_pos.x == BLOCK_SIDE_LENGTH-1
-//            || voxel_local_pos.y == BLOCK_SIDE_LENGTH-1
-//            || voxel_local_pos.z == BLOCK_SIDE_LENGTH-1) {
-//      return;
-//    }
+  int3 voxel_pos = voxel_base_pos + make_int3(voxel_local_pos);
+  float3 world_pos = VoxelToWorld(voxel_pos);
 
-    int3 voxel_pos = voxel_base_pos + make_int3(voxel_local_pos);
-    float3 world_pos = VoxelToWorld(voxel_pos);
+  //////////
+  /// 1. Read the scalar values
+  /// Refer to paulbourke.net/geometry/polygonise
+  /// Our coordinate system:
+  ///       ^
+  ///      /
+  ///    z
+  ///   /
+  /// o -- x -->
+  /// |
+  /// y
+  /// |
+  /// v
+  // 0 -> 011
+  // 1 -> 111
+  // 2 -> 110
+  // 3 -> 010
+  // 4 -> 001
+  // 5 -> 101
+  // 6 -> 100
+  // 7 -> 000
+  Voxel v;
+  float d[8];
+  float3 p[8];
 
-    //////////
-    /// 1. Read the scalar values
-    /// Refer to paulbourke.net/geometry/polygonise
-    /// Our coordinate system:
-    ///       ^
-    ///      /
-    ///    z
-    ///   /
-    /// o -- x -->
-    /// |
-    /// y
-    /// |
-    /// v
-    // 0 -> 011
-    // 1 -> 111
-    // 2 -> 110
-    // 3 -> 010
-    // 4 -> 001
-    // 5 -> 101
-    // 6 -> 100
-    // 7 -> 000
-    Voxel v;
-    float d[8];
-    float3 p[8];
+  float voxel_size = kSDFParams.voxel_size;
+  v = GetVoxel(map_table, map_entry, voxel_local_pos, make_uint3(0, 1, 1));
+  if (v.weight == 0) return;
+  p[0] = world_pos + voxel_size * make_float3(0, 1, 1);
+  d[0] = v.sdf;
 
-    float voxel_size = kSDFParams.voxel_size;
-    v = GetVoxel(map_table, map_entry, voxel_local_pos, make_uint3(0, 1, 1));
-    if (v.weight == 0) return;
-    p[0] = world_pos + voxel_size * make_float3(0, 1, 1);
-    d[0] = v.sdf;
+  v = GetVoxel(map_table, map_entry, voxel_local_pos, make_uint3(1, 1, 1));
+  if (v.weight == 0) return;
+  p[1] = world_pos + voxel_size * make_float3(1, 1, 1);
+  d[1] = v.sdf;
 
-    v = GetVoxel(map_table, map_entry, voxel_local_pos, make_uint3(1, 1, 1));
-    if (v.weight == 0) return;
-    p[1] = world_pos + voxel_size * make_float3(1, 1, 1);
-    d[1] = v.sdf;
+  v = GetVoxel(map_table, map_entry, voxel_local_pos, make_uint3(1, 1, 0));
+  if (v.weight == 0) return;
+  p[2] = world_pos + voxel_size * make_float3(1, 1, 0);
+  d[2] = v.sdf;
 
-    v = GetVoxel(map_table, map_entry, voxel_local_pos, make_uint3(1, 1, 0));
-    if (v.weight == 0) return;
-    p[2] = world_pos + voxel_size * make_float3(1, 1, 0);
-    d[2] = v.sdf;
+  v = GetVoxel(map_table, map_entry, voxel_local_pos, make_uint3(0, 1, 0));
+  if (v.weight == 0) return;
+  p[3] = world_pos + voxel_size * make_float3(0, 1, 0);
+  d[3] = v.sdf;
 
-    v = GetVoxel(map_table, map_entry, voxel_local_pos, make_uint3(0, 1, 0));
-    if (v.weight == 0) return;
-    p[3] = world_pos + voxel_size * make_float3(0, 1, 0);
-    d[3] = v.sdf;
+  v = GetVoxel(map_table, map_entry, voxel_local_pos, make_uint3(0, 0, 1));
+  if (v.weight == 0) return;
+  p[4] = world_pos + voxel_size * make_float3(0, 0, 1);
+  d[4] = v.sdf;
 
-    v = GetVoxel(map_table, map_entry, voxel_local_pos, make_uint3(0, 0, 1));
-    if (v.weight == 0) return;
-    p[4] = world_pos + voxel_size * make_float3(0, 0, 1);
-    d[4] = v.sdf;
+  v = GetVoxel(map_table, map_entry, voxel_local_pos, make_uint3(1, 0, 1));
+  if (v.weight == 0) return;
+  p[5] = world_pos + voxel_size * make_float3(1, 0, 1);
+  d[5] = v.sdf;
 
-    v = GetVoxel(map_table, map_entry, voxel_local_pos, make_uint3(1, 0, 1));
-    if (v.weight == 0) return;
-    p[5] = world_pos + voxel_size * make_float3(1, 0, 1);
-    d[5] = v.sdf;
+  v = GetVoxel(map_table, map_entry, voxel_local_pos, make_uint3(1, 0, 0));
+  if (v.weight == 0) return;
+  p[6] = world_pos + voxel_size * make_float3(1, 0, 0);
+  d[6] = v.sdf;
 
-    v = GetVoxel(map_table, map_entry, voxel_local_pos, make_uint3(1, 0, 0));
-    if (v.weight == 0) return;
-    p[6] = world_pos + voxel_size * make_float3(1, 0, 0);
-    d[6] = v.sdf;
+  v = GetVoxel(map_table, map_entry, voxel_local_pos, make_uint3(0, 0, 0));
+  if (v.weight == 0) return;
+  p[7] = world_pos + voxel_size * make_float3(0, 0, 0);
+  d[7] = v.sdf;
 
-    v = GetVoxel(map_table, map_entry, voxel_local_pos, make_uint3(0, 0, 0));
-    if (v.weight == 0) return;
-    p[7] = world_pos + voxel_size * make_float3(0, 0, 0);
-    d[7] = v.sdf;
+  //////////
+  /// 2. Determine cube type
+  int cube_index = 0;
+  if (d[0] < isolevel) cube_index |= 1;
+  if (d[1] < isolevel) cube_index |= 2;
+  if (d[2] < isolevel) cube_index |= 4;
+  if (d[3] < isolevel) cube_index |= 8;
+  if (d[4] < isolevel) cube_index |= 16;
+  if (d[5] < isolevel) cube_index |= 32;
+  if (d[6] < isolevel) cube_index |= 64;
+  if (d[7] < isolevel) cube_index |= 128;
 
-    //////////
-    /// 2. Determine cube type
-    int cube_index = 0;
-    if (d[0] < isolevel) cube_index |= 1;
-    if (d[1] < isolevel) cube_index |= 2;
-    if (d[2] < isolevel) cube_index |= 4;
-    if (d[3] < isolevel) cube_index |= 8;
-    if (d[4] < isolevel) cube_index |= 16;
-    if (d[5] < isolevel) cube_index |= 32;
-    if (d[6] < isolevel) cube_index |= 64;
-    if (d[7] < isolevel) cube_index |= 128;
-
-    const float kThreshold = 0.2f;
-    if (fabs(d[0]) > kThreshold) return;
-    if (fabs(d[1]) > kThreshold) return;
-    if (fabs(d[2]) > kThreshold) return;
-    if (fabs(d[3]) > kThreshold) return;
-    if (fabs(d[4]) > kThreshold) return;
-    if (fabs(d[5]) > kThreshold) return;
-    if (fabs(d[6]) > kThreshold) return;
-    if (fabs(d[7]) > kThreshold) return;
-    for (uint k = 0; k < 8; k++) {
-      for (uint l = 0; l < 8; l++) {
-        if (d[k] * d[l] < 0.0f) {
-          if (fabs(d[k]) + fabs(d[l]) > kThreshold) return;
-        } else {
-          if (fabs(d[k] - d[l]) > kThreshold) return;
-        }
-      }
-    }
-
-    if (kEdgeTable[cube_index] == 0 || kEdgeTable[cube_index] == 255)
-      return;
-
-    //////////
-    /// 3. Determine vertices (ptr allocated via (shared) edges
-    /// If the program reach here, the voxels holding edges must exist
-    // 0 -> 011.x, (0, 1)
-    // 1 -> 110.z, (1, 2)
-    // 2 -> 010.x, (2, 3)
-    // 3 -> 010.z, (3, 0)
-    // 4 -> 001.x, (4, 5)
-    // 5 -> 100.z, (5, 6)
-    // 6 -> 000.x, (6, 7)
-    // 7 -> 000.z, (7, 4)
-    // 8 -> 001.y, (4, 0)
-    // 9 -> 101.y, (5, 1)
-    //10 -> 100.y, (6, 2)
-    //11 -> 000.y, (7, 3)
-    int vertex_ptr[12];
-    float3 vertex_pos;
-
-    /// plane y = 1
-    if (kEdgeTable[cube_index] & 1) {
-      vertex_pos = VertexIntersection(p[0], p[1], d[0], d[1], isolevel);
-
-      MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
-                                   voxel_local_pos, make_uint3(0, 1, 1));
-      vertex_ptr[0] = AllocateVertex(mesh_data, cube.vertex_ptrs.x, vertex_pos);
-    }
-    if (kEdgeTable[cube_index] & 2) {
-      vertex_pos = VertexIntersection(p[1], p[2], d[1], d[2], isolevel);
-
-      MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
-                                   voxel_local_pos, make_uint3(1, 1, 0));
-      vertex_ptr[1] = AllocateVertex(mesh_data, cube.vertex_ptrs.z, vertex_pos);
-    }
-    if (kEdgeTable[cube_index] & 4) {
-      vertex_pos = VertexIntersection(p[2], p[3], d[2], d[3], isolevel);
-
-      MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
-                                   voxel_local_pos, make_uint3(0, 1, 0));
-      vertex_ptr[2] = AllocateVertex(mesh_data, cube.vertex_ptrs.x, vertex_pos);
-    }
-    if (kEdgeTable[cube_index] & 8) {
-      vertex_pos = VertexIntersection(p[3], p[0], d[3], d[0], isolevel);
-
-      MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
-                                   voxel_local_pos, make_uint3(0, 1, 0));
-      vertex_ptr[3] = AllocateVertex(mesh_data, cube.vertex_ptrs.z, vertex_pos);
-    }
-
-    /// plane y = 0
-    if (kEdgeTable[cube_index] & 16) {
-      vertex_pos = VertexIntersection(p[4], p[5], d[4], d[5], isolevel);
-
-      MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
-                                   voxel_local_pos, make_uint3(0, 0, 1));
-      vertex_ptr[4] = AllocateVertex(mesh_data, cube.vertex_ptrs.x, vertex_pos);
-    }
-    if (kEdgeTable[cube_index] & 32) {
-      vertex_pos = VertexIntersection(p[5], p[6], d[5], d[6], isolevel);
-
-      MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
-                                   voxel_local_pos, make_uint3(1, 0, 0));
-      vertex_ptr[5] = AllocateVertex(mesh_data, cube.vertex_ptrs.z, vertex_pos);
-    }
-    if (kEdgeTable[cube_index] & 64) {
-      vertex_pos = VertexIntersection(p[6], p[7], d[6], d[7], isolevel);
-
-      MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
-                                   voxel_local_pos, make_uint3(0, 0, 0));
-      vertex_ptr[6] = AllocateVertex(mesh_data, cube.vertex_ptrs.x, vertex_pos);
-    }
-    if (kEdgeTable[cube_index] & 128) {
-      vertex_pos = VertexIntersection(p[7], p[4], d[7], d[4], isolevel);
-
-      MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
-                                   voxel_local_pos, make_uint3(0, 0, 0));
-      vertex_ptr[7] = AllocateVertex(mesh_data, cube.vertex_ptrs.z, vertex_pos);
-    }
-
-    /// vertical
-    if (kEdgeTable[cube_index] & 256) {
-      vertex_pos = VertexIntersection(p[4], p[0], d[4], d[0], isolevel);
-
-      MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
-                                   voxel_local_pos, make_uint3(0, 0, 1));
-      vertex_ptr[8] = AllocateVertex(mesh_data, cube.vertex_ptrs.y, vertex_pos);
-    }
-    if (kEdgeTable[cube_index] & 512) {
-      vertex_pos = VertexIntersection(p[5], p[1], d[5], d[1], isolevel);
-
-      MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
-                                   voxel_local_pos, make_uint3(1, 0, 1));
-      vertex_ptr[9] = AllocateVertex(mesh_data, cube.vertex_ptrs.y, vertex_pos);
-    }
-    if (kEdgeTable[cube_index] & 1024) {
-      vertex_pos = VertexIntersection(p[6], p[2], d[6], d[2], isolevel);
-
-      MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
-                                   voxel_local_pos, make_uint3(1, 0, 0));
-      vertex_ptr[10] = AllocateVertex(mesh_data, cube.vertex_ptrs.y,
-                                      vertex_pos);
-    }
-    if (kEdgeTable[cube_index] & 2048) {
-      vertex_pos = VertexIntersection(p[7], p[3], d[7], d[3], isolevel);
-
-      MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
-                                   voxel_local_pos, make_uint3(0, 0, 0));
-      vertex_ptr[11] = AllocateVertex(mesh_data, cube.vertex_ptrs.y,
-                                      vertex_pos);
-    }
-
-    this_cube.cube_index = cube_index;
-    int i = 0;
-    for (int t = 0; kTriangleTable[cube_index][t] != -1; t += 3, ++i) {
-      int triangle_ptr = this_cube.triangle_ptr[i];
-      if (triangle_ptr == -1) {
-        triangle_ptr = mesh_data.AllocTriangleHeap();
+  const float kThreshold = 0.2f;
+  if (fabs(d[0]) > kThreshold) return;
+  if (fabs(d[1]) > kThreshold) return;
+  if (fabs(d[2]) > kThreshold) return;
+  if (fabs(d[3]) > kThreshold) return;
+  if (fabs(d[4]) > kThreshold) return;
+  if (fabs(d[5]) > kThreshold) return;
+  if (fabs(d[6]) > kThreshold) return;
+  if (fabs(d[7]) > kThreshold) return;
+  for (uint k = 0; k < 8; k++) {
+    for (uint l = 0; l < 8; l++) {
+      if (d[k] * d[l] < 0.0f) {
+        if (fabs(d[k]) + fabs(d[l]) > kThreshold) return;
       } else {
-        atomicSub(&mesh_data.vertices[mesh_data.triangles[triangle_ptr].vertex_ptrs.x].ref_count, 1);
-        atomicSub(&mesh_data.vertices[mesh_data.triangles[triangle_ptr].vertex_ptrs.y].ref_count, 1);
-        atomicSub(&mesh_data.vertices[mesh_data.triangles[triangle_ptr].vertex_ptrs.z].ref_count, 1);
+        if (fabs(d[k] - d[l]) > kThreshold) return;
       }
+    }
+  }
 
-      this_cube.triangle_ptr[i] = triangle_ptr;
+  if (kEdgeTable[cube_index] == 0 || kEdgeTable[cube_index] == 255)
+    return;
 
-      Triangle triangle;
-      triangle.Clear();
-      triangle.vertex_ptrs.x = vertex_ptr[kTriangleTable[cube_index][t + 0]];
-      atomicAdd(&mesh_data.vertices[triangle.vertex_ptrs.x].ref_count, 1);
+  //////////
+  /// 3. Determine vertices (ptr allocated via (shared) edges
+  /// If the program reach here, the voxels holding edges must exist
+  // 0 -> 011.x, (0, 1)
+  // 1 -> 110.z, (1, 2)
+  // 2 -> 010.x, (2, 3)
+  // 3 -> 010.z, (3, 0)
+  // 4 -> 001.x, (4, 5)
+  // 5 -> 100.z, (5, 6)
+  // 6 -> 000.x, (6, 7)
+  // 7 -> 000.z, (7, 4)
+  // 8 -> 001.y, (4, 0)
+  // 9 -> 101.y, (5, 1)
+  //10 -> 100.y, (6, 2)
+  //11 -> 000.y, (7, 3)
+  int vertex_ptr[12];
+  float3 vertex_pos;
 
-      triangle.vertex_ptrs.y = vertex_ptr[kTriangleTable[cube_index][t + 1]];
-      atomicAdd(&mesh_data.vertices[triangle.vertex_ptrs.y].ref_count, 1);
+  /// plane y = 1
+  if (kEdgeTable[cube_index] & 1) {
+    vertex_pos = VertexIntersection(p[0], p[1], d[0], d[1], isolevel);
 
-      triangle.vertex_ptrs.z = vertex_ptr[kTriangleTable[cube_index][t + 2]];
-      atomicAdd(&mesh_data.vertices[triangle.vertex_ptrs.z].ref_count, 1);
+    MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
+                                 voxel_local_pos, make_uint3(0, 1, 1));
+    vertex_ptr[0] = AllocateVertex(mesh_data, cube.vertex_ptrs.x, vertex_pos);
+  }
+  if (kEdgeTable[cube_index] & 2) {
+    vertex_pos = VertexIntersection(p[1], p[2], d[1], d[2], isolevel);
 
+    MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
+                                 voxel_local_pos, make_uint3(1, 1, 0));
+    vertex_ptr[1] = AllocateVertex(mesh_data, cube.vertex_ptrs.z, vertex_pos);
+  }
+  if (kEdgeTable[cube_index] & 4) {
+    vertex_pos = VertexIntersection(p[2], p[3], d[2], d[3], isolevel);
 
-      mesh_data.triangles[triangle_ptr] = triangle;
+    MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
+                                 voxel_local_pos, make_uint3(0, 1, 0));
+    vertex_ptr[2] = AllocateVertex(mesh_data, cube.vertex_ptrs.x, vertex_pos);
+  }
+  if (kEdgeTable[cube_index] & 8) {
+    vertex_pos = VertexIntersection(p[3], p[0], d[3], d[0], isolevel);
+
+    MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
+                                 voxel_local_pos, make_uint3(0, 1, 0));
+    vertex_ptr[3] = AllocateVertex(mesh_data, cube.vertex_ptrs.z, vertex_pos);
+  }
+
+  /// plane y = 0
+  if (kEdgeTable[cube_index] & 16) {
+    vertex_pos = VertexIntersection(p[4], p[5], d[4], d[5], isolevel);
+
+    MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
+                                 voxel_local_pos, make_uint3(0, 0, 1));
+    vertex_ptr[4] = AllocateVertex(mesh_data, cube.vertex_ptrs.x, vertex_pos);
+  }
+  if (kEdgeTable[cube_index] & 32) {
+    vertex_pos = VertexIntersection(p[5], p[6], d[5], d[6], isolevel);
+
+    MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
+                                 voxel_local_pos, make_uint3(1, 0, 0));
+    vertex_ptr[5] = AllocateVertex(mesh_data, cube.vertex_ptrs.z, vertex_pos);
+  }
+  if (kEdgeTable[cube_index] & 64) {
+    vertex_pos = VertexIntersection(p[6], p[7], d[6], d[7], isolevel);
+
+    MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
+                                 voxel_local_pos, make_uint3(0, 0, 0));
+    vertex_ptr[6] = AllocateVertex(mesh_data, cube.vertex_ptrs.x, vertex_pos);
+  }
+  if (kEdgeTable[cube_index] & 128) {
+    vertex_pos = VertexIntersection(p[7], p[4], d[7], d[4], isolevel);
+
+    MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
+                                 voxel_local_pos, make_uint3(0, 0, 0));
+    vertex_ptr[7] = AllocateVertex(mesh_data, cube.vertex_ptrs.z, vertex_pos);
+  }
+
+  /// vertical
+  if (kEdgeTable[cube_index] & 256) {
+    vertex_pos = VertexIntersection(p[4], p[0], d[4], d[0], isolevel);
+
+    MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
+                                 voxel_local_pos, make_uint3(0, 0, 1));
+    vertex_ptr[8] = AllocateVertex(mesh_data, cube.vertex_ptrs.y, vertex_pos);
+  }
+  if (kEdgeTable[cube_index] & 512) {
+    vertex_pos = VertexIntersection(p[5], p[1], d[5], d[1], isolevel);
+
+    MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
+                                 voxel_local_pos, make_uint3(1, 0, 1));
+    vertex_ptr[9] = AllocateVertex(mesh_data, cube.vertex_ptrs.y, vertex_pos);
+  }
+  if (kEdgeTable[cube_index] & 1024) {
+    vertex_pos = VertexIntersection(p[6], p[2], d[6], d[2], isolevel);
+
+    MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
+                                 voxel_local_pos, make_uint3(1, 0, 0));
+    vertex_ptr[10] = AllocateVertex(mesh_data, cube.vertex_ptrs.y,
+                                    vertex_pos);
+  }
+  if (kEdgeTable[cube_index] & 2048) {
+    vertex_pos = VertexIntersection(p[7], p[3], d[7], d[3], isolevel);
+
+    MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
+                                 voxel_local_pos, make_uint3(0, 0, 0));
+    vertex_ptr[11] = AllocateVertex(mesh_data, cube.vertex_ptrs.y,
+                                    vertex_pos);
+  }
+
+  this_cube.cube_index = cube_index;
+  int i = 0;
+  for (int t = 0; kTriangleTable[cube_index][t] != -1; t += 3, ++i) {
+    int triangle_ptr = this_cube.triangle_ptr[i];
+    if (triangle_ptr == -1) {
+      triangle_ptr = mesh_data.AllocTriangleHeap();
+    } else { // recycle the rubbish (TODO: more sophisticated operations)
+      int3 vertex_ptrs = mesh_data.triangles[triangle_ptr].vertex_ptrs;
+      atomicSub(&mesh_data.vertices[vertex_ptrs.x].ref_count, 1);
+      atomicSub(&mesh_data.vertices[vertex_ptrs.y].ref_count, 1);
+      atomicSub(&mesh_data.vertices[vertex_ptrs.z].ref_count, 1);
     }
 
+    this_cube.triangle_ptr[i] = triangle_ptr;
+
+    Triangle triangle;
+    triangle.Clear();
+    triangle.vertex_ptrs.x = vertex_ptr[kTriangleTable[cube_index][t + 0]];
+    atomicAdd(&mesh_data.vertices[triangle.vertex_ptrs.x].ref_count, 1);
+
+    triangle.vertex_ptrs.y = vertex_ptr[kTriangleTable[cube_index][t + 1]];
+    atomicAdd(&mesh_data.vertices[triangle.vertex_ptrs.y].ref_count, 1);
+
+    triangle.vertex_ptrs.z = vertex_ptr[kTriangleTable[cube_index][t + 2]];
+    atomicAdd(&mesh_data.vertices[triangle.vertex_ptrs.z].ref_count, 1);
+
+    mesh_data.triangles[triangle_ptr] = triangle;
+  }
 }
 
 __global__
-void RecycleTrianglesKernel(HashTableGPU<MeshCubeBlock> mesh_table, MeshData mesh_data) {
+void RecycleTrianglesKernel(HashTableGPU<MeshCubeBlock> mesh_table,
+                            MeshData mesh_data) {
   const HashEntry &mesh_entry = mesh_table.compacted_hash_entries[blockIdx.x];
 
-  const uint local_idx = threadIdx.x;  //inside of an SDF block
-  //for (uint local_idx = 0; local_idx < 512; ++local_idx) {
-    MeshCube &cube = mesh_table.values[mesh_entry.ptr](local_idx);
+  const uint local_idx = threadIdx.x;  //inside an SDF block
+  MeshCube &cube = mesh_table.values[mesh_entry.ptr](local_idx);
 
-    int i = 0;
-    for (int t = 0; kTriangleTable[cube.cube_index][t] != -1; t += 3, ++i);
+  int i = 0;
+  for (int t = 0; kTriangleTable[cube.cube_index][t] != -1; t += 3, ++i);
 
-    if (cube.cube_index == 0) i = 0;
-    for (; i < MeshCube::kTrianglePerCube; ++i) {
-      int triangle_ptr = cube.triangle_ptr[i];
-      if (triangle_ptr == -1) continue;
+  for (; i < MeshCube::kTrianglePerCube; ++i) {
+    int triangle_ptr = cube.triangle_ptr[i];
+    if (triangle_ptr == -1) continue;
 
-      atomicSub(
-              &mesh_data.vertices[mesh_data.triangles[triangle_ptr].vertex_ptrs.x].ref_count,
-              1);
-      atomicSub(
-              &mesh_data.vertices[mesh_data.triangles[triangle_ptr].vertex_ptrs.y].ref_count,
-              1);
-      atomicSub(
-              &mesh_data.vertices[mesh_data.triangles[triangle_ptr].vertex_ptrs.z].ref_count,
-              1);
+    int3 vertex_ptrs = mesh_data.triangles[triangle_ptr].vertex_ptrs;
+    atomicSub(&mesh_data.vertices[vertex_ptrs.x].ref_count, 1);
+    atomicSub(&mesh_data.vertices[vertex_ptrs.y].ref_count, 1);
+    atomicSub(&mesh_data.vertices[vertex_ptrs.z].ref_count, 1);
 
-      cube.triangle_ptr[i] = -1;
-
-      mesh_data.triangles[triangle_ptr].Clear();
-      mesh_data.FreeTriangleHeap(triangle_ptr);
-    //}
+    cube.triangle_ptr[i] = -1;
+    mesh_data.triangles[triangle_ptr].Clear();
+    mesh_data.FreeTriangleHeap(triangle_ptr);
   }
 }
 
@@ -455,29 +416,27 @@ __global__
 void RecycleVerticesKernel(HashTableGPU<MeshCubeBlock> mesh_table, MeshData mesh_data) {
   const HashEntry &mesh_entry = mesh_table.compacted_hash_entries[blockIdx.x];
   const uint local_idx = threadIdx.x;
-  //for (uint local_idx = 0; local_idx < 512; ++local_idx) {
 
-    MeshCube &cube = mesh_table.values[mesh_entry.ptr](local_idx);
+  MeshCube &cube = mesh_table.values[mesh_entry.ptr](local_idx);
 
-    if (cube.vertex_ptrs.x != -1 &&
-        mesh_data.vertices[cube.vertex_ptrs.x].ref_count <= 0) {
-      mesh_data.vertices[cube.vertex_ptrs.x].Clear();
-      mesh_data.FreeVertexHeap(cube.vertex_ptrs.x);
-      cube.vertex_ptrs.x = -1;
-    }
-    if (cube.vertex_ptrs.y != -1 &&
-        mesh_data.vertices[cube.vertex_ptrs.y].ref_count <= 0) {
-      mesh_data.vertices[cube.vertex_ptrs.y].Clear();
-      mesh_data.FreeVertexHeap(cube.vertex_ptrs.y);
-      cube.vertex_ptrs.y = -1;
-    }
-    if (cube.vertex_ptrs.z != -1 &&
-        mesh_data.vertices[cube.vertex_ptrs.z].ref_count <= 0) {
-      mesh_data.vertices[cube.vertex_ptrs.z].Clear();
-      mesh_data.FreeVertexHeap(cube.vertex_ptrs.z);
-      cube.vertex_ptrs.z = -1;
-    }
-  //}
+  if (cube.vertex_ptrs.x != -1 &&
+      mesh_data.vertices[cube.vertex_ptrs.x].ref_count <= 0) {
+    mesh_data.vertices[cube.vertex_ptrs.x].Clear();
+    mesh_data.FreeVertexHeap(cube.vertex_ptrs.x);
+    cube.vertex_ptrs.x = -1;
+  }
+  if (cube.vertex_ptrs.y != -1 &&
+      mesh_data.vertices[cube.vertex_ptrs.y].ref_count <= 0) {
+    mesh_data.vertices[cube.vertex_ptrs.y].Clear();
+    mesh_data.FreeVertexHeap(cube.vertex_ptrs.y);
+    cube.vertex_ptrs.y = -1;
+  }
+  if (cube.vertex_ptrs.z != -1 &&
+      mesh_data.vertices[cube.vertex_ptrs.z].ref_count <= 0) {
+    mesh_data.vertices[cube.vertex_ptrs.z].Clear();
+    mesh_data.FreeVertexHeap(cube.vertex_ptrs.z);
+    cube.vertex_ptrs.z = -1;
+  }
 }
 
 Mesh::Mesh(const HashParams &params) {
@@ -520,30 +479,6 @@ void Mesh::Reset() {
 }
 
 /// Assume hash_table_ is compactified
-void Mesh::CollectAllBlocks() {
-  const uint threads_per_block = 256;
-
-  uint entry_count;
-  checkCudaErrors(cudaMemcpy(&entry_count, gpu_data().entry_count,
-                             sizeof(uint), cudaMemcpyDeviceToHost));
-  LOG(INFO) << "entry count: " << entry_count;
-
-  const dim3 grid_size((entry_count + threads_per_block - 1)
-                       / threads_per_block, 1);
-  const dim3 block_size(threads_per_block, 1);
-
-  checkCudaErrors(cudaMemset(gpu_data().compacted_hash_entry_counter,
-                             0, sizeof(int)));
-  CollectAllBlocksKernel<<<grid_size, block_size >>>(gpu_data());
-
-  int res;
-  checkCudaErrors(cudaMemcpy(&res, gpu_data().compacted_hash_entry_counter,
-                             sizeof(uint), cudaMemcpyDeviceToHost));
-  LOG(INFO) << "Mesh block count in all: " << res;
-  checkCudaErrors(cudaDeviceSynchronize());
-  checkCudaErrors(cudaGetLastError());
-}
-
 void Mesh::MarchingCubes(Map *map) {
   uint occupied_block_count;
   checkCudaErrors(cudaMemcpy(&occupied_block_count,
@@ -556,7 +491,25 @@ void Mesh::MarchingCubes(Map *map) {
   const uint threads_per_block = BLOCK_SIZE;
   const dim3 grid_size(occupied_block_count, 1);
   const dim3 block_size(threads_per_block, 1);
+
+  /// Use divide and conquer to avoid read-write conflict
   MarchingCubesKernel<<<grid_size, block_size>>>(map->gpu_data(), gpu_data(),
+          make_uchar3(0, 0, 0), make_uchar3(1, 1, 1),
+          mesh_data_);
+  checkCudaErrors(cudaDeviceSynchronize());
+  checkCudaErrors(cudaGetLastError());
+  MarchingCubesKernel<<<grid_size, block_size>>>(map->gpu_data(), gpu_data(),
+          make_uchar3(0, 0, 1), make_uchar3(1, 1, 0),
+          mesh_data_);
+  checkCudaErrors(cudaDeviceSynchronize());
+  checkCudaErrors(cudaGetLastError());
+  MarchingCubesKernel<<<grid_size, block_size>>>(map->gpu_data(), gpu_data(),
+          make_uchar3(0, 1, 0), make_uchar3(1, 0, 1),
+          mesh_data_);
+  checkCudaErrors(cudaDeviceSynchronize());
+  checkCudaErrors(cudaGetLastError());
+  MarchingCubesKernel<<<grid_size, block_size>>>(map->gpu_data(), gpu_data(),
+          make_uchar3(1, 0, 0), make_uchar3(0, 1, 1),
           mesh_data_);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
@@ -633,13 +586,7 @@ void Mesh::SaveMesh(std::string path) {
       continue;
     }
 
-    if (length(vertices[triangles[i].vertex_ptrs.x].pos - vertices[triangles[i].vertex_ptrs.y].pos) > 0.1
-            || length(vertices[triangles[i].vertex_ptrs.y].pos - vertices[triangles[i].vertex_ptrs.z].pos) > 0.1
-            || length(vertices[triangles[i].vertex_ptrs.z].pos - vertices[triangles[i].vertex_ptrs.x].pos) > 0.1)
-      continue;
-
     ss << "f " << idx.x + 1 << " " << idx.y + 1 << " " << idx.z + 1 << "\n";
-    //LOG(INFO) << ss.str();
 
     ++triangle_count;
     out << ss.str();

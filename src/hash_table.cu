@@ -40,6 +40,37 @@ void ResetEntriesKernel(HashTableGPU<T> hash_table) {
   }
 }
 
+template <typename T>
+__global__
+void CollectAllBlocksKernel(HashTableGPU<T> hash_table) {
+  const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+  __shared__ int local_counter;
+  if (threadIdx.x == 0) local_counter = 0;
+  __syncthreads();
+
+  int addr_local = -1;
+  if (idx < *hash_table.entry_count) {
+    if (hash_table.hash_entries[idx].ptr != FREE_ENTRY) {
+      addr_local = atomicAdd(&local_counter, 1);
+    }
+  }
+
+  __syncthreads();
+
+  __shared__ int addr_global;
+  if (threadIdx.x == 0 && local_counter > 0) {
+    addr_global = atomicAdd(hash_table.compacted_hash_entry_counter, local_counter);
+  }
+  __syncthreads();
+
+  if (addr_local != -1) {
+    const uint addr = addr_global + addr_local;
+    hash_table.compacted_hash_entries[addr] = hash_table.hash_entries[idx];
+  }
+}
+
+
 //////////
 /// Member functions (CPU code)
 template <typename T>
@@ -55,6 +86,14 @@ HashTable<T>::HashTable(const HashParams &params) {
 template <typename T>
 HashTable<T>::~HashTable() {
   Free();
+}
+
+template <typename T>
+uint HashTable<T>::compacted_entry_count() {
+  uint count;
+  checkCudaErrors(cudaMemcpy(&count, gpu_data_.compacted_hash_entry_counter,
+                             sizeof(uint), cudaMemcpyDeviceToHost));
+  return count;
 }
 
 template <typename T>
@@ -177,6 +216,29 @@ void HashTable<T>::Reset() {
     checkCudaErrors(cudaDeviceSynchronize());
     checkCudaErrors(cudaGetLastError());
   }
+}
+
+template <typename T>
+void HashTable<T>::CollectAllEntries(){
+  const uint threads_per_block = 256;
+
+  uint entry_count;
+  checkCudaErrors(cudaMemcpy(&entry_count, gpu_data_.entry_count,
+                             sizeof(uint), cudaMemcpyDeviceToHost));
+  LOG(INFO) << "entry count: " << entry_count;
+
+  const dim3 grid_size((entry_count + threads_per_block - 1)
+                       / threads_per_block, 1);
+  const dim3 block_size(threads_per_block, 1);
+
+  checkCudaErrors(cudaMemset(gpu_data_.compacted_hash_entry_counter,
+                             0, sizeof(int)));
+  CollectAllBlocksKernel<<<grid_size, block_size >>>(gpu_data_);
+
+  int count = compacted_entry_count();
+  LOG(INFO) << "Mesh block count in all: " << count;
+  checkCudaErrors(cudaDeviceSynchronize());
+  checkCudaErrors(cudaGetLastError());
 }
 
 /// Member function: Others
