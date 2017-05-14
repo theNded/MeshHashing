@@ -22,11 +22,12 @@
 
 #include "config_reader.h"
 
-#define ICL
+#define ICL_
 #ifdef ICL
 const std::string kDefaultDatasetPath = "/home/wei/data/ICL/lv1/";
 #else
-const std::string kDefaultDatasetPath = "/home/wei/data/TUM/rgbd_dataset_freiburg3_long_office_household/";
+const std::string kDefaultDatasetPath =
+        "/home/wei/data/TUM/rgbd_dataset_freiburg3_long_office_household/";
 #endif
 
 /// Only test over 480x640 images
@@ -76,11 +77,11 @@ int main() {
   std::vector<float4x4>    wTc;
 
 #ifdef ICL
-  LoadICLImageList(kDefaultDatasetPath, depth_img_list, color_img_list);
-  LoadICLTrajectory(kDefaultDatasetPath, wTc);
+  LoadICL(kDefaultDatasetPath, depth_img_list, color_img_list, wTc);
 #else
-  LoadTUMImageList(kDefaultDatasetPath, depth_img_list, color_img_list);
-  LoadTUMTrajectory(kDefaultDatasetPath, wTc);
+  LoadTUM(kDefaultDatasetPath, depth_img_list, color_img_list, wTc);
+  //LoadTUMImageList(kDefaultDatasetPath, depth_img_list, color_img_list);
+  //LoadTUMTrajectory(kDefaultDatasetPath, wTc);
 #endif
 
   SDFParams sdf_params;
@@ -138,10 +139,10 @@ int main() {
     mesh.MarchingCubes(&voxel_map);
 #endif
 
-    //ray_caster.Cast(&voxel_map, T.getInverse());
-    //cv::Mat display = GPUFloat4ToMat(ray_caster.ray_caster_data().normal_image);
-    //cv::imshow("display", display);
-    //cv::waitKey(1);
+    ray_caster.Cast(&voxel_map, T.getInverse());
+    cv::Mat display = GPUFloat4ToMat(ray_caster.ray_caster_data().normal_image);
+    cv::imshow("display", display);
+    cv::waitKey(1);
   }
   end = std::chrono::system_clock::now();
   std::chrono::duration<double> seconds = end - start;

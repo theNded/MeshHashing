@@ -225,7 +225,6 @@ void HashTable<T>::CollectAllEntries(){
   uint entry_count;
   checkCudaErrors(cudaMemcpy(&entry_count, gpu_data_.entry_count,
                              sizeof(uint), cudaMemcpyDeviceToHost));
-  LOG(INFO) << "entry count: " << entry_count;
 
   const dim3 grid_size((entry_count + threads_per_block - 1)
                        / threads_per_block, 1);
@@ -236,7 +235,7 @@ void HashTable<T>::CollectAllEntries(){
   CollectAllBlocksKernel<<<grid_size, block_size >>>(gpu_data_);
 
   int count = compacted_entry_count();
-  LOG(INFO) << "Mesh block count in all: " << count;
+  LOG(INFO) << "Block count in all: " << count;
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }

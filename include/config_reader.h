@@ -7,7 +7,11 @@
 
 #include <string>
 #include <vector>
+#include <unordered_map>
+
 #include <opencv2/opencv.hpp>
+#include <glog/logging.h>
+
 #include "matrix.h"
 #include "params.h"
 
@@ -53,23 +57,23 @@ void LoadSensorParams(std::string path, SensorParams& params) {
   params.height = (int)fs["height"];
 }
 
-void LoadICLImageList(std::string dataset_path,
-                      std::vector<std::string> &depth_image_list,
-                      std::vector<std::string> &color_image_list) {
-  std::ifstream list_stream(dataset_path + "associations.txt");
+/// 1-1-1 correspondences
+void LoadICL(std::string dataset_path,
+             std::vector<std::string> &depth_image_list,
+             std::vector<std::string> &color_image_list,
+             std::vector<float4x4>& wTcs) {
+  std::ifstream img_stream(dataset_path + "associations.txt");
   std::string time_stamp, depth_image_name, color_image_name;
-  while (list_stream >> time_stamp >> depth_image_name
-                     >> time_stamp >> color_image_name) {
+  while (img_stream >> time_stamp >> depth_image_name
+                    >> time_stamp >> color_image_name) {
     depth_image_list.push_back(dataset_path + "/" + depth_image_name);
     color_image_list.push_back(dataset_path + "/" + color_image_name);
   }
-}
-void LoadICLTrajectory(std::string dataset_path,
-                       std::vector<float4x4> &wTc_list) {
-  std::ifstream list_stream(dataset_path + "traj0.gt.freiburg");
+
+  std::ifstream traj_stream(dataset_path + "traj0.gt.freiburg");
   std::string ts_img, img_path, ts_gt;
   float tx, ty, tz, qx, qy, qz, qw;
-  while (list_stream >> ts_img
+  while (traj_stream >> ts_img
                      >> tx >> ty >> tz
                      >> qx >> qy >> qz >> qw) {
     float4x4 wTc;
@@ -88,56 +92,52 @@ void LoadICLTrajectory(std::string dataset_path,
     wTc.m33 = 1 - 2 * qx * qx - 2 * qy * qy;
     wTc.m34 = tz;
     wTc.m44 = 1;
-    wTc_list.push_back(wTc);
+    wTcs.push_back(wTc);
   }
 }
 
-void LoadTUMImageList(std::string dataset_path,
-                      std::vector<std::string> &depth_image_list,
-                      std::vector<std::string> &color_image_list) {
-  std::ifstream depth_list_stream(dataset_path + "depth.txt");
-  std::ifstream color_list_stream(dataset_path + "rgb.txt");
-  std::string time_stamp, file_name;
-
-  std::getline(depth_list_stream, file_name);
-  std::getline(depth_list_stream, file_name);
-  std::getline(depth_list_stream, file_name);
-  while (depth_list_stream >> time_stamp >> file_name) {
-    depth_image_list.push_back(dataset_path + "/" + file_name);
+/// no 1-1-1 correspondences
+void LoadTUM(std::string dataset_path,
+             std::vector<std::string> &depth_image_list,
+             std::vector<std::string> &color_image_list,
+             std::vector<float4x4>& wTcs) {
+  std::ifstream img_stream(dataset_path + "depth_rgb_associations.txt");
+  std::unordered_map<std::string, std::string> depth_color_correspondence;
+  std::string depth_image_name, color_image_name, ts;
+  while (img_stream >> ts >> depth_image_name >> ts >> color_image_name) {
+    depth_color_correspondence.emplace(depth_image_name, color_image_name);
   }
 
-  std::getline(color_list_stream, file_name);
-  std::getline(color_list_stream, file_name);
-  std::getline(color_list_stream, file_name);
-  while (color_list_stream >> time_stamp >> file_name) {
-    color_image_list.push_back(dataset_path + "/" + file_name);
-  }
-}
-void LoadTUMTrajectory(std::string dataset_path,
-                       std::vector<float4x4> &wTc_list) {
-  std::ifstream list_stream(dataset_path + "depth_gt_associations.txt");
-  std::string ts_img, img_path, ts_gt;
+  std::ifstream traj_stream(dataset_path + "depth_gt_associations.txt");
   float tx, ty, tz, qx, qy, qz, qw;
-  while (list_stream >> ts_img >> img_path >> ts_gt
-                     >> tx >> ty >> tz
-                     >> qx >> qy >> qz >> qw) {
-    float4x4 wTc;
-    wTc.setIdentity();
+  while (traj_stream >> ts >> depth_image_name
+                     >> ts >> tx >> ty >> tz >> qx >> qy >> qz >> qw) {
+    if (depth_color_correspondence.find(depth_image_name)
+        != depth_color_correspondence.end()) {
+      float4x4 wTc;
+      wTc.setIdentity();
 
-    wTc.m11 = 1 - 2 * qy * qy - 2 * qz * qz;
-    wTc.m12 = 2 * qx * qy - 2 * qz * qw;
-    wTc.m13 = 2 * qx * qz + 2 * qy * qw;
-    wTc.m14 = tx;
-    wTc.m21 = 2 * qx * qy + 2 * qz * qw;
-    wTc.m22 = 1 - 2 * qx * qx - 2 * qz * qz;
-    wTc.m23 = 2 * qy * qz - 2 * qx * qw;
-    wTc.m24 = ty;
-    wTc.m31 = 2 * qx * qz - 2 * qy * qw;
-    wTc.m32 = 2 * qy * qz + 2 * qx * qw;
-    wTc.m33 = 1 - 2 * qx * qx - 2 * qy * qy;
-    wTc.m34 = tz;
-    wTc.m44 = 1;
-    wTc_list.push_back(wTc);
+      wTc.m11 = 1 - 2 * qy * qy - 2 * qz * qz;
+      wTc.m12 = 2 * qx * qy - 2 * qz * qw;
+      wTc.m13 = 2 * qx * qz + 2 * qy * qw;
+      wTc.m14 = tx;
+      wTc.m21 = 2 * qx * qy + 2 * qz * qw;
+      wTc.m22 = 1 - 2 * qx * qx - 2 * qz * qz;
+      wTc.m23 = 2 * qy * qz - 2 * qx * qw;
+      wTc.m24 = ty;
+      wTc.m31 = 2 * qx * qz - 2 * qy * qw;
+      wTc.m32 = 2 * qy * qz + 2 * qx * qw;
+      wTc.m33 = 1 - 2 * qx * qx - 2 * qy * qy;
+      wTc.m34 = tz;
+      wTc.m44 = 1;
+
+      depth_image_list.push_back(dataset_path + "/" + depth_image_name);
+      color_image_list.push_back(dataset_path + "/"
+                                 + depth_color_correspondence[depth_image_name]);
+      wTcs.push_back(wTc);
+      LOG(INFO) << depth_image_name << " "
+                << depth_color_correspondence[depth_image_name];
+    }
   }
 }
 
