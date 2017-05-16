@@ -3,6 +3,7 @@
 #include "sensor.h"
 #include <helper_cuda.h>
 #include <helper_math.h>
+#include <glog/logging.h>
 
 #define MINF __int_as_float(0xff800000)
 
@@ -26,14 +27,15 @@ void Sensor::BindSensorDataToTexture() {
 __global__
 void DepthCPUtoGPUKernel(float *d_output, short *d_input,
                          uint width, uint height,
-                         float min_depth_range, float max_depth_range) {
+                         float min_depth_range,
+                         float max_depth_range) {
   const int x = blockIdx.x * blockDim.x + threadIdx.x;
   const int y = blockIdx.y * blockDim.y + threadIdx.y;
 
   if (x >= width || y >= height) return;
   const int idx = y * width + x;
   /// Convert mm -> m
-  const float depth = 0.0002f * d_input[idx]; // (1 / 5000)
+  const float depth = 0.001f * d_input[idx];
   bool is_valid = (depth >= min_depth_range && depth <= max_depth_range);
   d_output[idx] = is_valid ? depth : MINF;
 }

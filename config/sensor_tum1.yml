@@ -5,5 +5,6 @@ cx:              318.6
 cy:              255.3
 min_depth_range: 0.5
 max_depth_range: 5.0
+range_factor:    0.0002
 height:          480
 width:           640

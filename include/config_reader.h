@@ -96,6 +96,34 @@ void LoadICL(std::string dataset_path,
   }
 }
 
+void LoadSUN3D(std::string dataset_path,
+               std::vector<std::string> &depth_img_list,
+               std::vector<std::string> &color_img_list,
+               std::vector<float4x4> &wTcs) {
+  std::ifstream color_stream(dataset_path + "color.txt");
+  LOG(INFO) << dataset_path + "color.txt";
+  std::string img_name;
+  while (color_stream >> img_name) {
+    color_img_list.push_back(dataset_path + "color/" + img_name);
+  }
+
+  std::ifstream depth_stream(dataset_path + "depth.txt");
+  while (depth_stream >> img_name) {
+    depth_img_list.push_back(dataset_path + "depth/" + img_name);
+  }
+
+  std::ifstream traj_stream(dataset_path + "trajectory.log");
+  int dummy;
+  float4x4 wTc;
+  while (traj_stream >> dummy >> dummy >> dummy
+          >> wTc.m11 >> wTc.m12 >> wTc.m13 >> wTc.m14
+          >> wTc.m21 >> wTc.m22 >> wTc.m23 >> wTc.m24
+          >> wTc.m31 >> wTc.m32 >> wTc.m33 >> wTc.m34
+          >> wTc.m41 >> wTc.m42 >> wTc.m43 >> wTc.m44) {
+    wTcs.push_back(wTc);
+  }
+}
+
 /// no 1-1-1 correspondences
 void LoadTUM(std::string dataset_path,
              std::vector<std::string> &depth_image_list,

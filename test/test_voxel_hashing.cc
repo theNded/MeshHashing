@@ -22,12 +22,15 @@
 
 #include "config_reader.h"
 
-#define ICL_
-#ifdef ICL
+#define SUN3D
+#if defined(ICL)
 const std::string kDefaultDatasetPath = "/home/wei/data/ICL/lv1/";
-#else
+#elif defined(TUM)
 const std::string kDefaultDatasetPath =
         "/home/wei/data/TUM/rgbd_dataset_freiburg3_long_office_household/";
+#elif defined(SUN3D)
+const std::string kDefaultDatasetPath =
+        "/home/wei/data/SUN3D/burghers/";
 #endif
 
 /// Only test over 480x640 images
@@ -76,12 +79,12 @@ int main() {
   std::vector<std::string> color_img_list;
   std::vector<float4x4>    wTc;
 
-#ifdef ICL
+#if defined(ICL)
   LoadICL(kDefaultDatasetPath, depth_img_list, color_img_list, wTc);
-#else
+#elif defined(TUM)
   LoadTUM(kDefaultDatasetPath, depth_img_list, color_img_list, wTc);
-  //LoadTUMImageList(kDefaultDatasetPath, depth_img_list, color_img_list);
-  //LoadTUMTrajectory(kDefaultDatasetPath, wTc);
+#elif defined(SUN3D)
+  LoadSUN3D(kDefaultDatasetPath, depth_img_list, color_img_list, wTc);
 #endif
 
   SDFParams sdf_params;
@@ -92,10 +95,13 @@ int main() {
   LoadHashParams("../config/hash.yml", hash_params);
 
   SensorParams sensor_params;
-#ifdef ICL
+
+#if defined(ICL)
   LoadSensorParams("../config/sensor_icl.yml", sensor_params);
-#else
+#elif defined(TUM)
   LoadSensorParams("../config/sensor_tum3.yml", sensor_params);
+#elif defined(SUN3D)
+  LoadSensorParams("../config/sensor_sun3d.yml", sensor_params);
 #endif
 
   RayCasterParams ray_cast_params;
