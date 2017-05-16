@@ -1,5 +1,5 @@
 %YAML:1.0
-voxel_size:                0.01
+voxel_size:                0.008
 sdf_upper_bound:           4.0
 truncation_distance_scale: 0.01
 truncation_distance:       0.02

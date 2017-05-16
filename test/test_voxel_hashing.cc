@@ -22,7 +22,7 @@
 
 #include "config_reader.h"
 
-#define SUN3D
+#define ICL
 #if defined(ICL)
 const std::string kDefaultDatasetPath = "/home/wei/data/ICL/lv1/";
 #elif defined(TUM)
@@ -30,7 +30,7 @@ const std::string kDefaultDatasetPath =
         "/home/wei/data/TUM/rgbd_dataset_freiburg3_long_office_household/";
 #elif defined(SUN3D)
 const std::string kDefaultDatasetPath =
-        "/home/wei/data/SUN3D/burghers/";
+        "/home/wei/data/SUN3D/copyroom/";
 #endif
 
 /// Only test over 480x640 images
@@ -114,7 +114,7 @@ int main() {
   Map voxel_map(hash_params);
   LOG(INFO) << "map allocated";
 
-  Mesh mesh(hash_params);
+  Mesh mesh;
   LOG(INFO) << "mesh allocated";
 
   Sensor sensor(sensor_params);
@@ -140,7 +140,7 @@ int main() {
     float4x4 T = wTc[0].getInverse() * wTc[i];
     sensor.set_transform(T);
 
-    fuser.Integrate(&voxel_map, &mesh, &sensor, NULL);
+    fuser.Integrate(&voxel_map, &sensor, NULL);
 #ifndef OFFLINE
     mesh.MarchingCubes(&voxel_map);
 #endif

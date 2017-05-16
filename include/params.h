@@ -73,6 +73,9 @@ struct __ALIGN__(16) SensorParams {
 
   float min_depth_range; /// 0.5f
   float max_depth_range; /// 5.0f, might need modify for LiDAR
+  float range_factor;    /// 1/5000 for TUM and ICL, 1/1000 for SUN3D
+
+  int3  padding;
 };
 
 #endif //VH_PARAMS_H

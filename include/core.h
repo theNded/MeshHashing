@@ -49,10 +49,33 @@ struct __ALIGN__(8) Voxel {
   }
 };
 
+struct __ALIGN__(4) MeshCube {
+  static const int kTrianglePerCube = 5;
+
+  // TODO(wei): Possible memory optimizations:
+  // 1. vertex_ptr point to int3 on shared memory
+  // 2. triangle_ptr point to linked list on shared memory
+  /// Point to 3 valid vertex indices
+  int3 vertex_ptrs;
+  int  triangle_ptr[kTrianglePerCube];
+  int  cube_index;
+
+
+
+  __device__
+  void Clear() {
+    vertex_ptrs = make_int3(-1, -1, -1);
+    for (int i = 0; i < kTrianglePerCube; ++i)
+      triangle_ptr[i] = -1;
+    cube_index = 0;
+  }
+};
+
 /// Block
 /// Typically Block is a 8x8x8 voxel cluster
 struct __ALIGN__(8) VoxelBlock {
-  Voxel voxels[BLOCK_SIZE];
+  Voxel    voxels[BLOCK_SIZE];
+  MeshCube cubes [BLOCK_SIZE];
 
   __device__
   void Clear() {
@@ -61,6 +84,7 @@ struct __ALIGN__(8) VoxelBlock {
 #endif
     for (int i = 0; i < BLOCK_SIZE; ++i) {
       voxels[i].Clear();
+      cubes[i].Clear();
     }
   }
 
@@ -71,6 +95,7 @@ struct __ALIGN__(8) VoxelBlock {
 
   __device__
   void Update(int i, const Voxel& update) {
+
     Voxel& in = voxels[i];
     float3 c_in     = make_float3(in.color.x, in.color.y, in.color.z);
     float3 c_update = make_float3(update.color.x, update.color.y, update.color.z);
@@ -104,42 +129,6 @@ struct __ALIGN__(8) Triangle {
   __device__
   void Clear() {
     vertex_ptrs = make_int3(-1, -1, -1);
-  }
-};
-
-struct __ALIGN__(4) MeshCube {
-  static const int kTrianglePerCube = 5;
-  /// Point to 3 valid vertex indices
-  int3 vertex_ptrs;
-  int  triangle_ptr[kTrianglePerCube];
-  int  cube_index;
-
-  __device__
-  void Clear() {
-    vertex_ptrs = make_int3(-1, -1, -1);
-    for (int i = 0; i < kTrianglePerCube; ++i)
-      triangle_ptr[i] = -1;
-    cube_index = 0;
-  }
-};
-
-
-struct __ALIGN__(8) MeshCubeBlock {
-  MeshCube indices[BLOCK_SIZE];
-
-  __device__
-  MeshCube& operator() (int i) {
-    return indices[i];
-  }
-
-  __device__
-  void Clear() {
-#ifdef __CUDACC__
-#pragma unroll 1
-#endif
-    for (int i = 0; i < BLOCK_SIZE; ++i) {
-      indices[i].Clear();
-    }
   }
 };
 #endif //VH_CORE_H

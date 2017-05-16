@@ -52,11 +52,10 @@ static const int kMaxVertexCount = 10000000;
 
 class Mesh {
 private:
-  HashTable<MeshCubeBlock> hash_table_;
   MeshData mesh_data_;
 
 public:
-  Mesh(const HashParams &params);
+  Mesh();
   ~Mesh();
 
   void Reset();
@@ -65,13 +64,6 @@ public:
   void CollectAllBlocks();
   void MarchingCubes(Map* map);
   void SaveMesh(std::string path);
-
-  HashTable<MeshCubeBlock> &hash_table() {
-    return hash_table_;
-  }
-  HashTableGPU<MeshCubeBlock> &gpu_data() {
-    return hash_table_.gpu_data();
-  }
 };
 
 

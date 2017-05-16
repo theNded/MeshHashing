@@ -69,7 +69,7 @@ inline Voxel GetVoxel(HashTableGPU<VoxelBlock>& map_table,
 }
 
 __device__
-inline MeshCube& GetMeshCube(HashTableGPU<MeshCubeBlock>& mesh_table,
+inline MeshCube& GetMeshCube(HashTableGPU<VoxelBlock>& hash_table,
                              MeshData &mesh_data,
                              const HashEntry& curr_entry,
                              uint3 voxel_local_pos,
@@ -82,9 +82,9 @@ inline MeshCube& GetMeshCube(HashTableGPU<MeshCubeBlock>& mesh_table,
 
   if (block_offset.x == 0 && block_offset.y == 0 && block_offset.z == 0) {
     uint i = VoxelLocalPosToIdx(voxel_local_pos_offset);
-    return mesh_table.values[curr_entry.ptr](i);
+    return hash_table.values[curr_entry.ptr].cubes[i];
   } else {
-    HashEntry entry = mesh_table.GetEntry(curr_entry.pos + block_offset);
+    HashEntry entry = hash_table.GetEntry(curr_entry.pos + block_offset);
     if (entry.ptr == FREE_ENTRY) {
       printf("GetMeshCube: should never reach here! %d %d %d\n",
              voxel_local_pos.x,
@@ -95,7 +95,7 @@ inline MeshCube& GetMeshCube(HashTableGPU<MeshCubeBlock>& mesh_table,
             voxel_local_pos_offset.x % BLOCK_SIDE_LENGTH,
             voxel_local_pos_offset.y % BLOCK_SIDE_LENGTH,
             voxel_local_pos_offset.z % BLOCK_SIDE_LENGTH));
-    return mesh_table.values[entry.ptr](i);
+    return hash_table.values[entry.ptr].cubes[i];
   }
 }
 
@@ -120,27 +120,22 @@ inline bool CheckMask(uint3 pos, uchar3 mask) {
 // TODO(wei): add locks
 __global__
 void MarchingCubesKernel(HashTableGPU<VoxelBlock> map_table,
-                         HashTableGPU<MeshCubeBlock> mesh_table,
                          uchar3 mask1, uchar3 mask2,// use this to avoid conflict
                          MeshData mesh_data) {
   const float isolevel = 0;
 
-  const HashEntry &mesh_entry = mesh_table.compacted_hash_entries[blockIdx.x];
-  const HashEntry &map_entry  = map_table.GetEntry(mesh_entry.pos);
-  if (map_entry.ptr == FREE_ENTRY) {
-    return;
-  }
+  const HashEntry &map_entry = map_table.compacted_hash_entries[blockIdx.x];
 
   int3  voxel_base_pos = BlockToVoxel(map_entry.pos);
 
   const uint local_idx = threadIdx.x;
   uint3 voxel_local_pos = IdxToVoxelLocalPos(local_idx);
-  if (! CheckMask(voxel_local_pos, mask1)
-    && ! CheckMask(voxel_local_pos, mask2)) {
-    return;
-  }
+//  if (! CheckMask(voxel_local_pos, mask1)
+//    && ! CheckMask(voxel_local_pos, mask2)) {
+//    return;
+//  }
 
-  MeshCube &this_cube = mesh_table.values[mesh_entry.ptr](local_idx);
+  MeshCube &this_cube = map_table.values[map_entry.ptr].cubes[local_idx];
   this_cube.cube_index = 0;
 
   int3 voxel_pos = voxel_base_pos + make_int3(voxel_local_pos);
@@ -268,28 +263,28 @@ void MarchingCubesKernel(HashTableGPU<VoxelBlock> map_table,
   if (kEdgeTable[cube_index] & 1) {
     vertex_pos = VertexIntersection(p[0], p[1], d[0], d[1], isolevel);
 
-    MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
+    MeshCube &cube = GetMeshCube(map_table, mesh_data, map_entry,
                                  voxel_local_pos, make_uint3(0, 1, 1));
     vertex_ptr[0] = AllocateVertex(mesh_data, cube.vertex_ptrs.x, vertex_pos);
   }
   if (kEdgeTable[cube_index] & 2) {
     vertex_pos = VertexIntersection(p[1], p[2], d[1], d[2], isolevel);
 
-    MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
+    MeshCube &cube = GetMeshCube(map_table, mesh_data, map_entry,
                                  voxel_local_pos, make_uint3(1, 1, 0));
     vertex_ptr[1] = AllocateVertex(mesh_data, cube.vertex_ptrs.z, vertex_pos);
   }
   if (kEdgeTable[cube_index] & 4) {
     vertex_pos = VertexIntersection(p[2], p[3], d[2], d[3], isolevel);
 
-    MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
+    MeshCube &cube = GetMeshCube(map_table, mesh_data, map_entry,
                                  voxel_local_pos, make_uint3(0, 1, 0));
     vertex_ptr[2] = AllocateVertex(mesh_data, cube.vertex_ptrs.x, vertex_pos);
   }
   if (kEdgeTable[cube_index] & 8) {
     vertex_pos = VertexIntersection(p[3], p[0], d[3], d[0], isolevel);
 
-    MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
+    MeshCube &cube = GetMeshCube(map_table, mesh_data, map_entry,
                                  voxel_local_pos, make_uint3(0, 1, 0));
     vertex_ptr[3] = AllocateVertex(mesh_data, cube.vertex_ptrs.z, vertex_pos);
   }
@@ -298,28 +293,28 @@ void MarchingCubesKernel(HashTableGPU<VoxelBlock> map_table,
   if (kEdgeTable[cube_index] & 16) {
     vertex_pos = VertexIntersection(p[4], p[5], d[4], d[5], isolevel);
 
-    MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
+    MeshCube &cube = GetMeshCube(map_table, mesh_data, map_entry,
                                  voxel_local_pos, make_uint3(0, 0, 1));
     vertex_ptr[4] = AllocateVertex(mesh_data, cube.vertex_ptrs.x, vertex_pos);
   }
   if (kEdgeTable[cube_index] & 32) {
     vertex_pos = VertexIntersection(p[5], p[6], d[5], d[6], isolevel);
 
-    MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
+    MeshCube &cube = GetMeshCube(map_table, mesh_data, map_entry,
                                  voxel_local_pos, make_uint3(1, 0, 0));
     vertex_ptr[5] = AllocateVertex(mesh_data, cube.vertex_ptrs.z, vertex_pos);
   }
   if (kEdgeTable[cube_index] & 64) {
     vertex_pos = VertexIntersection(p[6], p[7], d[6], d[7], isolevel);
 
-    MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
+    MeshCube &cube = GetMeshCube(map_table, mesh_data, map_entry,
                                  voxel_local_pos, make_uint3(0, 0, 0));
     vertex_ptr[6] = AllocateVertex(mesh_data, cube.vertex_ptrs.x, vertex_pos);
   }
   if (kEdgeTable[cube_index] & 128) {
     vertex_pos = VertexIntersection(p[7], p[4], d[7], d[4], isolevel);
 
-    MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
+    MeshCube &cube = GetMeshCube(map_table, mesh_data, map_entry,
                                  voxel_local_pos, make_uint3(0, 0, 0));
     vertex_ptr[7] = AllocateVertex(mesh_data, cube.vertex_ptrs.z, vertex_pos);
   }
@@ -328,21 +323,21 @@ void MarchingCubesKernel(HashTableGPU<VoxelBlock> map_table,
   if (kEdgeTable[cube_index] & 256) {
     vertex_pos = VertexIntersection(p[4], p[0], d[4], d[0], isolevel);
 
-    MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
+    MeshCube &cube = GetMeshCube(map_table, mesh_data, map_entry,
                                  voxel_local_pos, make_uint3(0, 0, 1));
     vertex_ptr[8] = AllocateVertex(mesh_data, cube.vertex_ptrs.y, vertex_pos);
   }
   if (kEdgeTable[cube_index] & 512) {
     vertex_pos = VertexIntersection(p[5], p[1], d[5], d[1], isolevel);
 
-    MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
+    MeshCube &cube = GetMeshCube(map_table, mesh_data, map_entry,
                                  voxel_local_pos, make_uint3(1, 0, 1));
     vertex_ptr[9] = AllocateVertex(mesh_data, cube.vertex_ptrs.y, vertex_pos);
   }
   if (kEdgeTable[cube_index] & 1024) {
     vertex_pos = VertexIntersection(p[6], p[2], d[6], d[2], isolevel);
 
-    MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
+    MeshCube &cube = GetMeshCube(map_table, mesh_data, map_entry,
                                  voxel_local_pos, make_uint3(1, 0, 0));
     vertex_ptr[10] = AllocateVertex(mesh_data, cube.vertex_ptrs.y,
                                     vertex_pos);
@@ -350,23 +345,28 @@ void MarchingCubesKernel(HashTableGPU<VoxelBlock> map_table,
   if (kEdgeTable[cube_index] & 2048) {
     vertex_pos = VertexIntersection(p[7], p[3], d[7], d[3], isolevel);
 
-    MeshCube &cube = GetMeshCube(mesh_table, mesh_data, mesh_entry,
+    MeshCube &cube = GetMeshCube(map_table, mesh_data, map_entry,
                                  voxel_local_pos, make_uint3(0, 0, 0));
     vertex_ptr[11] = AllocateVertex(mesh_data, cube.vertex_ptrs.y,
                                     vertex_pos);
   }
 
-  this_cube.cube_index = cube_index;
   int i = 0;
   for (int t = 0; kTriangleTable[cube_index][t] != -1; t += 3, ++i) {
     int triangle_ptr = this_cube.triangle_ptr[i];
-    if (triangle_ptr == -1) {
-      triangle_ptr = mesh_data.AllocTriangleHeap();
-    } else { // recycle the rubbish (TODO: more sophisticated operations)
-      int3 vertex_ptrs = mesh_data.triangles[triangle_ptr].vertex_ptrs;
-      atomicSub(&mesh_data.vertices[vertex_ptrs.x].ref_count, 1);
-      atomicSub(&mesh_data.vertices[vertex_ptrs.y].ref_count, 1);
-      atomicSub(&mesh_data.vertices[vertex_ptrs.z].ref_count, 1);
+
+    /// If the cube type is not changed, do not modify triangles,
+    /// as they are what they are
+    if (kTriangleTable[cube_index][t]
+        != kTriangleTable[this_cube.cube_index][t]) {
+      if (triangle_ptr == -1) {
+        triangle_ptr = mesh_data.AllocTriangleHeap();
+      } else { // recycle the rubbish (TODO: more sophisticated operations)
+        int3 vertex_ptrs = mesh_data.triangles[triangle_ptr].vertex_ptrs;
+        atomicSub(&mesh_data.vertices[vertex_ptrs.x].ref_count, 1);
+        atomicSub(&mesh_data.vertices[vertex_ptrs.y].ref_count, 1);
+        atomicSub(&mesh_data.vertices[vertex_ptrs.z].ref_count, 1);
+      }
     }
 
     this_cube.triangle_ptr[i] = triangle_ptr;
@@ -374,25 +374,25 @@ void MarchingCubesKernel(HashTableGPU<VoxelBlock> map_table,
     Triangle triangle;
     triangle.Clear();
     triangle.vertex_ptrs.x = vertex_ptr[kTriangleTable[cube_index][t + 0]];
-    atomicAdd(&mesh_data.vertices[triangle.vertex_ptrs.x].ref_count, 1);
-
     triangle.vertex_ptrs.y = vertex_ptr[kTriangleTable[cube_index][t + 1]];
-    atomicAdd(&mesh_data.vertices[triangle.vertex_ptrs.y].ref_count, 1);
-
     triangle.vertex_ptrs.z = vertex_ptr[kTriangleTable[cube_index][t + 2]];
+
+    atomicAdd(&mesh_data.vertices[triangle.vertex_ptrs.y].ref_count, 1);
+    atomicAdd(&mesh_data.vertices[triangle.vertex_ptrs.x].ref_count, 1);
     atomicAdd(&mesh_data.vertices[triangle.vertex_ptrs.z].ref_count, 1);
 
     mesh_data.triangles[triangle_ptr] = triangle;
   }
+  this_cube.cube_index = cube_index;
 }
 
 __global__
-void RecycleTrianglesKernel(HashTableGPU<MeshCubeBlock> mesh_table,
+void RecycleTrianglesKernel(HashTableGPU<VoxelBlock> hash_table,
                             MeshData mesh_data) {
-  const HashEntry &mesh_entry = mesh_table.compacted_hash_entries[blockIdx.x];
+  const HashEntry &entry = hash_table.compacted_hash_entries[blockIdx.x];
 
   const uint local_idx = threadIdx.x;  //inside an SDF block
-  MeshCube &cube = mesh_table.values[mesh_entry.ptr](local_idx);
+  MeshCube &cube = hash_table.values[entry.ptr].cubes[local_idx];
 
   int i = 0;
   for (int t = 0; kTriangleTable[cube.cube_index][t] != -1; t += 3, ++i);
@@ -413,11 +413,12 @@ void RecycleTrianglesKernel(HashTableGPU<MeshCubeBlock> mesh_table,
 }
 
 __global__
-void RecycleVerticesKernel(HashTableGPU<MeshCubeBlock> mesh_table, MeshData mesh_data) {
-  const HashEntry &mesh_entry = mesh_table.compacted_hash_entries[blockIdx.x];
+void RecycleVerticesKernel(HashTableGPU<VoxelBlock> hash_table,
+                           MeshData mesh_data) {
+  const HashEntry &entry = hash_table.compacted_hash_entries[blockIdx.x];
   const uint local_idx = threadIdx.x;
 
-  MeshCube &cube = mesh_table.values[mesh_entry.ptr](local_idx);
+  MeshCube &cube = hash_table.values[entry.ptr].cubes[local_idx];
 
   if (cube.vertex_ptrs.x != -1 &&
       mesh_data.vertices[cube.vertex_ptrs.x].ref_count <= 0) {
@@ -439,7 +440,7 @@ void RecycleVerticesKernel(HashTableGPU<MeshCubeBlock> mesh_table, MeshData mesh
   }
 }
 
-Mesh::Mesh(const HashParams &params) {
+Mesh::Mesh() {
   checkCudaErrors(cudaMalloc(&mesh_data_.vertex_heap,
                              sizeof(uint) * kMaxVertexCount));
   checkCudaErrors(cudaMalloc(&mesh_data_.vertex_heap_counter, sizeof(uint)));
@@ -450,8 +451,6 @@ Mesh::Mesh(const HashParams &params) {
   checkCudaErrors(cudaMalloc(&mesh_data_.triangle_heap_counter, sizeof(uint)));
   checkCudaErrors(cudaMalloc(&mesh_data_.triangles,
                              sizeof(Triangle) * kMaxVertexCount));
-
-  hash_table_.Resize(params);
 
   Reset();
 }
@@ -474,15 +473,13 @@ void Mesh::Reset() {
   ResetHeapKernel<<<grid_size, block_size>>>(mesh_data_);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
-
-  hash_table_.Reset();
 }
 
 /// Assume hash_table_ is compactified
 void Mesh::MarchingCubes(Map *map) {
   uint occupied_block_count;
   checkCudaErrors(cudaMemcpy(&occupied_block_count,
-                             gpu_data().compacted_hash_entry_counter,
+                             map->gpu_data().compacted_hash_entry_counter,
                              sizeof(uint), cudaMemcpyDeviceToHost));
   LOG(INFO) << "marching cubes block count: " << occupied_block_count;
   if (occupied_block_count <= 0)
@@ -493,32 +490,32 @@ void Mesh::MarchingCubes(Map *map) {
   const dim3 block_size(threads_per_block, 1);
 
   /// Use divide and conquer to avoid read-write conflict
-  MarchingCubesKernel<<<grid_size, block_size>>>(map->gpu_data(), gpu_data(),
+  MarchingCubesKernel<<<grid_size, block_size>>>(map->gpu_data(),
           make_uchar3(0, 0, 0), make_uchar3(1, 1, 1),
           mesh_data_);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
-  MarchingCubesKernel<<<grid_size, block_size>>>(map->gpu_data(), gpu_data(),
-          make_uchar3(0, 0, 1), make_uchar3(1, 1, 0),
-          mesh_data_);
-  checkCudaErrors(cudaDeviceSynchronize());
-  checkCudaErrors(cudaGetLastError());
-  MarchingCubesKernel<<<grid_size, block_size>>>(map->gpu_data(), gpu_data(),
-          make_uchar3(0, 1, 0), make_uchar3(1, 0, 1),
-          mesh_data_);
-  checkCudaErrors(cudaDeviceSynchronize());
-  checkCudaErrors(cudaGetLastError());
-  MarchingCubesKernel<<<grid_size, block_size>>>(map->gpu_data(), gpu_data(),
-          make_uchar3(1, 0, 0), make_uchar3(0, 1, 1),
-          mesh_data_);
+//  MarchingCubesKernel<<<grid_size, block_size>>>(map->gpu_data(),
+//          make_uchar3(0, 0, 1), make_uchar3(1, 1, 0),
+//          mesh_data_);
+//  checkCudaErrors(cudaDeviceSynchronize());
+//  checkCudaErrors(cudaGetLastError());
+//  MarchingCubesKernel<<<grid_size, block_size>>>(map->gpu_data(),
+//          make_uchar3(0, 1, 0), make_uchar3(1, 0, 1),
+//          mesh_data_);
+//  checkCudaErrors(cudaDeviceSynchronize());
+//  checkCudaErrors(cudaGetLastError());
+//  MarchingCubesKernel<<<grid_size, block_size>>>(map->gpu_data(),
+//          make_uchar3(1, 0, 0), make_uchar3(0, 1, 1),
+//          mesh_data_);
+//  checkCudaErrors(cudaDeviceSynchronize());
+//  checkCudaErrors(cudaGetLastError());
+
+  RecycleTrianglesKernel<<<grid_size, block_size>>>(map->gpu_data(), mesh_data_);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 
-  RecycleTrianglesKernel<<<grid_size, block_size>>>(gpu_data(), mesh_data_);
-  checkCudaErrors(cudaDeviceSynchronize());
-  checkCudaErrors(cudaGetLastError());
-
-  RecycleVerticesKernel<<<grid_size, block_size>>>(gpu_data(), mesh_data_);
+  RecycleVerticesKernel<<<grid_size, block_size>>>(map->gpu_data(), mesh_data_);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }

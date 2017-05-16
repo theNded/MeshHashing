@@ -27,6 +27,7 @@ private:
   /// sensor data
   SensorData		sensor_data_;
   SensorParams	sensor_params_;
+  // mysterious padding for alignment
 
   float4x4      w_T_c_; // camera -> world
   float4x4      c_T_w_;

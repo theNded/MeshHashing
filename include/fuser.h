@@ -16,15 +16,15 @@
 
 class Fuser {
 private:
-  void UpdateBlocks(Map* map, Mesh* mesh, Sensor* sensor);
-  void AllocBlocks(Map* map, Mesh* mesh, Sensor* sensor);
-  void CollectTargetBlocks(Map* map, Mesh* mesh, Sensor *sensor);
+  void UpdateBlocks(Map* map, Sensor* sensor);
+  void AllocBlocks(Map* map, Sensor* sensor);
+  void CollectTargetBlocks(Map* map, Sensor *sensor);
 
 public:
   Fuser();
   ~Fuser();
 
-  void Integrate(Map* map, Mesh* mesh, Sensor *sensor, unsigned int* is_streamed_mask);
+  void Integrate(Map* map, Sensor *sensor, unsigned int* is_streamed_mask);
 };
 
 #endif //VH_MAPPER_H

@@ -53,6 +53,7 @@ void LoadSensorParams(std::string path, SensorParams& params) {
   params.cy = (float)fs["cy"];
   params.min_depth_range = (float)fs["min_depth_range"];
   params.max_depth_range = (float)fs["max_depth_range"];
+  params.range_factor    = (float)fs["range_factor"];
   params.width  = (int)fs["width"];
   params.height = (int)fs["height"];
 }

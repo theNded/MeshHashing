@@ -27,6 +27,7 @@ void Sensor::BindSensorDataToTexture() {
 __global__
 void DepthCPUtoGPUKernel(float *d_output, short *d_input,
                          uint width, uint height,
+                         float range_factor,
                          float min_depth_range,
                          float max_depth_range) {
   const int x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -35,7 +36,7 @@ void DepthCPUtoGPUKernel(float *d_output, short *d_input,
   if (x >= width || y >= height) return;
   const int idx = y * width + x;
   /// Convert mm -> m
-  const float depth = 0.001f * d_input[idx];
+  const float depth = range_factor * d_input[idx];
   bool is_valid = (depth >= min_depth_range && depth <= max_depth_range);
   d_output[idx] = is_valid ? depth : MINF;
 }
@@ -197,6 +198,7 @@ void Sensor::DepthCPUtoGPU(cv::Mat& depth) {
   DepthCPUtoGPUKernel<<<grid_size, block_size>>>(
           sensor_data_.depth_image, depth_imagebuffer_,
           width, height,
+          sensor_params_.range_factor,
           sensor_params_.min_depth_range,
           sensor_params_.max_depth_range);
 }
