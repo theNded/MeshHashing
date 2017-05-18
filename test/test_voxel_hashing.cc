@@ -22,7 +22,7 @@
 
 #include "config_reader.h"
 
-#define ICL
+#define SUN3D
 #if defined(ICL)
 const std::string kDefaultDatasetPath = "/home/wei/data/ICL/lv1/";
 #elif defined(TUM)
@@ -128,7 +128,7 @@ int main() {
   //                       30, cv::Size(640, 480));
   std::chrono::time_point<std::chrono::system_clock> start, end;
   start = std::chrono::system_clock::now();
-  int frames = depth_img_list.size();
+  int frames = depth_img_list.size() - 1;
 //#define OFFLINE
   for (int i = 0; i < frames; ++i) {
     LOG(INFO) << i;
@@ -143,12 +143,13 @@ int main() {
     fuser.Integrate(&voxel_map, &sensor, NULL);
 #ifndef OFFLINE
     mesh.MarchingCubes(&voxel_map);
+    mesh.CompressMesh(&voxel_map);
 #endif
 
-    ray_caster.Cast(&voxel_map, T.getInverse());
-    cv::Mat display = GPUFloat4ToMat(ray_caster.ray_caster_data().normal_image);
-    cv::imshow("display", display);
-    cv::waitKey(1);
+//    ray_caster.Cast(&voxel_map, T.getInverse());
+//    cv::Mat display = GPUFloat4ToMat(ray_caster.ray_caster_data().color_image);
+//    cv::imshow("display", display);
+//    cv::waitKey(1);
   }
   end = std::chrono::system_clock::now();
   std::chrono::duration<double> seconds = end - start;
@@ -160,7 +161,8 @@ int main() {
   mesh.MarchingCubes(&voxel_map);
 #endif
 
-  mesh.SaveMesh("ttt.obj");
+  mesh.SaveMesh(&voxel_map, "test.obj");
+  //mesh.SaveMesh(&voxel_map, "ttt.obj");
 
   voxel_map.Debug();
 }

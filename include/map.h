@@ -25,6 +25,7 @@ public:
 
   void Reset();
   void Recycle();
+  void CollectAllBlocks();
 
   /// Only classes with Kernel function should call it
   /// The other part of the hash_table should be hidden

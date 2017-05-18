@@ -112,7 +112,7 @@ struct __ALIGN__(8) VoxelBlock {
 
 
 /// Used by mesh
-struct __ALIGN__(8) Vertex {
+struct Vertex {
   float3 pos;
   int    ref_count;
 
@@ -123,7 +123,7 @@ struct __ALIGN__(8) Vertex {
   }
 };
 
-struct __ALIGN__(8) Triangle {
+struct Triangle {
   int3 vertex_ptrs;
 
   __device__

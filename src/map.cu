@@ -83,6 +83,36 @@ void RecycleInvalidBlockKernel(HashTableGPU<VoxelBlock> hash_table) {
   }
 }
 
+__global__
+void CollectAllBlocksKernel(HashTableGPU<VoxelBlock> hash_table) {
+  const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+  __shared__ int local_counter;
+  if (threadIdx.x == 0) local_counter = 0;
+  __syncthreads();
+
+  int addr_local = -1;
+  if (idx < *hash_table.entry_count) {
+    if (hash_table.hash_entries[idx].ptr != FREE_ENTRY) {
+      addr_local = atomicAdd(&local_counter, 1);
+    }
+  }
+
+  __syncthreads();
+
+  __shared__ int addr_global;
+  if (threadIdx.x == 0 && local_counter > 0) {
+    addr_global = atomicAdd(hash_table.compacted_hash_entry_counter,
+                            local_counter);
+  }
+  __syncthreads();
+
+  if (addr_local != -1) {
+    const uint addr = addr_global + addr_local;
+    hash_table.compacted_hash_entries[addr] = hash_table.hash_entries[idx];
+  }
+}
+
 //////////
 /// Member functions (CPU code)
 Map::Map(const HashParams &hash_params) {
@@ -170,4 +200,27 @@ void Map::RecycleInvalidBlock() {
   RecycleInvalidBlockKernel << <grid_size, block_size >> >(gpu_data());
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
+}
+
+void Map::CollectAllBlocks(){
+  const uint threads_per_block = 256;
+  uint res = 0;
+
+  uint entry_count;
+  checkCudaErrors(cudaMemcpy(&entry_count, gpu_data().entry_count,
+                             sizeof(uint), cudaMemcpyDeviceToHost));
+
+  const dim3 grid_size((entry_count + threads_per_block - 1)
+                       / threads_per_block, 1);
+  const dim3 block_size(threads_per_block, 1);
+
+  checkCudaErrors(cudaMemset(gpu_data().compacted_hash_entry_counter,
+                             0, sizeof(int)));
+  CollectAllBlocksKernel<<<grid_size, block_size >>>(gpu_data());
+  checkCudaErrors(cudaDeviceSynchronize());
+  checkCudaErrors(cudaGetLastError());
+
+  checkCudaErrors(cudaMemcpy(&res, gpu_data().compacted_hash_entry_counter,
+                             sizeof(uint), cudaMemcpyDeviceToHost));
+  LOG(INFO) << "Block count in all: " << res;
 }
