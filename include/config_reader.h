@@ -125,6 +125,43 @@ void LoadSUN3D(std::string dataset_path,
   }
 }
 
+void LoadSUN3DOriginal(std::string dataset_path,
+                       std::vector<std::string> &depth_img_list,
+                       std::vector<std::string> &color_img_list,
+                       std::vector<float4x4> &wTcs) {
+  std::ifstream stream(dataset_path + "image_depth_association.txt");
+  std::string ts, color_img_name, depth_img_name;
+  while (stream >> ts >> color_img_name >> ts >> depth_img_name) {
+    color_img_list.push_back(dataset_path + "image/" + color_img_name);
+    depth_img_list.push_back(dataset_path + "depth/" + depth_img_name);
+  }
+
+  std::ifstream traj_stream(dataset_path + "trajectory.txt");
+  double cTw[12];
+  float4x4 wTc;
+  while (traj_stream >> cTw[0] >> cTw[1] >> cTw[2] >> cTw[3]
+                     >> cTw[4] >> cTw[5] >> cTw[6] >> cTw[7]
+                     >> cTw[8] >> cTw[9] >> cTw[10] >> cTw[11]) {
+
+    wTc.setIdentity();
+    wTc.m11 = (float)cTw[0];
+    wTc.m12 = (float)cTw[1];
+    wTc.m13 = (float)cTw[2];
+    wTc.m14 = (float)cTw[3];
+    wTc.m21 = (float)cTw[4];
+    wTc.m22 = (float)cTw[5];
+    wTc.m23 = (float)cTw[6];
+    wTc.m24 = (float)cTw[7];
+    wTc.m31 = (float)cTw[8];
+    wTc.m32 = (float)cTw[9];
+    wTc.m33 = (float)cTw[10];
+    wTc.m34 = (float)cTw[11];
+
+    wTc.getInverse();
+    wTcs.push_back(wTc);
+  }
+}
+
 /// no 1-1-1 correspondences
 void LoadTUM(std::string dataset_path,
              std::vector<std::string> &depth_image_list,

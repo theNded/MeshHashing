@@ -625,6 +625,8 @@ void Mesh::CompressMesh(Map *map) {
   ResetCompactMesh();
 
   int occupied_block_count = map->hash_table().compacted_entry_count();
+  if (occupied_block_count <= 0) return;
+
   {
     const uint threads_per_block = BLOCK_SIZE;
     const dim3 grid_size(occupied_block_count, 1);

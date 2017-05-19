@@ -22,7 +22,7 @@
 
 #include "config_reader.h"
 
-#define SUN3D
+#define SUN3D_ORI
 #if defined(ICL)
 const std::string kDefaultDatasetPath = "/home/wei/data/ICL/lv1/";
 #elif defined(TUM)
@@ -31,6 +31,9 @@ const std::string kDefaultDatasetPath =
 #elif defined(SUN3D)
 const std::string kDefaultDatasetPath =
         "/home/wei/data/SUN3D/copyroom/";
+#elif defined(SUN3D_ORI)
+const std::string kDefaultDatasetPath =
+        "/home/wei/data/SUN3D-Princeton/hotel_umd/maryland_hotel3/";
 #endif
 
 /// Only test over 480x640 images
@@ -85,6 +88,8 @@ int main() {
   LoadTUM(kDefaultDatasetPath, depth_img_list, color_img_list, wTc);
 #elif defined(SUN3D)
   LoadSUN3D(kDefaultDatasetPath, depth_img_list, color_img_list, wTc);
+#elif defined(SUN3D_ORI)
+  LoadSUN3DOriginal(kDefaultDatasetPath, depth_img_list, color_img_list, wTc);
 #endif
 
   SDFParams sdf_params;
@@ -102,6 +107,8 @@ int main() {
   LoadSensorParams("../config/sensor_tum3.yml", sensor_params);
 #elif defined(SUN3D)
   LoadSensorParams("../config/sensor_sun3d.yml", sensor_params);
+#elif defined(SUN3D_ORI)
+  LoadSensorParams("../config/sensor_sun3d_ori.yml", sensor_params);
 #endif
 
   RayCasterParams ray_cast_params;
@@ -130,10 +137,12 @@ int main() {
   start = std::chrono::system_clock::now();
   int frames = depth_img_list.size() - 1;
 //#define OFFLINE
+
   for (int i = 0; i < frames; ++i) {
     LOG(INFO) << i;
     cv::Mat depth = cv::imread(depth_img_list[i], -1);
     cv::Mat color = cv::imread(color_img_list[i]);
+
     cv::cvtColor(color, color, CV_BGR2BGRA);
 
     sensor.Process(depth, color);
@@ -144,12 +153,19 @@ int main() {
 #ifndef OFFLINE
     mesh.MarchingCubes(&voxel_map);
     mesh.CompressMesh(&voxel_map);
+
+    if (i > 0 && i % 500 == 0) {
+      std::stringstream ss;
+      ss.str("");
+      ss << "model-" << i << ".obj";
+      mesh.SaveMesh(&voxel_map, ss.str());
+    }
 #endif
 
-//    ray_caster.Cast(&voxel_map, T.getInverse());
-//    cv::Mat display = GPUFloat4ToMat(ray_caster.ray_caster_data().color_image);
-//    cv::imshow("display", display);
-//    cv::waitKey(1);
+    ray_caster.Cast(&voxel_map, T.getInverse());
+    cv::Mat display = GPUFloat4ToMat(ray_caster.ray_caster_data().normal_image);
+    cv::imshow("display", display);
+    cv::waitKey(1);
   }
   end = std::chrono::system_clock::now();
   std::chrono::duration<double> seconds = end - start;

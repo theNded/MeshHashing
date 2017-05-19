@@ -1,6 +1,6 @@
 %YAML:1.0
-bucket_count:      200000
+bucket_count:      800000
 bucket_size:       10
-entry_count:       2000000
+entry_count:       8000000
 linked_list_size:  7
-value_capacity:    100000
+value_capacity:    400000
