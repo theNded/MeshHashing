@@ -9,7 +9,8 @@
 extern texture<float, cudaTextureType2D, cudaReadModeElementType> depth_texture;
 extern texture<float4, cudaTextureType2D, cudaReadModeElementType> color_texture;
 __global__
-void UpdateBlocksKernel(HashTableGPU<VoxelBlock> map_table,
+void UpdateBlocksKernel(HashTableGPU map_table,
+                        VoxelBlock *blocks,
                         SensorData sensor_data,
                         SensorParams sensor_params,
                         float4x4 c_T_w) {
@@ -62,11 +63,11 @@ void UpdateBlocksKernel(HashTableGPU<VoxelBlock> map_table,
     delta.color = make_uchar3(0, 255, 0);
   }
 
-  map_table.values[entry.ptr].Update(local_idx, delta);
+  blocks[entry.ptr].Update(local_idx, delta);
 }
 
 __global__
-void AllocBlocksKernel(HashTableGPU<VoxelBlock> map_table,
+void AllocBlocksKernel(HashTableGPU map_table,
                        SensorData sensor_data,
                        SensorParams sensor_params,
                        float4x4 w_T_c, const uint* is_streamed_mask) {
@@ -210,7 +211,7 @@ void Map::UpdateBlocks(Sensor *sensor) {
 
   const dim3 grid_size(compacted_entry_count, 1);
   const dim3 block_size(threads_per_block, 1);
-  UpdateBlocksKernel <<<grid_size, block_size>>>(gpu_data(),
+  UpdateBlocksKernel <<<grid_size, block_size>>>(gpu_data(), blocks_,
           sensor->sensor_data(), sensor->sensor_params(), sensor->c_T_w());
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());

@@ -17,7 +17,7 @@ inline float3 frac(const float3& val)  {
 
 // TODO(wei): refine it
 __device__
-Voxel GetVoxel(const HashTableGPU<VoxelBlock>& hash_table, float3 world_pos) {
+Voxel GetVoxel(const HashTableGPU& hash_table, VoxelBlock *blocks, float3 world_pos) {
   HashEntry hash_entry = hash_table.GetEntry(WorldToBlock(world_pos));
   Voxel v;
   if (hash_entry.ptr == FREE_ENTRY) {
@@ -25,13 +25,14 @@ Voxel GetVoxel(const HashTableGPU<VoxelBlock>& hash_table, float3 world_pos) {
   } else {
     int3 voxel_pos = WorldToVoxeli(world_pos);
     int i = VoxelPosToIdx(voxel_pos);
-    v = hash_table.values[hash_entry.ptr](i);
+    v = blocks[hash_entry.ptr](i);
   }
   return v;
 }
 
 __device__
-bool TrilinearInterpolation(const HashTableGPU<VoxelBlock>& hash_table,
+bool TrilinearInterpolation(const HashTableGPU& hash_table,
+                            VoxelBlock *blocks,
                             const float3& pos,
                             float& sdf, uchar3& color) {
   const float offset = kSDFParams.voxel_size;
@@ -46,7 +47,7 @@ bool TrilinearInterpolation(const HashTableGPU<VoxelBlock>& hash_table,
   float3 v_color;
   
   /// 000
-  v = GetVoxel(hash_table, pos_corner+make_float3(0.0f, 0.0f, 0.0f));
+  v = GetVoxel(hash_table, blocks, pos_corner+make_float3(0.0f, 0.0f, 0.0f));
   if(v.weight == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
   w = (1.0f-ratio.x)*(1.0f-ratio.y)*(1.0f-ratio.z);
@@ -54,7 +55,7 @@ bool TrilinearInterpolation(const HashTableGPU<VoxelBlock>& hash_table,
   colorf += w * v_color;
 
   /// 001
-  v = GetVoxel(hash_table, pos_corner+make_float3(0.0f, 0.0f, offset));
+  v = GetVoxel(hash_table, blocks, pos_corner+make_float3(0.0f, 0.0f, offset));
   if(v.weight == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
   w = (1.0f-ratio.x)*(1.0f-ratio.y)*ratio.z;
@@ -62,7 +63,7 @@ bool TrilinearInterpolation(const HashTableGPU<VoxelBlock>& hash_table,
   colorf += w * v_color;
 
   /// 010
-  v = GetVoxel(hash_table, pos_corner+make_float3(0.0f, offset, 0.0f));
+  v = GetVoxel(hash_table, blocks, pos_corner+make_float3(0.0f, offset, 0.0f));
   if(v.weight == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
   w = (1.0f-ratio.x)*ratio.y *(1.0f-ratio.z);
@@ -70,7 +71,7 @@ bool TrilinearInterpolation(const HashTableGPU<VoxelBlock>& hash_table,
   colorf += w * v_color;
 
   /// 011
-  v = GetVoxel(hash_table, pos_corner+make_float3(0.0f, offset, offset));
+  v = GetVoxel(hash_table, blocks, pos_corner+make_float3(0.0f, offset, offset));
   if(v.weight == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
   w = (1.0f-ratio.x)*ratio.y*ratio.z;
@@ -78,7 +79,7 @@ bool TrilinearInterpolation(const HashTableGPU<VoxelBlock>& hash_table,
   colorf += w * v_color;
 
   /// 100
-  v = GetVoxel(hash_table, pos_corner+make_float3(offset, 0.0f, 0.0f));
+  v = GetVoxel(hash_table, blocks, pos_corner+make_float3(offset, 0.0f, 0.0f));
   if(v.weight == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
   w = ratio.x*(1.0f-ratio.y)*(1.0f-ratio.z);
@@ -86,7 +87,7 @@ bool TrilinearInterpolation(const HashTableGPU<VoxelBlock>& hash_table,
   colorf += w * v_color;
 
   /// 101
-  v = GetVoxel(hash_table, pos_corner+make_float3(offset, 0.0f, offset));
+  v = GetVoxel(hash_table, blocks, pos_corner+make_float3(offset, 0.0f, offset));
   if(v.weight == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
   w = ratio.x*(1.0f-ratio.y)*ratio.z;
@@ -94,7 +95,7 @@ bool TrilinearInterpolation(const HashTableGPU<VoxelBlock>& hash_table,
   colorf += w	* v_color;
 
   /// 110
-  v = GetVoxel(hash_table, pos_corner+make_float3(offset, offset, 0.0f));
+  v = GetVoxel(hash_table, blocks, pos_corner+make_float3(offset, offset, 0.0f));
   if(v.weight == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
   w = ratio.x*ratio.y*(1.0f-ratio.z);
@@ -102,7 +103,7 @@ bool TrilinearInterpolation(const HashTableGPU<VoxelBlock>& hash_table,
   colorf += w * v_color;
 
   /// 111
-  v = GetVoxel(hash_table, pos_corner+make_float3(offset, offset, offset));
+  v = GetVoxel(hash_table, blocks, pos_corner+make_float3(offset, offset, offset));
   if(v.weight == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
   w = ratio.x*ratio.y*ratio.z;
@@ -122,7 +123,8 @@ float LinearIntersection(float t_near, float t_far, float sdf_near, float sdf_fa
 // d0 near, d1 far
 __device__
 /// Iteratively
-bool BisectionIntersection(const HashTableGPU<VoxelBlock>& hash_table,
+bool BisectionIntersection(const HashTableGPU& hash_table,
+                           VoxelBlock* blocks,
                            const float3& world_pos_camera_origin,
                            const float3& world_dir,
                            float sdf_near, float t_near,
@@ -135,7 +137,7 @@ bool BisectionIntersection(const HashTableGPU<VoxelBlock>& hash_table,
 #pragma unroll 1
   for(uint i = 0; i < kIterations; i++) {
     m = LinearIntersection(l, r, l_sdf, r_sdf);
-    if(!TrilinearInterpolation(hash_table, world_pos_camera_origin + m * world_dir,
+    if(!TrilinearInterpolation(hash_table, blocks, world_pos_camera_origin + m * world_dir,
                                m_sdf, color))
       return false;
 
@@ -150,31 +152,32 @@ bool BisectionIntersection(const HashTableGPU<VoxelBlock>& hash_table,
 }
 
 __device__
-float3 GradientAtPoint(const HashTableGPU<VoxelBlock>& hash_table,
+float3 GradientAtPoint(const HashTableGPU& hash_table,
+                       VoxelBlock *blocks,
                        const float3& pos) {
   const float voxelSize = kSDFParams.voxel_size;
   float3 offset = make_float3(voxelSize, voxelSize, voxelSize);
 
   /// negative
   float distn00; uchar3 colorn00;
-  TrilinearInterpolation(hash_table, pos-make_float3(0.5f*offset.x, 0.0f, 0.0f),
+  TrilinearInterpolation(hash_table, blocks, pos-make_float3(0.5f*offset.x, 0.0f, 0.0f),
                          distn00, colorn00);
   float dist0n0; uchar3 color0n0;
-  TrilinearInterpolation(hash_table, pos-make_float3(0.0f, 0.5f*offset.y, 0.0f),
+  TrilinearInterpolation(hash_table, blocks, pos-make_float3(0.0f, 0.5f*offset.y, 0.0f),
                          dist0n0, color0n0);
   float dist00n; uchar3 color00n;
-  TrilinearInterpolation(hash_table, pos-make_float3(0.0f, 0.0f, 0.5f*offset.z),
+  TrilinearInterpolation(hash_table, blocks, pos-make_float3(0.0f, 0.0f, 0.5f*offset.z),
                          dist00n, color00n);
 
   /// positive
   float distp00; uchar3 colorp00;
-  TrilinearInterpolation(hash_table, pos+make_float3(0.5f*offset.x, 0.0f, 0.0f),
+  TrilinearInterpolation(hash_table, blocks, pos+make_float3(0.5f*offset.x, 0.0f, 0.0f),
                          distp00, colorp00);
   float dist0p0; uchar3 color0p0;
-  TrilinearInterpolation(hash_table, pos+make_float3(0.0f, 0.5f*offset.y, 0.0f),
+  TrilinearInterpolation(hash_table, blocks, pos+make_float3(0.0f, 0.5f*offset.y, 0.0f),
                          dist0p0, color0p0);
   float dist00p; uchar3 color00p;
-  TrilinearInterpolation(hash_table, pos+make_float3(0.0f, 0.0f, 0.5f*offset.z),
+  TrilinearInterpolation(hash_table, blocks, pos+make_float3(0.0f, 0.0f, 0.5f*offset.z),
                          dist00p, color00p);
 
   float3 grad = make_float3((distp00-distn00)/offset.x,
@@ -192,7 +195,8 @@ float3 GradientAtPoint(const HashTableGPU<VoxelBlock>& hash_table,
 //////////
 /// Kernel function
 __global__
-void CastKernel(const HashTableGPU<VoxelBlock> hash_table,
+void CastKernel(const HashTableGPU hash_table,
+                VoxelBlock *blocks,
                 RayCasterData ray_caster_data,
                 RayCasterParams ray_caster_params,
                 const float4x4 c_T_w,
@@ -238,7 +242,7 @@ void CastKernel(const HashTableGPU<VoxelBlock> hash_table,
     float sdf;
     uchar3 color;
 
-    if (TrilinearInterpolation(hash_table, world_pos_sample, sdf, color)) {
+    if (TrilinearInterpolation(hash_table, blocks, world_pos_sample, sdf, color)) {
       /// Zero crossing
       if (prev_sample.weight > 0 && prev_sample.sdf > 0.0f && sdf < 0.0f) {
 
@@ -246,7 +250,7 @@ void CastKernel(const HashTableGPU<VoxelBlock> hash_table,
         uchar3 interpolated_color;
         /// Find isosurface
         bool is_isosurface_found = BisectionIntersection(
-                hash_table,
+                hash_table, blocks,
                 world_pos_camera_origin, world_dir,
                 prev_sample.sdf, prev_sample.t, sdf, t,
                 interpolated_t, interpolated_color);
@@ -276,7 +280,7 @@ void CastKernel(const HashTableGPU<VoxelBlock> hash_table,
                                   interpolated_color.z / 255.f, 1.0f);
             
             if (ray_caster_params.enable_gradients) {
-              float3 normal = GradientAtPoint(hash_table, world_pos_isosurface);
+              float3 normal = GradientAtPoint(hash_table, blocks, world_pos_isosurface);
               normal = -normal;
               float4 n = c_T_w * make_float4(normal, 0.0f);
               ray_caster_data.normal_image[pixel_idx]
@@ -326,7 +330,7 @@ void RayCaster::Cast(Map* map, const float4x4& c_T_w) {
                        /threads_per_block);
   const dim3 block_size(threads_per_block, threads_per_block);
 
-  CastKernel<<<grid_size, block_size>>>(map->gpu_data(),
+  CastKernel<<<grid_size, block_size>>>(map->gpu_data(), map->blocks(),
           ray_caster_data_, ray_caster_params_, c_T_w, w_T_c);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());

@@ -13,10 +13,9 @@
 /// However, we need CUDA code that has to be in .cu
 /// Hence, we separate the declaration and implementation
 /// And specifically instantiate it with @typename Block in the .cu
-template <typename T>
 class HashTable {
 private:
-  HashTableGPU<T> gpu_data_;
+  HashTableGPU gpu_data_;
   HashParams hash_params_;
 
   void Alloc(const HashParams &params);
@@ -36,7 +35,7 @@ public:
 
   void Debug();
 
-  HashTableGPU<T>& gpu_data() {
+  HashTableGPU& gpu_data() {
     return gpu_data_;
   }
 };

@@ -6,18 +6,16 @@
 
 //////////
 /// Kernel functions
-template <typename T>
 __global__
-void ResetBucketMutexesKernel(HashTableGPU<T> hash_table) {
+void ResetBucketMutexesKernel(HashTableGPU hash_table) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (idx < *hash_table.bucket_count) {
     hash_table.bucket_mutexes[idx] = FREE_ENTRY;
   }
 }
 
-template <typename T>
 __global__
-void ResetHeapKernel(HashTableGPU<T> hash_table) {
+void ResetHeapKernel(HashTableGPU hash_table) {
   uint idx = blockIdx.x * blockDim.x + threadIdx.x;
 
   if (idx == 0) {
@@ -26,13 +24,11 @@ void ResetHeapKernel(HashTableGPU<T> hash_table) {
 
   if (idx < *hash_table.value_capacity) {
     hash_table.heap[idx] = *hash_table.value_capacity - idx - 1;
-    hash_table.values[idx].Clear();
   }
 }
 
-template <typename T>
 __global__
-void ResetEntriesKernel(HashTableGPU<T> hash_table) {
+void ResetEntriesKernel(HashTableGPU hash_table) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (idx < *hash_table.entry_count) {
     hash_table.hash_entries[idx].Clear();
@@ -40,71 +36,35 @@ void ResetEntriesKernel(HashTableGPU<T> hash_table) {
   }
 }
 
-template <typename T>
-__global__
-void CollectAllBlocksKernel(HashTableGPU<T> hash_table) {
-  const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-  __shared__ int local_counter;
-  if (threadIdx.x == 0) local_counter = 0;
-  __syncthreads();
-
-  int addr_local = -1;
-  if (idx < *hash_table.entry_count) {
-    if (hash_table.hash_entries[idx].ptr != FREE_ENTRY) {
-      addr_local = atomicAdd(&local_counter, 1);
-    }
-  }
-
-  __syncthreads();
-
-  __shared__ int addr_global;
-  if (threadIdx.x == 0 && local_counter > 0) {
-    addr_global = atomicAdd(hash_table.compacted_hash_entry_counter, local_counter);
-  }
-  __syncthreads();
-
-  if (addr_local != -1) {
-    const uint addr = addr_global + addr_local;
-    hash_table.compacted_hash_entries[addr] = hash_table.hash_entries[idx];
-  }
-}
-
 
 //////////
 /// Member functions (CPU code)
-template <typename T>
-HashTable<T>::HashTable() {}
+HashTable::HashTable() {}
 
-template <typename T>
-HashTable<T>::HashTable(const HashParams &params) {
+HashTable::HashTable(const HashParams &params) {
   hash_params_ = params;
   Alloc(params);
   Reset();
 }
 
-template <typename T>
-HashTable<T>::~HashTable() {
+HashTable::~HashTable() {
   Free();
 }
 
-template <typename T>
-uint HashTable<T>::compacted_entry_count() {
+uint HashTable::compacted_entry_count() {
   uint count;
   checkCudaErrors(cudaMemcpy(&count, gpu_data_.compacted_hash_entry_counter,
                              sizeof(uint), cudaMemcpyDeviceToHost));
   return count;
 }
 
-template <typename T>
-void HashTable<T>::Resize(const HashParams &params) {
+void HashTable::Resize(const HashParams &params) {
   hash_params_ = params;
   Alloc(params);
   Reset();
 }
 
-template <typename T>
-void HashTable<T>::Alloc(const HashParams &params) {
+void HashTable::Alloc(const HashParams &params) {
   /// Parameters
   checkCudaErrors(cudaMalloc(&gpu_data_.bucket_count, sizeof(uint)));
   checkCudaErrors(cudaMemcpy(gpu_data_.bucket_count, &params.bucket_count,
@@ -131,8 +91,6 @@ void HashTable<T>::Alloc(const HashParams &params) {
                              sizeof(uint) * params.value_capacity));
   checkCudaErrors(cudaMalloc(&gpu_data_.heap_counter,
                              sizeof(uint)));
-  checkCudaErrors(cudaMalloc(&gpu_data_.values,
-                             sizeof(T) * params.value_capacity));
 
   /// Entries
   checkCudaErrors(cudaMalloc(&gpu_data_.hash_entries,
@@ -150,8 +108,7 @@ void HashTable<T>::Alloc(const HashParams &params) {
   gpu_data_.is_on_gpu = true;
 }
 
-template <typename T>
-void HashTable<T>::Free() {
+void HashTable::Free() {
   if (gpu_data_.is_on_gpu) {
     checkCudaErrors(cudaFree(gpu_data_.bucket_count));
     checkCudaErrors(cudaFree(gpu_data_.bucket_size));
@@ -161,7 +118,6 @@ void HashTable<T>::Free() {
 
     checkCudaErrors(cudaFree(gpu_data_.heap));
     checkCudaErrors(cudaFree(gpu_data_.heap_counter));
-    checkCudaErrors(cudaFree(gpu_data_.values));
     checkCudaErrors(cudaFree(gpu_data_.hash_entry_remove_flags));
 
     checkCudaErrors(cudaFree(gpu_data_.hash_entries));
@@ -175,8 +131,7 @@ void HashTable<T>::Free() {
 
 /// Member functions (CPU calling GPU kernels)
 // (__host__)
-template <typename T>
-void HashTable<T>::ResetMutexes() {
+void HashTable::ResetMutexes() {
   const int threads_per_block = 64;
   const dim3 grid_size((hash_params_.bucket_count + threads_per_block - 1)
                        / threads_per_block, 1);
@@ -188,8 +143,7 @@ void HashTable<T>::ResetMutexes() {
 }
 
 // (__host__)
-template <typename T>
-void HashTable<T>::Reset() {
+void HashTable::Reset() {
   /// Reset mutexes
   ResetMutexes();
 
@@ -218,33 +172,9 @@ void HashTable<T>::Reset() {
   }
 }
 
-template <typename T>
-void HashTable<T>::CollectAllEntries(){
-  const uint threads_per_block = 256;
-
-  uint entry_count;
-  checkCudaErrors(cudaMemcpy(&entry_count, gpu_data_.entry_count,
-                             sizeof(uint), cudaMemcpyDeviceToHost));
-
-  const dim3 grid_size((entry_count + threads_per_block - 1)
-                       / threads_per_block, 1);
-  const dim3 block_size(threads_per_block, 1);
-
-  checkCudaErrors(cudaMemset(gpu_data_.compacted_hash_entry_counter,
-                             0, sizeof(int)));
-  CollectAllBlocksKernel<<<grid_size, block_size >>>(gpu_data_);
-
-  int count = compacted_entry_count();
-  LOG(INFO) << "Block count in all: " << count;
-  checkCudaErrors(cudaDeviceSynchronize());
-  checkCudaErrors(cudaGetLastError());
-}
-
 /// Member function: Others
-template <typename T>
-void HashTable<T>::Debug() {
+void HashTable::Debug() {
   HashEntry *entries = new HashEntry[hash_params_.bucket_size * hash_params_.bucket_count];
-  T *values          = new T[hash_params_.value_capacity];
   uint *heap = new uint[hash_params_.value_capacity];
   uint  heap_counter;
 
@@ -257,9 +187,9 @@ void HashTable<T>::Debug() {
   checkCudaErrors(cudaMemcpy(entries, gpu_data_.hash_entries,
                              sizeof(HashEntry) * hash_params_.bucket_size * hash_params_.bucket_count,
                              cudaMemcpyDeviceToHost));
-  checkCudaErrors(cudaMemcpy(values, gpu_data_.values,
-                             sizeof(T) * hash_params_.value_capacity,
-                             cudaMemcpyDeviceToHost));
+//  checkCudaErrors(cudaMemcpy(values, gpu_data_.values,
+//                             sizeof(T) * hash_params_.value_capacity,
+//                             cudaMemcpyDeviceToHost));
 
   LOG(INFO) << "GPU -> CPU data transfer finished";
 
@@ -358,9 +288,6 @@ void HashTable<T>::Debug() {
             << not_free_value_count + free_value_count;
 
   delete [] entries;
-  delete [] values;
+  //delete [] values;
   delete [] heap;
 }
-
-/// Instantiate for a correct compilation
-template class HashTable<VoxelBlock>;

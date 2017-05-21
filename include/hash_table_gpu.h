@@ -15,12 +15,10 @@
 #include "geometry_util.h"
 #include "params.h"
 
-template <typename T>
 struct HashTableGPU {
   /// Hash VALUE part
   uint      *heap;                    /// index to free values
   uint      *heap_counter;            /// single element; used as an atomic counter (points to the next free block)
-  T         *values;                  /// pre-allocated and managed by heap manually to avoid expensive malloc
   int       *hash_entry_remove_flags; /// used in garbage collection
 
   /// Hash KEY part

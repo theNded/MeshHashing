@@ -13,29 +13,37 @@
 
 #define PINF  __int_as_float(0x7f800000)
 
+__global__
+void ResetBlocksKernel(VoxelBlock* blocks, int value_capacity) {
+  uint idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+  if (idx < value_capacity) {
+    blocks[idx].Clear();
+  }
+}
 //////////
 /// Kernel functions
 /// Starve voxels (to determine outliers)
 __global__
-void StarveOccupiedVoxelsKernel(HashTableGPU<VoxelBlock> hash_table) {
+void StarveOccupiedVoxelsKernel(HashTableGPU hash_table, VoxelBlock* blocks) {
 
   const uint idx = blockIdx.x;
   const HashEntry& entry = hash_table.compacted_hash_entries[idx];
 
-  int weight = hash_table.values[entry.ptr](threadIdx.x).weight;
+  int weight = blocks[entry.ptr](threadIdx.x).weight;
   weight = max(0, weight-1);
-  hash_table.values[entry.ptr](threadIdx.x).weight = weight;
+  blocks[entry.ptr](threadIdx.x).weight = weight;
 }
 
 /// Collect dead voxels
 __global__
-void CollectInvalidBlockInfoKernel(HashTableGPU<VoxelBlock> hash_table) {
+void CollectInvalidBlockInfoKernel(HashTableGPU hash_table, VoxelBlock* blocks) {
 
   const uint idx = blockIdx.x;
   const HashEntry& entry = hash_table.compacted_hash_entries[idx];
 
-  Voxel v0 = hash_table.values[entry.ptr](2*threadIdx.x+0);
-  Voxel v1 = hash_table.values[entry.ptr](2*threadIdx.x+1);
+  Voxel v0 = blocks[entry.ptr](2*threadIdx.x+0);
+  Voxel v1 = blocks[entry.ptr](2*threadIdx.x+1);
 
   if (v0.weight == 0)	v0.sdf = PINF;
   if (v1.weight == 0)	v1.sdf = PINF;
@@ -71,20 +79,20 @@ void CollectInvalidBlockInfoKernel(HashTableGPU<VoxelBlock> hash_table) {
 }
 
 __global__
-void RecycleInvalidBlockKernel(HashTableGPU<VoxelBlock> hash_table) {
+void RecycleInvalidBlockKernel(HashTableGPU hash_table, VoxelBlock *blocks) {
   const uint idx = blockIdx.x*blockDim.x + threadIdx.x;
 
   if (idx < (*hash_table.compacted_hash_entry_counter)
       && hash_table.hash_entry_remove_flags[idx] != 0) {
     const HashEntry& entry = hash_table.compacted_hash_entries[idx];
     if (hash_table.DeleteEntry(entry.pos)) {
-      hash_table.values[entry.ptr].Clear();
+      blocks[entry.ptr].Clear();
     }
   }
 }
 
 __global__
-void CollectAllBlocksKernel(HashTableGPU<VoxelBlock> hash_table) {
+void CollectAllBlocksKernel(HashTableGPU hash_table) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
 
   __shared__ int local_counter;
@@ -119,6 +127,10 @@ Map::Map(const HashParams &hash_params) {
   hash_table_.Resize(hash_params);
 
   Reset();
+
+  checkCudaErrors(cudaMalloc(&blocks_,
+                             sizeof(VoxelBlock) * hash_params.value_capacity));
+  ResetBlocks(hash_params.value_capacity);
 
   /// Shared mesh
   checkCudaErrors(cudaMalloc(&mesh_data_.vertex_heap,
@@ -181,6 +193,18 @@ void Map::Reset() {
   hash_table_.Reset();
 }
 
+void Map::ResetBlocks(int capacity){
+  const int threads_per_block = 64;
+  const dim3 grid_size((kMaxVertexCount + threads_per_block - 1)
+                       / threads_per_block, 1);
+  const dim3 block_size(threads_per_block, 1);
+
+  ResetBlocksKernel<<<grid_size, block_size>>>(blocks_, capacity);
+  checkCudaErrors(cudaDeviceSynchronize());
+  checkCudaErrors(cudaGetLastError());
+}
+
+
 void Map::Recycle() {
   // TODO(wei): change it via global parameters
   bool kRecycle = true;
@@ -211,7 +235,7 @@ void Map::StarveOccupiedVoxels() {
   const dim3 grid_size(processing_block_count, 1);
   const dim3 block_size(threads_per_block, 1);
 
-  StarveOccupiedVoxelsKernel<<<grid_size, block_size >>>(gpu_data());
+  StarveOccupiedVoxelsKernel<<<grid_size, block_size >>>(gpu_data(), blocks_);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }
@@ -230,7 +254,7 @@ void Map::CollectInvalidBlockInfo() {
   const dim3 grid_size(processing_block_count, 1);
   const dim3 block_size(threads_per_block, 1);
 
-  CollectInvalidBlockInfoKernel <<<grid_size, block_size >>>(gpu_data());
+  CollectInvalidBlockInfoKernel <<<grid_size, block_size >>>(gpu_data(), blocks_);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }
@@ -250,7 +274,7 @@ void Map::RecycleInvalidBlock() {
                        / threads_per_block, 1);
   const dim3 block_size(threads_per_block, 1);
 
-  RecycleInvalidBlockKernel << <grid_size, block_size >> >(gpu_data());
+  RecycleInvalidBlockKernel << <grid_size, block_size >> >(gpu_data(), blocks_);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }
@@ -279,9 +303,8 @@ void Map::CollectAllBlocks(){
 }
 
 /// Kernel functions
-template <typename T>
 __global__
-void CollectTargetBlocksKernel(HashTableGPU<T> hash_table,
+void CollectTargetBlocksKernel(HashTableGPU hash_table,
                                SensorParams sensor_params, // K && min/max depth
                                float4x4 c_T_w) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;

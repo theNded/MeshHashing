@@ -63,7 +63,9 @@ static const int kMaxVertexCount = 10000000;
 
 class Map {
 private:
-  HashTable<VoxelBlock> hash_table_;
+  HashTable hash_table_;
+  VoxelBlock *blocks_;
+
   uint integrated_frame_count_;
   SharedMash  mesh_data_;
   CompactMesh compact_mesh_;
@@ -90,6 +92,8 @@ public:
   void CollectTargetBlocks(Sensor *sensor);
   void CollectAllBlocks();
 
+  void ResetBlocks(int value_capacity);
+
   /// Mesh
   void ResetSharedMesh();
   void ResetCompactMesh();
@@ -102,14 +106,17 @@ public:
 
   /// Only classes with Kernel function should call it
   /// The other part of the hash_table should be hidden
-  HashTable<VoxelBlock> &hash_table() {
+  HashTable &hash_table() {
     return hash_table_;
   }
-  HashTableGPU<VoxelBlock> &gpu_data() {
+  HashTableGPU &gpu_data() {
     return hash_table_.gpu_data();
   }
   uint& frame_count() {
     return integrated_frame_count_;
+  }
+  VoxelBlock* blocks() {
+    return blocks_;
   }
   void Debug() {
     hash_table_.Debug();
