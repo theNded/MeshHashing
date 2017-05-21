@@ -28,7 +28,7 @@ const std::string kDefaultDatasetPath =
         "/home/wei/data/TUM/rgbd_dataset_freiburg3_long_office_household/";
 #elif defined(SUN3D)
 const std::string kDefaultDatasetPath =
-        "/home/wei/data/SUN3D/copyroom/";
+        "/home/wei/data/SUN3D/lounge/";
 #elif defined(SUN3D_ORI)
 const std::string kDefaultDatasetPath =
         "/home/wei/data/SUN3D-Princeton/hotel_umd/maryland_hotel3/";
@@ -72,9 +72,10 @@ cv::Mat GPUFloat4ToMat(float4 *cuda_memory) {
 #endif
 }
 
+/// Refer to constant.cu
 extern void SetConstantSDFParams(const SDFParams& params);
 
-int main() {
+int main(int argc, char** argv) {
   /// Load images
   std::vector<std::string> depth_img_list;
   std::vector<std::string> color_img_list;
@@ -119,18 +120,17 @@ int main() {
   Map voxel_map(hash_params);
   LOG(INFO) << "map allocated";
 
-
   Sensor sensor(sensor_params);
-  sensor.BindSensorDataToTexture();
+  sensor.BindGPUTexture();
 
   RayCaster ray_caster(ray_cast_params);
 
   //cv::VideoWriter writer("icl-vh.avi", CV_FOURCC('X','V','I','D'),
   //                       30, cv::Size(640, 480));
+
   std::chrono::time_point<std::chrono::system_clock> start, end;
   start = std::chrono::system_clock::now();
-  int frames = 200;//depth_img_list.size() - 1;
-//#define OFFLINE
+  int frames = depth_img_list.size() - 1;
 
   for (int i = 0; i < frames; ++i) {
     LOG(INFO) << i;
@@ -143,8 +143,7 @@ int main() {
     float4x4 T = wTc[0].getInverse() * wTc[i];
     sensor.set_transform(T);
 
-    voxel_map.Integrate(&sensor, NULL);
-#ifndef OFFLINE
+    voxel_map.Integrate(sensor, NULL);
     voxel_map.MarchingCubes();
     voxel_map.CompressMesh();
 
@@ -154,20 +153,17 @@ int main() {
       ss << "model-" << i << ".obj";
       voxel_map.SaveMesh(ss.str());
     }
-#endif
 
-    ray_caster.Cast(&voxel_map, T.getInverse());
-    cv::Mat display = GPUFloat4ToMat(ray_caster.ray_caster_data().normal_image);
+    ray_caster.Cast(voxel_map, T.getInverse());
+    cv::Mat display = GPUFloat4ToMat(ray_caster.gpu_data().normal_image);
     cv::imshow("display", display);
     cv::waitKey(1);
   }
+
   end = std::chrono::system_clock::now();
   std::chrono::duration<double> seconds = end - start;
   LOG(INFO) << "Total time: " << seconds.count();
   LOG(INFO) << "Fps: " << frames / seconds.count();
 
   voxel_map.SaveMesh("test20.obj");
-  //mesh.SaveMesh(&voxel_map, "ttt.obj");
-
-  voxel_map.Debug();
 }

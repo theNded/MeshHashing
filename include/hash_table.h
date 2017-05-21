@@ -12,7 +12,6 @@
 #include <helper_cuda.h>
 #include <helper_math.h>
 
-#include "core.h"
 #include "geometry_util.h"
 #include "params.h"
 
@@ -44,7 +43,7 @@ struct HashTableGPU {
   uint      *heap_counter;            /// single element; used as an atomic counter (points to the next free block)
 
   /// Hash KEY part
-  HashEntry *hash_entries;                 /// hash entries that stores pointers to sdf values
+  HashEntry *entries;                 /// hash entries that stores pointers to sdf values
   /// == occupied_block_count
   /// Misc
   int       *bucket_mutexes;     /// binary flag per hash bucket; used for allocation to atomically lock a bucket
@@ -103,7 +102,7 @@ struct HashTableGPU {
     entry.ptr    = FREE_ENTRY;
 
     for (uint i = 0; i < (*bucket_size); ++i) {
-      HashEntry curr_entry = hash_entries[i + bucket_first_entry_idx];
+      HashEntry curr_entry = entries[i + bucket_first_entry_idx];
       if (IsBlockAllocated(block_pos, curr_entry)) {
         return curr_entry;
       }
@@ -117,7 +116,7 @@ struct HashTableGPU {
 
     #pragma unroll 1
     for (uint iter = 0; iter < *linked_list_size; ++iter) {
-      curr_entry = hash_entries[i];
+      curr_entry = entries[i];
 
       if (IsBlockAllocated(block_pos, curr_entry)) {
         return curr_entry;
@@ -154,7 +153,7 @@ struct HashTableGPU {
     int empty_entry_idx = -1;
     for (uint j = 0; j < (*bucket_size); j++) {
       uint i = j + bucket_first_entry_idx;
-      const HashEntry& curr_entry = hash_entries[i];
+      const HashEntry& curr_entry = entries[i];
       if (IsBlockAllocated(pos, curr_entry)) {
         return;
       }
@@ -170,7 +169,7 @@ struct HashTableGPU {
     uint i = bucket_last_entry_idx;
     int offset = 0;
     for (uint iter = 0; iter < *linked_list_size; ++iter) {
-      HashEntry& curr_entry = hash_entries[i];
+      HashEntry& curr_entry = entries[i];
       if (IsBlockAllocated(pos, curr_entry)) {
         return;
       }
@@ -184,7 +183,7 @@ struct HashTableGPU {
     if (empty_entry_idx != -1) {
       int lock = atomicExch(&bucket_mutexes[bucket_idx], LOCK_ENTRY);
       if (lock != LOCK_ENTRY) {
-        HashEntry& entry = hash_entries[empty_entry_idx];
+        HashEntry& entry = entries[empty_entry_idx];
         entry.pos    = pos;
         entry.offset = NO_OFFSET;
         entry.ptr    = AllocHeap();	//memory alloc
@@ -203,25 +202,25 @@ struct HashTableGPU {
 
       i = (bucket_last_entry_idx + offset) % (*entry_count);
 
-      HashEntry& curr_entry = hash_entries[i];
+      HashEntry& curr_entry = entries[i];
 
       if (curr_entry.ptr == FREE_ENTRY) {	//this is the first free entry
         int lock = atomicExch(&bucket_mutexes[bucket_idx], LOCK_ENTRY);
         if (lock != LOCK_ENTRY) {
           // Not use reference in order to avoid lock ?
-          HashEntry& bucket_last_entry = hash_entries[bucket_last_entry_idx];
+          HashEntry& bucket_last_entry = entries[bucket_last_entry_idx];
           uint alloc_bucket_idx = i / (*bucket_size);
 
           lock = atomicExch(&bucket_mutexes[alloc_bucket_idx], LOCK_ENTRY);
           if (lock != LOCK_ENTRY) {
-            HashEntry& entry = hash_entries[i];
+            HashEntry& entry = entries[i];
             entry.pos    = pos;
             entry.offset = bucket_last_entry.offset; // pointer assignment in linked list
             entry.ptr    = AllocHeap();	//memory alloc
 
             // Not sure if it is ok to directly assign to reference
             bucket_last_entry.offset = offset;
-            hash_entries[bucket_last_entry_idx] = bucket_last_entry;
+            entries[bucket_last_entry_idx] = bucket_last_entry;
           }
         }
         return;	//bucket was already locked
@@ -239,12 +238,12 @@ struct HashTableGPU {
 
     for (uint j = 0; j < (*bucket_size); j++) {
       uint i = j + bucket_first_entry_idx;
-      const HashEntry& curr = hash_entries[i];
+      const HashEntry& curr = entries[i];
       if (IsBlockAllocated(block_pos, curr)) {
 
 #ifndef HANDLE_COLLISIONS
         FreeHeap(curr.ptr);
-        hash_entries[i].Clear();
+        entries[i].Clear();
         return true;
 #else
         // Deal with linked list: curr = curr->next
@@ -253,15 +252,15 @@ struct HashTableGPU {
           if (lock != LOCK_ENTRY) {
             FreeHeap(curr.ptr);
             int next_idx = (i + curr.offset) % (*entry_count);
-            hash_entries[i] = hash_entries[next_idx];
-            hash_entries[next_idx].Clear();
+            entries[i] = entries[next_idx];
+            entries[next_idx].Clear();
             return true;
           } else {
             return false;
           }
         } else {
           FreeHeap(curr.ptr);
-          hash_entries[i].Clear();
+          entries[i].Clear();
           return true;
         }
 #endif
@@ -272,23 +271,23 @@ struct HashTableGPU {
     // Init with linked list traverse
     const uint bucket_last_entry_idx = bucket_first_entry_idx + (*bucket_size) - 1;
     int i = bucket_last_entry_idx;
-    HashEntry& curr = hash_entries[i];
+    HashEntry& curr = entries[i];
 
     int prev_idx = i;
     i = (bucket_last_entry_idx + curr.offset) % (*entry_count);
 
     #pragma unroll 1
     for (uint iter = 0; iter < *linked_list_size; ++iter) {
-      curr = hash_entries[i];
+      curr = entries[i];
 
       if (IsBlockAllocated(block_pos, curr)) {
         int lock = atomicExch(&bucket_mutexes[bucket_idx], LOCK_ENTRY);
         if (lock != LOCK_ENTRY) {
           FreeHeap(curr.ptr);
-          hash_entries[i].Clear();
-          HashEntry prev = hash_entries[prev_idx];
+          entries[i].Clear();
+          HashEntry prev = entries[prev_idx];
           prev.offset = curr.offset;
-          hash_entries[prev_idx] = prev;
+          entries[prev_idx] = prev;
           return true;
         } else {
           return false;
@@ -336,15 +335,15 @@ public:
 };
 
 struct CompactHashTableGPU {
-  int       *hash_entry_remove_flags; /// used in garbage collection
-  HashEntry *compacted_hash_entries;       /// allocated for parallel computation
-  int       *compacted_hash_entry_counter; /// atomic counter to add compacted entries atomically
+  int       *entry_recycle_flags; /// used in garbage collection
+  HashEntry *compacted_entries;       /// allocated for parallel computation
+  int       *compacted_entry_counter; /// atomic counter to add compacted entries atomically
 };
 
 class CompactHashTable {
 private:
   CompactHashTableGPU gpu_data_;
-  uint entry_count_;
+  uint                entry_count_;
 
   void Alloc(uint entry_count);
   void Free();
@@ -353,7 +352,9 @@ public:
   CompactHashTable();
   ~CompactHashTable();
 
-  uint size();
+  uint entry_count();
+  void reset_entry_count();
+
   void Resize(uint entry_count);
   void Reset();
 

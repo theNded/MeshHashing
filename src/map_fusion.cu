@@ -6,18 +6,26 @@
 #endif
 
 /// Refer to sensor.cu
-extern texture<float, cudaTextureType2D, cudaReadModeElementType> depth_texture;
+extern texture<float,  cudaTextureType2D, cudaReadModeElementType> depth_texture;
 extern texture<float4, cudaTextureType2D, cudaReadModeElementType> color_texture;
+
+////////////////////
+/// class Map - integrate sensor data
+////////////////////
+
+////////////////////
+/// Device code
+////////////////////
 __global__
-void UpdateBlocksKernel(CompactHashTableGPU map_table,
-                        VoxelBlock *blocks,
-                        SensorData sensor_data,
-                        SensorParams sensor_params,
-                        float4x4 c_T_w) {
+void UpdateBlocksKernel(CompactHashTableGPU compact_hash_table,
+                        VoxelBlocksGPU      blocks,
+                        SensorDataGPU       sensor_data,
+                        SensorParams        sensor_params,
+                        float4x4            c_T_w) {
 
   //TODO check if we should load this in shared memory (compacted_entries)
   /// 1. Select voxel
-  const HashEntry &entry = map_table.compacted_hash_entries[blockIdx.x];
+  const HashEntry &entry = compact_hash_table.compacted_entries[blockIdx.x];
   int3 voxel_base_pos = BlockToVoxel(entry.pos);
   uint local_idx = threadIdx.x;  //inside of an SDF block
   int3 voxel_pos = voxel_base_pos + make_int3(IdxToVoxelLocalPos(local_idx));
@@ -25,9 +33,10 @@ void UpdateBlocksKernel(CompactHashTableGPU map_table,
   /// 2. Project to camera
   float3 world_pos = VoxelToWorld(voxel_pos);
   float3 camera_pos = c_T_w * world_pos;
-  uint2 image_pos = make_uint2(CameraProjectToImagei(camera_pos,
-                                                     sensor_params.fx, sensor_params.fy,
-                                                     sensor_params.cx, sensor_params.cy));
+  uint2 image_pos = make_uint2(
+          CameraProjectToImagei(camera_pos,
+                                sensor_params.fx, sensor_params.fy,
+                                sensor_params.cx, sensor_params.cy));
   if (image_pos.x >= sensor_params.width
       || image_pos.y >= sensor_params.height)
     return;
@@ -67,10 +76,11 @@ void UpdateBlocksKernel(CompactHashTableGPU map_table,
 }
 
 __global__
-void AllocBlocksKernel(HashTableGPU map_table,
-                       SensorData sensor_data,
-                       SensorParams sensor_params,
-                       float4x4 w_T_c, const uint* is_streamed_mask) {
+void AllocBlocksKernel(HashTableGPU   hash_table,
+                       SensorDataGPU  sensor_data,
+                       SensorParams   sensor_params,
+                       float4x4       w_T_c,
+                       const uint* is_streamed_mask) {
 
   const uint x = blockIdx.x * blockDim.x + threadIdx.x;
   const uint y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -135,7 +145,7 @@ void AllocBlocksKernel(HashTableGPU map_table,
     if (IsBlockInCameraFrustum(w_T_c.getInverse(), block_pos_curr, sensor_params)) {
       /// Disable streaming at current
       // && !isSDFBlockStreamedOut(idCurrentVoxel, hash_table, is_streamed_mask)) {
-      map_table.AllocEntry(block_pos_curr);
+      hash_table.AllocEntry(block_pos_curr);
     }
 
     // Traverse voxel grid
@@ -156,63 +166,54 @@ void AllocBlocksKernel(HashTableGPU map_table,
 }
 
 
-/// Member functions (CPU code)
-
-void Map::Integrate(Sensor* sensor, uint *is_streamed_mask) {
-
-  //make the rigid transform available on the GPU
-  //map->gpu_data().updateParams(map->hash_params());
-  /// seems OK
-
-  //allocate all hash blocks which are corresponding to depth map entries
+////////////////////
+/// Host code
+////////////////////
+void Map::Integrate(Sensor& sensor, uint *is_streamed_mask) {
   AllocBlocks(sensor);
 
-  /// DIFFERENT: is_streamed_mask now empty
-  /// seems OK now, supported by MATLAB scatter3
-
-  //generate a linear hash array with only occupied entries
-  CollectTargetBlocks(sensor);
-  /// seems OK, supported by MATLAB scatter3
-
-  //volumetrically integrate the depth data into the depth SDFBlocks
+  CollectInFrustumBlocks(sensor);
   UpdateBlocks(sensor);
-  /// cuda kernel launching ok
-  /// seems ok according to CUDA output
 
   Recycle();
 
-  frame_count() ++;
+  integrated_frame_count_ ++;
 }
 
-/// Member functions (CPU calling GPU kernels)
-void Map::AllocBlocks(Sensor* sensor) {
-  hash_table().ResetMutexes();
+void Map::AllocBlocks(Sensor& sensor) {
+  hash_table_.ResetMutexes();
 
   const uint threads_per_block = 8;
-  const dim3 grid_size((sensor->sensor_params().width + threads_per_block - 1)
+  const dim3 grid_size((sensor.sensor_params().width + threads_per_block - 1)
                        /threads_per_block,
-                       (sensor->sensor_params().height + threads_per_block - 1)
+                       (sensor.sensor_params().height + threads_per_block - 1)
                        /threads_per_block);
   const dim3 block_size(threads_per_block, threads_per_block);
 
-  AllocBlocksKernel<<<grid_size, block_size>>>(gpu_data(),
-          sensor->sensor_data(), sensor->sensor_params(), sensor->w_T_c(), NULL);
+  AllocBlocksKernel<<<grid_size, block_size>>>(
+          hash_table_.gpu_data(),
+          sensor.gpu_data(),
+          sensor.sensor_params(), sensor.w_T_c(),
+          NULL);
 
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }
 
-void Map::UpdateBlocks(Sensor *sensor) {
+void Map::UpdateBlocks(Sensor &sensor) {
   const uint threads_per_block = BLOCK_SIZE;
 
-  uint compacted_entry_count = compact_hash_table_.size();
+  uint compacted_entry_count = compact_hash_table_.entry_count();
   if (compacted_entry_count <= 0)
     return;
 
   const dim3 grid_size(compacted_entry_count, 1);
   const dim3 block_size(threads_per_block, 1);
-  UpdateBlocksKernel <<<grid_size, block_size>>>(compact_hash_table_.gpu_data(), blocks_.gpu_data(),
-          sensor->sensor_data(), sensor->sensor_params(), sensor->c_T_w());
+  UpdateBlocksKernel <<<grid_size, block_size>>>(
+          compact_hash_table_.gpu_data(),
+          blocks_.gpu_data(),
+          sensor.gpu_data(),
+          sensor.sensor_params(), sensor.c_T_w());
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }

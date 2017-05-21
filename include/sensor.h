@@ -10,7 +10,7 @@
 #include "params.h"
 
 /// At first get rid of CUDARGBDAdaptor and RGBDSensor, use it directly
-struct SensorData {
+struct SensorDataGPU {
   /// Raw data
   float*		depth_image;
   float4*		color_image;
@@ -25,13 +25,14 @@ struct SensorData {
 class Sensor {
 private:
   /// sensor data
-  SensorData		sensor_data_;
+  SensorDataGPU	gpu_data_;
   SensorParams	sensor_params_;
   // mysterious padding for alignment
 
   float4x4      w_T_c_; // camera -> world
   float4x4      c_T_w_;
 
+  /// sensor data cpu
   float4* colored_depth_image_;
   short*  depth_imagebuffer_;
   uchar*  color_imagebuffer_;
@@ -43,7 +44,7 @@ public:
   Sensor(SensorParams &params);
   ~Sensor();
 
-  void BindSensorDataToTexture();
+  void BindGPUTexture();
   int Process(cv::Mat &depth, cv::Mat &color);
   float4* ColorizeDepthImage() const;
 
@@ -63,8 +64,8 @@ public:
   uint height() const {
     return sensor_params_.height;
   }
-  const SensorData& sensor_data() {
-    return sensor_data_;
+  const SensorDataGPU& gpu_data() {
+    return gpu_data_;
   }
   const SensorParams& sensor_params() {
     return sensor_params_;

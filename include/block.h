@@ -64,11 +64,6 @@ struct __ALIGN__(8) VoxelBlock {
   }
 
   __device__
-  Voxel& operator() (int i) {
-    return voxels[i];
-  }
-
-  __device__
   void Update(int i, const Voxel& update) {
 
     Voxel& in = voxels[i];

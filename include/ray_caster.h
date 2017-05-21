@@ -17,7 +17,7 @@ struct RayCasterSample {
   uint   weight;
 };
 
-struct RayCasterData {
+struct RayCasterDataGPU {
   float  *depth_image;
   float4 *vertex_image;
   float4 *normal_image;
@@ -26,17 +26,17 @@ struct RayCasterData {
 
 class RayCaster {
 private:
-  RayCasterData ray_caster_data_;
-  RayCasterParams ray_caster_params_;
+  RayCasterDataGPU gpu_data_;
+  RayCasterParams  ray_caster_params_;
 
 public:
   RayCaster(const RayCasterParams& params);
   ~RayCaster(void);
 
-  void Cast(Map* map, const float4x4& c_T_w);
+  void Cast(Map& map, const float4x4& c_T_w);
 
-  const RayCasterData& ray_caster_data() {
-    return ray_caster_data_;
+  const RayCasterDataGPU& gpu_data() {
+    return gpu_data_;
   }
   const RayCasterParams& ray_caster_params() const {
     return ray_caster_params_;

@@ -106,11 +106,12 @@ LIST(APPEND CUDA_NVCC_FLAGS -gencode=arch=compute_52,code=sm_52)
 CUDA_ADD_LIBRARY(cuda-voxel-hashing
         ${VH}/src/constant.cu
         ${VH}/src/hash_table.cu
-        ${VH}/src/sensor.cu
         ${VH}/src/block.cu
-        ${VH}/src/map_core_impl.cu
-        ${VH}/src/map_fusion_impl.cu
-        ${VH}/src/map_mesh_impl.cu
+        ${VH}/src/mesh.cu
+        ${VH}/src/sensor.cu
+        ${VH}/src/map_core.cu
+        ${VH}/src/map_fusion.cu
+        ${VH}/src/map_mesh.cu
         ${VH}/src/ray_caster.cu)
 TARGET_LINK_LIBRARIES(cuda-voxel-hashing ${OpenCV_LIBRARIES} glog)
 
