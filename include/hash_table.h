@@ -42,12 +42,9 @@ struct HashTableGPU {
   /// Hash VALUE part
   uint      *heap;                    /// index to free values
   uint      *heap_counter;            /// single element; used as an atomic counter (points to the next free block)
-  int       *hash_entry_remove_flags; /// used in garbage collection
 
   /// Hash KEY part
   HashEntry *hash_entries;                 /// hash entries that stores pointers to sdf values
-  HashEntry *compacted_hash_entries;       /// allocated for parallel computation
-  int       *compacted_hash_entry_counter; /// atomic counter to add compacted entries atomically
   /// == occupied_block_count
   /// Misc
   int       *bucket_mutexes;     /// binary flag per hash bucket; used for allocation to atomically lock a bucket
@@ -312,10 +309,6 @@ struct HashTableGPU {
 
 };
 
-/// Generally, the template should be implemented entirely in a header
-/// However, we need CUDA code that has to be in .cu
-/// Hence, we separate the declaration and implementation
-/// And specifically instantiate it with @typename Block in the .cu
 class HashTable {
 private:
   HashTableGPU gpu_data_;
@@ -329,7 +322,6 @@ public:
   HashTable(const HashParams &params);
   ~HashTable();
 
-  uint compacted_entry_count();
   void Resize(const HashParams &params);
   void Reset();
   void ResetMutexes();
@@ -343,4 +335,30 @@ public:
   }
 };
 
+struct CompactHashTableGPU {
+  int       *hash_entry_remove_flags; /// used in garbage collection
+  HashEntry *compacted_hash_entries;       /// allocated for parallel computation
+  int       *compacted_hash_entry_counter; /// atomic counter to add compacted entries atomically
+};
+
+class CompactHashTable {
+private:
+  CompactHashTableGPU gpu_data_;
+  uint entry_count_;
+
+  void Alloc(uint entry_count);
+  void Free();
+
+public:
+  CompactHashTable();
+  ~CompactHashTable();
+
+  uint size();
+  void Resize(uint entry_count);
+  void Reset();
+
+  CompactHashTableGPU& gpu_data() {
+    return gpu_data_;
+  }
+};
 #endif //VH_HASH_TABLE_H

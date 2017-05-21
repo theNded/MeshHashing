@@ -9,7 +9,7 @@
 extern texture<float, cudaTextureType2D, cudaReadModeElementType> depth_texture;
 extern texture<float4, cudaTextureType2D, cudaReadModeElementType> color_texture;
 __global__
-void UpdateBlocksKernel(HashTableGPU map_table,
+void UpdateBlocksKernel(CompactHashTableGPU map_table,
                         VoxelBlock *blocks,
                         SensorData sensor_data,
                         SensorParams sensor_params,
@@ -205,13 +205,13 @@ void Map::AllocBlocks(Sensor* sensor) {
 void Map::UpdateBlocks(Sensor *sensor) {
   const uint threads_per_block = BLOCK_SIZE;
 
-  uint compacted_entry_count = hash_table().compacted_entry_count();
+  uint compacted_entry_count = compact_hash_table_.size();
   if (compacted_entry_count <= 0)
     return;
 
   const dim3 grid_size(compacted_entry_count, 1);
   const dim3 block_size(threads_per_block, 1);
-  UpdateBlocksKernel <<<grid_size, block_size>>>(gpu_data(), blocks_.gpu_data(),
+  UpdateBlocksKernel <<<grid_size, block_size>>>(compact_hash_table_.gpu_data(), blocks_.gpu_data(),
           sensor->sensor_data(), sensor->sensor_params(), sensor->c_T_w());
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());

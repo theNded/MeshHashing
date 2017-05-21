@@ -123,13 +123,14 @@ inline bool CheckMask(uint3 pos, uchar3 mask) {
 
 // TODO(wei): add locks
 __global__
-void MarchingCubesKernel(HashTableGPU map_table,
+void MarchingCubesKernel(HashTableGPU        map_table,
+                         CompactHashTableGPU compact_map_table,
                          VoxelBlock  *blocks,
                          uchar3 mask1, uchar3 mask2,// use this to avoid conflict
                          SharedMash mesh_data) {
   const float isolevel = 0;
 
-  const HashEntry &map_entry = map_table.compacted_hash_entries[blockIdx.x];
+  const HashEntry &map_entry = compact_map_table.compacted_hash_entries[blockIdx.x];
 
   int3  voxel_base_pos = BlockToVoxel(map_entry.pos);
 
@@ -394,7 +395,7 @@ void MarchingCubesKernel(HashTableGPU map_table,
 }
 
 __global__
-void RecycleTrianglesKernel(HashTableGPU hash_table,
+void RecycleTrianglesKernel(CompactHashTableGPU hash_table,
                             VoxelBlock* blocks,
                             SharedMash mesh_data) {
   const HashEntry &entry = hash_table.compacted_hash_entries[blockIdx.x];
@@ -421,7 +422,7 @@ void RecycleTrianglesKernel(HashTableGPU hash_table,
 }
 
 __global__
-void RecycleVerticesKernel(HashTableGPU hash_table,
+void RecycleVerticesKernel(CompactHashTableGPU hash_table,
                            VoxelBlock *blocks,
                            SharedMash mesh_data) {
   const HashEntry &entry = hash_table.compacted_hash_entries[blockIdx.x];
@@ -475,10 +476,7 @@ void Map::ResetCompactMesh() {
 
 /// Assume hash_table_ is compactified
 void Map::MarchingCubes() {
-  uint occupied_block_count;
-  checkCudaErrors(cudaMemcpy(&occupied_block_count,
-                             gpu_data().compacted_hash_entry_counter,
-                             sizeof(uint), cudaMemcpyDeviceToHost));
+  uint occupied_block_count = compact_hash_table_.size();
   LOG(INFO) << "marching cubes block count: " << occupied_block_count;
   if (occupied_block_count <= 0)
     return;
@@ -488,7 +486,7 @@ void Map::MarchingCubes() {
   const dim3 block_size(threads_per_block, 1);
 
   /// Use divide and conquer to avoid read-write conflict
-  MarchingCubesKernel<<<grid_size, block_size>>>(gpu_data(), blocks_.gpu_data(),
+  MarchingCubesKernel<<<grid_size, block_size>>>(gpu_data(), compact_hash_table_.gpu_data(), blocks_.gpu_data(),
           make_uchar3(0, 0, 0), make_uchar3(1, 1, 1),
           mesh_data_);
   checkCudaErrors(cudaDeviceSynchronize());
@@ -512,17 +510,17 @@ void Map::MarchingCubes() {
   checkCudaErrors(cudaGetLastError());
 #endif
 
-  RecycleTrianglesKernel<<<grid_size, block_size>>>(gpu_data(), blocks_.gpu_data(), mesh_data_);
+  RecycleTrianglesKernel<<<grid_size, block_size>>>(compact_hash_table_.gpu_data(), blocks_.gpu_data(), mesh_data_);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 
-  RecycleVerticesKernel<<<grid_size, block_size>>>(gpu_data(), blocks_.gpu_data(), mesh_data_);
+  RecycleVerticesKernel<<<grid_size, block_size>>>(compact_hash_table_.gpu_data(), blocks_.gpu_data(), mesh_data_);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }
 
 __global__
-void CollectVerticesAndTrianglesKernel(HashTableGPU hash_table,
+void CollectVerticesAndTrianglesKernel(CompactHashTableGPU hash_table,
                                        VoxelBlock *blocks,
                                        SharedMash mesh_data,
                                        int* vertex_ref_count,
@@ -573,7 +571,7 @@ void Map::CompressMesh() {
   //map->CollectAllBlocks();
   ResetCompactMesh();
 
-  int occupied_block_count = hash_table().compacted_entry_count();
+  int occupied_block_count = compact_hash_table_.size();
   if (occupied_block_count <= 0) return;
 
   {
@@ -582,7 +580,7 @@ void Map::CompressMesh() {
     const dim3 block_size(threads_per_block, 1);
 
     CollectVerticesAndTrianglesKernel << < grid_size, block_size >> > (
-            gpu_data(), blocks_.gpu_data(), mesh_data_,
+            compact_hash_table_.gpu_data(), blocks_.gpu_data(), mesh_data_,
                     compact_mesh_.vertices_ref_count,
                     compact_mesh_.triangles_ref_count);
     checkCudaErrors(cudaDeviceSynchronize());

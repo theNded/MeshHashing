@@ -32,10 +32,16 @@ void ResetEntriesKernel(HashTableGPU hash_table) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (idx < *hash_table.entry_count) {
     hash_table.hash_entries[idx].Clear();
-    hash_table.compacted_hash_entries[idx].Clear();
   }
 }
 
+__global__
+void ResetCompactEntriesKernel(CompactHashTableGPU hash_table, uint entry_count) {
+  const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (idx < entry_count) {
+    hash_table.compacted_hash_entries[idx].Clear();
+  }
+}
 
 //////////
 /// Member functions (CPU code)
@@ -49,13 +55,6 @@ HashTable::HashTable(const HashParams &params) {
 
 HashTable::~HashTable() {
   Free();
-}
-
-uint HashTable::compacted_entry_count() {
-  uint count;
-  checkCudaErrors(cudaMemcpy(&count, gpu_data_.compacted_hash_entry_counter,
-                             sizeof(uint), cudaMemcpyDeviceToHost));
-  return count;
 }
 
 void HashTable::Resize(const HashParams &params) {
@@ -95,12 +94,6 @@ void HashTable::Alloc(const HashParams &params) {
   /// Entries
   checkCudaErrors(cudaMalloc(&gpu_data_.hash_entries,
                              sizeof(HashEntry) * params.entry_count));
-  checkCudaErrors(cudaMalloc(&gpu_data_.compacted_hash_entries,
-                             sizeof(HashEntry) * params.entry_count));
-  checkCudaErrors(cudaMalloc(&gpu_data_.compacted_hash_entry_counter,
-                             sizeof(int)));
-  checkCudaErrors(cudaMalloc(&gpu_data_.hash_entry_remove_flags,
-                             sizeof(int) * params.entry_count));
 
   /// Mutexes
   checkCudaErrors(cudaMalloc(&gpu_data_.bucket_mutexes,
@@ -118,11 +111,8 @@ void HashTable::Free() {
 
     checkCudaErrors(cudaFree(gpu_data_.heap));
     checkCudaErrors(cudaFree(gpu_data_.heap_counter));
-    checkCudaErrors(cudaFree(gpu_data_.hash_entry_remove_flags));
 
     checkCudaErrors(cudaFree(gpu_data_.hash_entries));
-    checkCudaErrors(cudaFree(gpu_data_.compacted_hash_entries));
-    checkCudaErrors(cudaFree(gpu_data_.compacted_hash_entry_counter));
 
     checkCudaErrors(cudaFree(gpu_data_.bucket_mutexes));
     gpu_data_.is_on_gpu = false;
@@ -290,4 +280,47 @@ void HashTable::Debug() {
   delete [] entries;
   //delete [] values;
   delete [] heap;
+}
+
+CompactHashTable::CompactHashTable() {}
+CompactHashTable::~CompactHashTable() {
+  Free();
+}
+
+void CompactHashTable::Alloc(uint entry_count) {
+  checkCudaErrors(cudaMalloc(&gpu_data_.compacted_hash_entries,
+                             sizeof(HashEntry) * entry_count));
+  checkCudaErrors(cudaMalloc(&gpu_data_.compacted_hash_entry_counter,
+                             sizeof(int)));
+  checkCudaErrors(cudaMalloc(&gpu_data_.hash_entry_remove_flags,
+                             sizeof(int) * entry_count));
+}
+
+void CompactHashTable::Free() {
+  checkCudaErrors(cudaFree(gpu_data_.compacted_hash_entries));
+  checkCudaErrors(cudaFree(gpu_data_.compacted_hash_entry_counter));
+  checkCudaErrors(cudaFree(gpu_data_.hash_entry_remove_flags));
+}
+
+void CompactHashTable::Resize(uint entry_count) {
+  entry_count_ = entry_count;
+  Alloc(entry_count);
+}
+
+void CompactHashTable::Reset() {
+  const int threads_per_block = 64;
+  const dim3 grid_size((entry_count_ + threads_per_block - 1)
+                       / threads_per_block, 1);
+  const dim3 block_size(threads_per_block, 1);
+
+  ResetCompactEntriesKernel<<<grid_size, block_size>>>(gpu_data_, entry_count_);
+  checkCudaErrors(cudaDeviceSynchronize());
+  checkCudaErrors(cudaGetLastError());
+}
+
+uint CompactHashTable::size() {
+  uint count;
+  checkCudaErrors(cudaMemcpy(&count, gpu_data_.compacted_hash_entry_counter,
+                             sizeof(uint), cudaMemcpyDeviceToHost));
+  return count;
 }

@@ -72,6 +72,8 @@ private:
   SharedMash  mesh_data_;
   CompactMesh compact_mesh_;
 
+  CompactHashTable compact_hash_table_;
+
   /// Garbage collection
   void StarveOccupiedVoxels();
   void CollectInvalidBlockInfo();

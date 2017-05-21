@@ -17,7 +17,7 @@
 /// Kernel functions
 /// Starve voxels (to determine outliers)
 __global__
-void StarveOccupiedVoxelsKernel(HashTableGPU hash_table, VoxelBlock* blocks) {
+void StarveOccupiedVoxelsKernel(CompactHashTableGPU hash_table, VoxelBlock* blocks) {
 
   const uint idx = blockIdx.x;
   const HashEntry& entry = hash_table.compacted_hash_entries[idx];
@@ -29,7 +29,7 @@ void StarveOccupiedVoxelsKernel(HashTableGPU hash_table, VoxelBlock* blocks) {
 
 /// Collect dead voxels
 __global__
-void CollectInvalidBlockInfoKernel(HashTableGPU hash_table, VoxelBlock* blocks) {
+void CollectInvalidBlockInfoKernel(CompactHashTableGPU hash_table, VoxelBlock* blocks) {
 
   const uint idx = blockIdx.x;
   const HashEntry& entry = hash_table.compacted_hash_entries[idx];
@@ -71,12 +71,14 @@ void CollectInvalidBlockInfoKernel(HashTableGPU hash_table, VoxelBlock* blocks) 
 }
 
 __global__
-void RecycleInvalidBlockKernel(HashTableGPU hash_table, VoxelBlock *blocks) {
+void RecycleInvalidBlockKernel(HashTableGPU hash_table,
+                               CompactHashTableGPU compact_hash_table,
+                               VoxelBlock *blocks) {
   const uint idx = blockIdx.x*blockDim.x + threadIdx.x;
 
-  if (idx < (*hash_table.compacted_hash_entry_counter)
-      && hash_table.hash_entry_remove_flags[idx] != 0) {
-    const HashEntry& entry = hash_table.compacted_hash_entries[idx];
+  if (idx < (*compact_hash_table.compacted_hash_entry_counter)
+      && compact_hash_table.hash_entry_remove_flags[idx] != 0) {
+    const HashEntry& entry = compact_hash_table.compacted_hash_entries[idx];
     if (hash_table.DeleteEntry(entry.pos)) {
       blocks[entry.ptr].Clear();
     }
@@ -84,7 +86,8 @@ void RecycleInvalidBlockKernel(HashTableGPU hash_table, VoxelBlock *blocks) {
 }
 
 __global__
-void CollectAllBlocksKernel(HashTableGPU hash_table) {
+void CollectAllBlocksKernel(HashTableGPU hash_table,
+                            CompactHashTableGPU compact_hash_table) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
 
   __shared__ int local_counter;
@@ -102,14 +105,14 @@ void CollectAllBlocksKernel(HashTableGPU hash_table) {
 
   __shared__ int addr_global;
   if (threadIdx.x == 0 && local_counter > 0) {
-    addr_global = atomicAdd(hash_table.compacted_hash_entry_counter,
+    addr_global = atomicAdd(compact_hash_table.compacted_hash_entry_counter,
                             local_counter);
   }
   __syncthreads();
 
   if (addr_local != -1) {
     const uint addr = addr_global + addr_local;
-    hash_table.compacted_hash_entries[addr] = hash_table.hash_entries[idx];
+    compact_hash_table.compacted_hash_entries[addr] = hash_table.hash_entries[idx];
   }
 }
 
@@ -117,6 +120,7 @@ void CollectAllBlocksKernel(HashTableGPU hash_table) {
 /// Member functions (CPU code)
 Map::Map(const HashParams &hash_params) {
   hash_table_.Resize(hash_params);
+  compact_hash_table_.Resize(hash_params.entry_count);
   blocks_.Resize(hash_params.value_capacity);
 
   Reset();
@@ -179,7 +183,9 @@ Map::~Map() {
 
 void Map::Reset() {
   integrated_frame_count_ = 0;
+
   hash_table_.Reset();
+  compact_hash_table_.Reset();
   blocks_.Reset();
 }
 
@@ -203,17 +209,14 @@ void Map::Recycle() {
 void Map::StarveOccupiedVoxels() {
   const uint threads_per_block = BLOCK_SIZE;
 
-  uint processing_block_count;
-  checkCudaErrors(cudaMemcpy(&processing_block_count,
-                             gpu_data().compacted_hash_entry_counter,
-                             sizeof(uint), cudaMemcpyDeviceToHost));
+  uint processing_block_count = compact_hash_table_.size();
   if (processing_block_count <= 0)
     return;
 
   const dim3 grid_size(processing_block_count, 1);
   const dim3 block_size(threads_per_block, 1);
 
-  StarveOccupiedVoxelsKernel<<<grid_size, block_size >>>(gpu_data(), blocks_.gpu_data());
+  StarveOccupiedVoxelsKernel<<<grid_size, block_size >>>(compact_hash_table_.gpu_data(), blocks_.gpu_data());
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }
@@ -222,17 +225,14 @@ void Map::StarveOccupiedVoxels() {
 void Map::CollectInvalidBlockInfo() {
   const uint threads_per_block = BLOCK_SIZE / 2;
 
-  uint processing_block_count;
-  checkCudaErrors(cudaMemcpy(&processing_block_count,
-                             gpu_data().compacted_hash_entry_counter,
-                             sizeof(uint), cudaMemcpyDeviceToHost));
+  uint processing_block_count = compact_hash_table_.size();
   if (processing_block_count <= 0)
     return;
 
   const dim3 grid_size(processing_block_count, 1);
   const dim3 block_size(threads_per_block, 1);
 
-  CollectInvalidBlockInfoKernel <<<grid_size, block_size >>>(gpu_data(), blocks_.gpu_data());
+  CollectInvalidBlockInfoKernel <<<grid_size, block_size >>>(compact_hash_table_.gpu_data(), blocks_.gpu_data());
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }
@@ -241,10 +241,7 @@ void Map::CollectInvalidBlockInfo() {
 void Map::RecycleInvalidBlock() {
   const uint threads_per_block = 64;
 
-  uint processing_block_count;
-  checkCudaErrors(cudaMemcpy(&processing_block_count,
-                             gpu_data().compacted_hash_entry_counter,
-                             sizeof(uint), cudaMemcpyDeviceToHost));
+  uint processing_block_count = compact_hash_table_.size();
   if (processing_block_count <= 0)
     return;
 
@@ -252,7 +249,8 @@ void Map::RecycleInvalidBlock() {
                        / threads_per_block, 1);
   const dim3 block_size(threads_per_block, 1);
 
-  RecycleInvalidBlockKernel << <grid_size, block_size >> >(gpu_data(), blocks_.gpu_data());
+  RecycleInvalidBlockKernel << <grid_size, block_size >> >(gpu_data(),
+          compact_hash_table_.gpu_data(), blocks_.gpu_data());
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }
@@ -269,13 +267,13 @@ void Map::CollectAllBlocks(){
                        / threads_per_block, 1);
   const dim3 block_size(threads_per_block, 1);
 
-  checkCudaErrors(cudaMemset(gpu_data().compacted_hash_entry_counter,
+  checkCudaErrors(cudaMemset(compact_hash_table_.gpu_data().compacted_hash_entry_counter,
                              0, sizeof(int)));
-  CollectAllBlocksKernel<<<grid_size, block_size >>>(gpu_data());
+  CollectAllBlocksKernel<<<grid_size, block_size >>>(gpu_data(), compact_hash_table_.gpu_data());
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 
-  checkCudaErrors(cudaMemcpy(&res, gpu_data().compacted_hash_entry_counter,
+  checkCudaErrors(cudaMemcpy(&res, compact_hash_table_.gpu_data().compacted_hash_entry_counter,
                              sizeof(uint), cudaMemcpyDeviceToHost));
   LOG(INFO) << "Block count in all: " << res;
 }
@@ -283,6 +281,7 @@ void Map::CollectAllBlocks(){
 /// Kernel functions
 __global__
 void CollectTargetBlocksKernel(HashTableGPU hash_table,
+                               CompactHashTableGPU compact_hash_table,
                                SensorParams sensor_params, // K && min/max depth
                                float4x4 c_T_w) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -305,13 +304,13 @@ void CollectTargetBlocksKernel(HashTableGPU hash_table,
 
   __shared__ int addr_global;
   if (threadIdx.x == 0 && local_counter > 0) {
-    addr_global = atomicAdd(hash_table.compacted_hash_entry_counter, local_counter);
+    addr_global = atomicAdd(compact_hash_table.compacted_hash_entry_counter, local_counter);
   }
   __syncthreads();
 
   if (addr_local != -1) {
     const uint addr = addr_global + addr_local;
-    hash_table.compacted_hash_entries[addr] = hash_table.hash_entries[idx];
+    compact_hash_table.compacted_hash_entries[addr] = hash_table.hash_entries[idx];
   }
 }
 
@@ -328,13 +327,13 @@ void Map::CollectTargetBlocks(Sensor *sensor){
                        / threads_per_block, 1);
   const dim3 block_size(threads_per_block, 1);
 
-  checkCudaErrors(cudaMemset(gpu_data().compacted_hash_entry_counter,
+  checkCudaErrors(cudaMemset(compact_hash_table_.gpu_data().compacted_hash_entry_counter,
                              0, sizeof(int)));
-  CollectTargetBlocksKernel<<<grid_size, block_size >>>(gpu_data(),
+  CollectTargetBlocksKernel<<<grid_size, block_size >>>(gpu_data(), compact_hash_table_.gpu_data(),
           sensor->sensor_params(), sensor->c_T_w());
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
-  checkCudaErrors(cudaMemcpy(&res, gpu_data().compacted_hash_entry_counter,
+  checkCudaErrors(cudaMemcpy(&res, compact_hash_table_.gpu_data().compacted_hash_entry_counter,
                              sizeof(uint), cudaMemcpyDeviceToHost));
   LOG(INFO) << "Block count in view frustum: " << res;
 }
