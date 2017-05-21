@@ -1,8 +1,8 @@
 #include <glog/logging.h>
 #include <unordered_map>
-#include "mesh.h"
 
 #include "mc_tables.h"
+#include "map.h"
 
 //#define REDUCTION
 
@@ -444,64 +444,7 @@ void RecycleVerticesKernel(HashTableGPU<VoxelBlock> hash_table,
   }
 }
 
-Mesh::Mesh() {
-  /// Shared mesh
-  checkCudaErrors(cudaMalloc(&mesh_data_.vertex_heap,
-                             sizeof(uint) * kMaxVertexCount));
-  checkCudaErrors(cudaMalloc(&mesh_data_.vertex_heap_counter, sizeof(uint)));
-  checkCudaErrors(cudaMalloc(&mesh_data_.vertices,
-                             sizeof(Vertex) * kMaxVertexCount));
-
-  checkCudaErrors(cudaMalloc(&mesh_data_.triangle_heap,
-                             sizeof(uint) * kMaxVertexCount));
-  checkCudaErrors(cudaMalloc(&mesh_data_.triangle_heap_counter, sizeof(uint)));
-  checkCudaErrors(cudaMalloc(&mesh_data_.triangles,
-                             sizeof(Triangle) * kMaxVertexCount));
-
-  /// Compact mesh
-  checkCudaErrors(cudaMalloc(&compact_mesh_.vertex_index_remapper,
-                             sizeof(int) * kMaxVertexCount));
-
-  checkCudaErrors(cudaMalloc(&compact_mesh_.vertex_counter,
-                             sizeof(uint)));
-  checkCudaErrors(cudaMalloc(&compact_mesh_.vertices_ref_count,
-                             sizeof(int) * kMaxVertexCount));
-  checkCudaErrors(cudaMalloc(&compact_mesh_.vertices,
-                             sizeof(Vertex) * kMaxVertexCount));
-
-  checkCudaErrors(cudaMalloc(&compact_mesh_.triangle_counter,
-                             sizeof(uint)));
-  checkCudaErrors(cudaMalloc(&compact_mesh_.triangles_ref_count,
-                             sizeof(int) * kMaxVertexCount));
-  checkCudaErrors(cudaMalloc(&compact_mesh_.triangles,
-                             sizeof(Triangle) * kMaxVertexCount));
-
-  ResetSharedMesh();
-}
-
-Mesh::~Mesh() {
-  /// Shared mesh
-  checkCudaErrors(cudaFree(mesh_data_.vertex_heap));
-  checkCudaErrors(cudaFree(mesh_data_.vertex_heap_counter));
-  checkCudaErrors(cudaFree(mesh_data_.vertices));
-
-  checkCudaErrors(cudaFree(mesh_data_.triangle_heap));
-  checkCudaErrors(cudaFree(mesh_data_.triangle_heap_counter));
-  checkCudaErrors(cudaFree(mesh_data_.triangles));
-
-  /// Compact mesh
-  checkCudaErrors(cudaFree(compact_mesh_.vertex_index_remapper));
-
-  checkCudaErrors(cudaFree(compact_mesh_.vertex_counter));
-  checkCudaErrors(cudaFree(compact_mesh_.vertices_ref_count));
-  checkCudaErrors(cudaFree(compact_mesh_.vertices));
-
-  checkCudaErrors(cudaFree(compact_mesh_.triangle_counter));
-  checkCudaErrors(cudaFree(compact_mesh_.triangles_ref_count));
-  checkCudaErrors(cudaFree(compact_mesh_.triangles));
-}
-
-void Mesh::ResetSharedMesh(){
+void Map::ResetSharedMesh(){
   const int threads_per_block = 64;
   const dim3 grid_size((kMaxVertexCount + threads_per_block - 1)
                        / threads_per_block, 1);
@@ -512,7 +455,7 @@ void Mesh::ResetSharedMesh(){
   checkCudaErrors(cudaGetLastError());
 }
 
-void Mesh::ResetCompactMesh() {
+void Map::ResetCompactMesh() {
   checkCudaErrors(cudaMemset(compact_mesh_.vertex_index_remapper, 0xff,
                              sizeof(int) * kMaxVertexCount));
   checkCudaErrors(cudaMemset(compact_mesh_.vertices_ref_count, 0,
@@ -526,10 +469,10 @@ void Mesh::ResetCompactMesh() {
 }
 
 /// Assume hash_table_ is compactified
-void Mesh::MarchingCubes(Map *map) {
+void Map::MarchingCubes() {
   uint occupied_block_count;
   checkCudaErrors(cudaMemcpy(&occupied_block_count,
-                             map->gpu_data().compacted_hash_entry_counter,
+                             gpu_data().compacted_hash_entry_counter,
                              sizeof(uint), cudaMemcpyDeviceToHost));
   LOG(INFO) << "marching cubes block count: " << occupied_block_count;
   if (occupied_block_count <= 0)
@@ -540,7 +483,7 @@ void Mesh::MarchingCubes(Map *map) {
   const dim3 block_size(threads_per_block, 1);
 
   /// Use divide and conquer to avoid read-write conflict
-  MarchingCubesKernel<<<grid_size, block_size>>>(map->gpu_data(),
+  MarchingCubesKernel<<<grid_size, block_size>>>(gpu_data(),
           make_uchar3(0, 0, 0), make_uchar3(1, 1, 1),
           mesh_data_);
   checkCudaErrors(cudaDeviceSynchronize());
@@ -564,11 +507,11 @@ void Mesh::MarchingCubes(Map *map) {
   checkCudaErrors(cudaGetLastError());
 #endif
 
-  RecycleTrianglesKernel<<<grid_size, block_size>>>(map->gpu_data(), mesh_data_);
+  RecycleTrianglesKernel<<<grid_size, block_size>>>(gpu_data(), mesh_data_);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 
-  RecycleVerticesKernel<<<grid_size, block_size>>>(map->gpu_data(), mesh_data_);
+  RecycleVerticesKernel<<<grid_size, block_size>>>(gpu_data(), mesh_data_);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }
@@ -620,11 +563,11 @@ void AssignTrianglesKernel(int* triangle_ref_count,
   }
 }
 
-void Mesh::CompressMesh(Map *map) {
+void Map::CompressMesh() {
   //map->CollectAllBlocks();
   ResetCompactMesh();
 
-  int occupied_block_count = map->hash_table().compacted_entry_count();
+  int occupied_block_count = hash_table().compacted_entry_count();
   if (occupied_block_count <= 0) return;
 
   {
@@ -633,7 +576,7 @@ void Mesh::CompressMesh(Map *map) {
     const dim3 block_size(threads_per_block, 1);
 
     CollectVerticesAndTrianglesKernel << < grid_size, block_size >> > (
-            map->gpu_data(), mesh_data_,
+            gpu_data(), mesh_data_,
                     compact_mesh_.vertices_ref_count,
                     compact_mesh_.triangles_ref_count);
     checkCudaErrors(cudaDeviceSynchronize());
@@ -667,12 +610,12 @@ void Mesh::CompressMesh(Map *map) {
   }
 }
 
-void Mesh::SaveMesh(Map* map, std::string path) {
+void Map::SaveMesh(std::string path) {
   /// get data from GPU
   LOG(INFO) << "Copying data from GPU";
 
-  map->CollectAllBlocks();
-  CompressMesh(map);
+  CollectAllBlocks();
+  CompressMesh();
 
   uint remapper_vertex_count_cpu;
   checkCudaErrors(cudaMemcpy(&remapper_vertex_count_cpu,

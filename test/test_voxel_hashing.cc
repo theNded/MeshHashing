@@ -15,14 +15,12 @@
 #include <opencv2/opencv.hpp>
 #include <sensor.h>
 #include <ray_caster.h>
-#include <mesh.h>
 
-#include "fuser.h"
 #include "renderer.h"
 
 #include "config_reader.h"
 
-#define SUN3D_ORI
+#define SUN3D
 #if defined(ICL)
 const std::string kDefaultDatasetPath = "/home/wei/data/ICL/lv1/";
 #elif defined(TUM)
@@ -121,13 +119,9 @@ int main() {
   Map voxel_map(hash_params);
   LOG(INFO) << "map allocated";
 
-  Mesh mesh;
-  LOG(INFO) << "mesh allocated";
 
   Sensor sensor(sensor_params);
   sensor.BindSensorDataToTexture();
-
-  Fuser fuser;
 
   RayCaster ray_caster(ray_cast_params);
 
@@ -149,16 +143,16 @@ int main() {
     float4x4 T = wTc[0].getInverse() * wTc[i];
     sensor.set_transform(T);
 
-    fuser.Integrate(&voxel_map, &sensor, NULL);
+    voxel_map.Integrate(&sensor, NULL);
 #ifndef OFFLINE
-    mesh.MarchingCubes(&voxel_map);
-    mesh.CompressMesh(&voxel_map);
+    voxel_map.MarchingCubes();
+    voxel_map.CompressMesh();
 
     if (i > 0 && i % 500 == 0) {
       std::stringstream ss;
       ss.str("");
       ss << "model-" << i << ".obj";
-      mesh.SaveMesh(&voxel_map, ss.str());
+      voxel_map.SaveMesh(ss.str());
     }
 #endif
 
@@ -172,12 +166,7 @@ int main() {
   LOG(INFO) << "Total time: " << seconds.count();
   LOG(INFO) << "Fps: " << frames / seconds.count();
 
-#ifdef OFFLINE
-  mesh.CollectAllBlocks();
-  mesh.MarchingCubes(&voxel_map);
-#endif
-
-  mesh.SaveMesh(&voxel_map, "test.obj");
+  voxel_map.SaveMesh("test.obj");
   //mesh.SaveMesh(&voxel_map, "ttt.obj");
 
   voxel_map.Debug();

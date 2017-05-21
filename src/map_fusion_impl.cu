@@ -1,55 +1,13 @@
-/// Input depth image as texture
-/// Easier interpolation
-#include <device_launch_parameters.h>
-
-#include <helper_cuda.h>
-#include <glog/logging.h>
+#include "map.h"
 #include "sensor.h"
-#include "fuser.h"
-#include "hash_table_gpu.h"
 
+#ifndef PINF
 #define PINF  __int_as_float(0x7f800000)
+#endif
 
 /// Refer to sensor.cu
 extern texture<float, cudaTextureType2D, cudaReadModeElementType> depth_texture;
 extern texture<float4, cudaTextureType2D, cudaReadModeElementType> color_texture;
-
-/// Kernel functions
-template <typename T>
-__global__
-void CollectTargetBlocksKernel(HashTableGPU<T> hash_table,
-                              SensorParams sensor_params, // K && min/max depth
-                              float4x4 c_T_w) {
-  const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-  __shared__ int local_counter;
-  if (threadIdx.x == 0) local_counter = 0;
-  __syncthreads();
-
-  int addr_local = -1;
-  if (idx < *hash_table.entry_count) {
-    if (hash_table.hash_entries[idx].ptr != FREE_ENTRY) {
-      if (IsBlockInCameraFrustum(c_T_w, hash_table.hash_entries[idx].pos,
-                                 sensor_params)) {
-        addr_local = atomicAdd(&local_counter, 1);
-      }
-    }
-  }
-
-  __syncthreads();
-
-  __shared__ int addr_global;
-  if (threadIdx.x == 0 && local_counter > 0) {
-    addr_global = atomicAdd(hash_table.compacted_hash_entry_counter, local_counter);
-  }
-  __syncthreads();
-
-  if (addr_local != -1) {
-    const uint addr = addr_global + addr_local;
-    hash_table.compacted_hash_entries[addr] = hash_table.hash_entries[idx];
-  }
-}
-
 __global__
 void UpdateBlocksKernel(HashTableGPU<VoxelBlock> map_table,
                         SensorData sensor_data,
@@ -93,9 +51,9 @@ void UpdateBlocksKernel(HashTableGPU<VoxelBlock> map_table,
   Voxel delta;
   delta.sdf = sdf;
   delta.weight = max(kSDFParams.weight_sample * 1.5f *
-                             (1.0f - NormalizeDepth(depth,
-                                                    sensor_params.min_depth_range,
-                                                    sensor_params.max_depth_range)),
+                     (1.0f - NormalizeDepth(depth,
+                                            sensor_params.min_depth_range,
+                                            sensor_params.max_depth_range)),
                      1.0f);
   if (sensor_data.color_image) {
     float4 color = tex2D(color_texture, image_pos.x, image_pos.y);
@@ -196,39 +154,38 @@ void AllocBlocksKernel(HashTableGPU<VoxelBlock> map_table,
   }
 }
 
-/// Member functions (CPU code)
-Fuser::Fuser() {}
-Fuser::~Fuser(){}
 
-void Fuser::Integrate(Map *map, Sensor* sensor, uint *is_streamed_mask) {
+/// Member functions (CPU code)
+
+void Map::Integrate(Sensor* sensor, uint *is_streamed_mask) {
 
   //make the rigid transform available on the GPU
   //map->gpu_data().updateParams(map->hash_params());
   /// seems OK
 
   //allocate all hash blocks which are corresponding to depth map entries
-  AllocBlocks(map, sensor);
+  AllocBlocks(sensor);
 
   /// DIFFERENT: is_streamed_mask now empty
   /// seems OK now, supported by MATLAB scatter3
 
   //generate a linear hash array with only occupied entries
-  CollectTargetBlocks(map, sensor);
+  CollectTargetBlocks(sensor);
   /// seems OK, supported by MATLAB scatter3
 
   //volumetrically integrate the depth data into the depth SDFBlocks
-  UpdateBlocks(map, sensor);
+  UpdateBlocks(sensor);
   /// cuda kernel launching ok
   /// seems ok according to CUDA output
 
-  map->Recycle();
+  Recycle();
 
-  map->frame_count() ++;
+  frame_count() ++;
 }
 
 /// Member functions (CPU calling GPU kernels)
-void Fuser::AllocBlocks(Map* map, Sensor* sensor) {
-  map->hash_table().ResetMutexes();
+void Map::AllocBlocks(Sensor* sensor) {
+  hash_table().ResetMutexes();
 
   const uint threads_per_block = 8;
   const dim3 grid_size((sensor->sensor_params().width + threads_per_block - 1)
@@ -237,46 +194,23 @@ void Fuser::AllocBlocks(Map* map, Sensor* sensor) {
                        /threads_per_block);
   const dim3 block_size(threads_per_block, threads_per_block);
 
-  AllocBlocksKernel<<<grid_size, block_size>>>(map->gpu_data(),
+  AllocBlocksKernel<<<grid_size, block_size>>>(gpu_data(),
           sensor->sensor_data(), sensor->sensor_params(), sensor->w_T_c(), NULL);
 
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }
 
-void Fuser::CollectTargetBlocks(Map* map, Sensor *sensor){
-  const uint threads_per_block = 256;
-  uint res = 0;
-
-  uint entry_count;
-  checkCudaErrors(cudaMemcpy(&entry_count, map->gpu_data().entry_count,
-                             sizeof(uint), cudaMemcpyDeviceToHost));
-
-  const dim3 grid_size((entry_count + threads_per_block - 1)
-                       / threads_per_block, 1);
-  const dim3 block_size(threads_per_block, 1);
-
-  checkCudaErrors(cudaMemset(map->gpu_data().compacted_hash_entry_counter,
-                             0, sizeof(int)));
-  CollectTargetBlocksKernel<<<grid_size, block_size >>>(map->gpu_data(),
-          sensor->sensor_params(), sensor->c_T_w());
-  checkCudaErrors(cudaDeviceSynchronize());
-  checkCudaErrors(cudaGetLastError());
-  checkCudaErrors(cudaMemcpy(&res, map->gpu_data().compacted_hash_entry_counter,
-                             sizeof(uint), cudaMemcpyDeviceToHost));
-  LOG(INFO) << "Block count in view frustum: " << res;
-}
-
-void Fuser::UpdateBlocks(Map* map, Sensor *sensor) {
+void Map::UpdateBlocks(Sensor *sensor) {
   const uint threads_per_block = BLOCK_SIZE;
 
-  uint compacted_entry_count = map->hash_table().compacted_entry_count();
+  uint compacted_entry_count = hash_table().compacted_entry_count();
   if (compacted_entry_count <= 0)
     return;
 
   const dim3 grid_size(compacted_entry_count, 1);
   const dim3 block_size(threads_per_block, 1);
-  UpdateBlocksKernel <<<grid_size, block_size>>>(map->gpu_data(),
+  UpdateBlocksKernel <<<grid_size, block_size>>>(gpu_data(),
           sensor->sensor_data(), sensor->sensor_params(), sensor->c_T_w());
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());

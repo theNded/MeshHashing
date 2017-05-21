@@ -110,7 +110,6 @@ struct __ALIGN__(8) VoxelBlock {
   }
 };
 
-
 /// Used by mesh
 struct Vertex {
   float3 pos;

@@ -119,9 +119,62 @@ Map::Map(const HashParams &hash_params) {
   hash_table_.Resize(hash_params);
 
   Reset();
+
+  /// Shared mesh
+  checkCudaErrors(cudaMalloc(&mesh_data_.vertex_heap,
+                             sizeof(uint) * kMaxVertexCount));
+  checkCudaErrors(cudaMalloc(&mesh_data_.vertex_heap_counter, sizeof(uint)));
+  checkCudaErrors(cudaMalloc(&mesh_data_.vertices,
+                             sizeof(Vertex) * kMaxVertexCount));
+
+  checkCudaErrors(cudaMalloc(&mesh_data_.triangle_heap,
+                             sizeof(uint) * kMaxVertexCount));
+  checkCudaErrors(cudaMalloc(&mesh_data_.triangle_heap_counter, sizeof(uint)));
+  checkCudaErrors(cudaMalloc(&mesh_data_.triangles,
+                             sizeof(Triangle) * kMaxVertexCount));
+
+  /// Compact mesh
+  checkCudaErrors(cudaMalloc(&compact_mesh_.vertex_index_remapper,
+                             sizeof(int) * kMaxVertexCount));
+
+  checkCudaErrors(cudaMalloc(&compact_mesh_.vertex_counter,
+                             sizeof(uint)));
+  checkCudaErrors(cudaMalloc(&compact_mesh_.vertices_ref_count,
+                             sizeof(int) * kMaxVertexCount));
+  checkCudaErrors(cudaMalloc(&compact_mesh_.vertices,
+                             sizeof(Vertex) * kMaxVertexCount));
+
+  checkCudaErrors(cudaMalloc(&compact_mesh_.triangle_counter,
+                             sizeof(uint)));
+  checkCudaErrors(cudaMalloc(&compact_mesh_.triangles_ref_count,
+                             sizeof(int) * kMaxVertexCount));
+  checkCudaErrors(cudaMalloc(&compact_mesh_.triangles,
+                             sizeof(Triangle) * kMaxVertexCount));
+
+  ResetSharedMesh();
 }
 
-Map::~Map() {}
+Map::~Map() {
+  checkCudaErrors(cudaFree(mesh_data_.vertex_heap));
+  checkCudaErrors(cudaFree(mesh_data_.vertex_heap_counter));
+  checkCudaErrors(cudaFree(mesh_data_.vertices));
+
+  checkCudaErrors(cudaFree(mesh_data_.triangle_heap));
+  checkCudaErrors(cudaFree(mesh_data_.triangle_heap_counter));
+  checkCudaErrors(cudaFree(mesh_data_.triangles));
+
+  /// Compact mesh
+  checkCudaErrors(cudaFree(compact_mesh_.vertex_index_remapper));
+
+  checkCudaErrors(cudaFree(compact_mesh_.vertex_counter));
+  checkCudaErrors(cudaFree(compact_mesh_.vertices_ref_count));
+  checkCudaErrors(cudaFree(compact_mesh_.vertices));
+
+  checkCudaErrors(cudaFree(compact_mesh_.triangle_counter));
+  checkCudaErrors(cudaFree(compact_mesh_.triangles_ref_count));
+  checkCudaErrors(cudaFree(compact_mesh_.triangles));
+
+}
 
 void Map::Reset() {
   integrated_frame_count_ = 0;
@@ -224,3 +277,64 @@ void Map::CollectAllBlocks(){
                              sizeof(uint), cudaMemcpyDeviceToHost));
   LOG(INFO) << "Block count in all: " << res;
 }
+
+/// Kernel functions
+template <typename T>
+__global__
+void CollectTargetBlocksKernel(HashTableGPU<T> hash_table,
+                               SensorParams sensor_params, // K && min/max depth
+                               float4x4 c_T_w) {
+  const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+  __shared__ int local_counter;
+  if (threadIdx.x == 0) local_counter = 0;
+  __syncthreads();
+
+  int addr_local = -1;
+  if (idx < *hash_table.entry_count) {
+    if (hash_table.hash_entries[idx].ptr != FREE_ENTRY) {
+      if (IsBlockInCameraFrustum(c_T_w, hash_table.hash_entries[idx].pos,
+                                 sensor_params)) {
+        addr_local = atomicAdd(&local_counter, 1);
+      }
+    }
+  }
+
+  __syncthreads();
+
+  __shared__ int addr_global;
+  if (threadIdx.x == 0 && local_counter > 0) {
+    addr_global = atomicAdd(hash_table.compacted_hash_entry_counter, local_counter);
+  }
+  __syncthreads();
+
+  if (addr_local != -1) {
+    const uint addr = addr_global + addr_local;
+    hash_table.compacted_hash_entries[addr] = hash_table.hash_entries[idx];
+  }
+}
+
+
+void Map::CollectTargetBlocks(Sensor *sensor){
+  const uint threads_per_block = 256;
+  uint res = 0;
+
+  uint entry_count;
+  checkCudaErrors(cudaMemcpy(&entry_count, gpu_data().entry_count,
+                             sizeof(uint), cudaMemcpyDeviceToHost));
+
+  const dim3 grid_size((entry_count + threads_per_block - 1)
+                       / threads_per_block, 1);
+  const dim3 block_size(threads_per_block, 1);
+
+  checkCudaErrors(cudaMemset(gpu_data().compacted_hash_entry_counter,
+                             0, sizeof(int)));
+  CollectTargetBlocksKernel<<<grid_size, block_size >>>(gpu_data(),
+          sensor->sensor_params(), sensor->c_T_w());
+  checkCudaErrors(cudaDeviceSynchronize());
+  checkCudaErrors(cudaGetLastError());
+  checkCudaErrors(cudaMemcpy(&res, gpu_data().compacted_hash_entry_counter,
+                             sizeof(uint), cudaMemcpyDeviceToHost));
+  LOG(INFO) << "Block count in view frustum: " << res;
+}
+
