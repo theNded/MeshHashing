@@ -211,7 +211,7 @@ void Map::UpdateBlocks(Sensor *sensor) {
 
   const dim3 grid_size(compacted_entry_count, 1);
   const dim3 block_size(threads_per_block, 1);
-  UpdateBlocksKernel <<<grid_size, block_size>>>(gpu_data(), blocks_,
+  UpdateBlocksKernel <<<grid_size, block_size>>>(gpu_data(), blocks_.gpu_data(),
           sensor->sensor_data(), sensor->sensor_params(), sensor->c_T_w());
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());

@@ -129,7 +129,7 @@ int main() {
   //                       30, cv::Size(640, 480));
   std::chrono::time_point<std::chrono::system_clock> start, end;
   start = std::chrono::system_clock::now();
-  int frames = 20;//depth_img_list.size() - 1;
+  int frames = 200;//depth_img_list.size() - 1;
 //#define OFFLINE
 
   for (int i = 0; i < frames; ++i) {
@@ -157,7 +157,7 @@ int main() {
 #endif
 
     ray_caster.Cast(&voxel_map, T.getInverse());
-    cv::Mat display = GPUFloat4ToMat(ray_caster.ray_caster_data().color_image);
+    cv::Mat display = GPUFloat4ToMat(ray_caster.ray_caster_data().normal_image);
     cv::imshow("display", display);
     cv::waitKey(1);
   }

@@ -7,7 +7,9 @@
 #define VH_MAP_H
 
 #include "hash_table.h"
+#include "block.h"
 #include "sensor.h"
+
 struct SharedMash {
   // Dynamic memory management for vertices
   // We need compact operation,
@@ -63,8 +65,8 @@ static const int kMaxVertexCount = 10000000;
 
 class Map {
 private:
-  HashTable hash_table_;
-  VoxelBlock *blocks_;
+  HashTable   hash_table_;
+  VoxelBlocks blocks_;
 
   uint integrated_frame_count_;
   SharedMash  mesh_data_;
@@ -115,7 +117,7 @@ public:
   uint& frame_count() {
     return integrated_frame_count_;
   }
-  VoxelBlock* blocks() {
+  VoxelBlocks& blocks() {
     return blocks_;
   }
   void Debug() {

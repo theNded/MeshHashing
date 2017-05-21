@@ -1,7 +1,6 @@
 #include <matrix.h>
 #include <geometry_util.h>
 
-#include "hash_table_gpu.h"
 #include "ray_caster.h"
 
 //////////
@@ -17,7 +16,8 @@ inline float3 frac(const float3& val)  {
 
 // TODO(wei): refine it
 __device__
-Voxel GetVoxel(const HashTableGPU& hash_table, VoxelBlock *blocks, float3 world_pos) {
+Voxel GetVoxel(const HashTableGPU& hash_table,
+               VoxelBlock *blocks, float3 world_pos) {
   HashEntry hash_entry = hash_table.GetEntry(WorldToBlock(world_pos));
   Voxel v;
   if (hash_entry.ptr == FREE_ENTRY) {
@@ -330,7 +330,7 @@ void RayCaster::Cast(Map* map, const float4x4& c_T_w) {
                        /threads_per_block);
   const dim3 block_size(threads_per_block, threads_per_block);
 
-  CastKernel<<<grid_size, block_size>>>(map->gpu_data(), map->blocks(),
+  CastKernel<<<grid_size, block_size>>>(map->gpu_data(), map->blocks().gpu_data(),
           ray_caster_data_, ray_caster_params_, c_T_w, w_T_c);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());

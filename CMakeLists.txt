@@ -107,6 +107,7 @@ CUDA_ADD_LIBRARY(cuda-voxel-hashing
         ${VH}/src/constant.cu
         ${VH}/src/hash_table.cu
         ${VH}/src/sensor.cu
+        ${VH}/src/block.cu
         ${VH}/src/map_core_impl.cu
         ${VH}/src/map_fusion_impl.cu
         ${VH}/src/map_mesh_impl.cu

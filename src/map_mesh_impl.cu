@@ -488,7 +488,7 @@ void Map::MarchingCubes() {
   const dim3 block_size(threads_per_block, 1);
 
   /// Use divide and conquer to avoid read-write conflict
-  MarchingCubesKernel<<<grid_size, block_size>>>(gpu_data(), blocks_,
+  MarchingCubesKernel<<<grid_size, block_size>>>(gpu_data(), blocks_.gpu_data(),
           make_uchar3(0, 0, 0), make_uchar3(1, 1, 1),
           mesh_data_);
   checkCudaErrors(cudaDeviceSynchronize());
@@ -512,11 +512,11 @@ void Map::MarchingCubes() {
   checkCudaErrors(cudaGetLastError());
 #endif
 
-  RecycleTrianglesKernel<<<grid_size, block_size>>>(gpu_data(), blocks_, mesh_data_);
+  RecycleTrianglesKernel<<<grid_size, block_size>>>(gpu_data(), blocks_.gpu_data(), mesh_data_);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 
-  RecycleVerticesKernel<<<grid_size, block_size>>>(gpu_data(), blocks_, mesh_data_);
+  RecycleVerticesKernel<<<grid_size, block_size>>>(gpu_data(), blocks_.gpu_data(), mesh_data_);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }
@@ -582,7 +582,7 @@ void Map::CompressMesh() {
     const dim3 block_size(threads_per_block, 1);
 
     CollectVerticesAndTrianglesKernel << < grid_size, block_size >> > (
-            gpu_data(), blocks_, mesh_data_,
+            gpu_data(), blocks_.gpu_data(), mesh_data_,
                     compact_mesh_.vertices_ref_count,
                     compact_mesh_.triangles_ref_count);
     checkCudaErrors(cudaDeviceSynchronize());

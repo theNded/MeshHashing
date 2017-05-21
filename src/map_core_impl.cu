@@ -13,14 +13,6 @@
 
 #define PINF  __int_as_float(0x7f800000)
 
-__global__
-void ResetBlocksKernel(VoxelBlock* blocks, int value_capacity) {
-  uint idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-  if (idx < value_capacity) {
-    blocks[idx].Clear();
-  }
-}
 //////////
 /// Kernel functions
 /// Starve voxels (to determine outliers)
@@ -125,12 +117,9 @@ void CollectAllBlocksKernel(HashTableGPU hash_table) {
 /// Member functions (CPU code)
 Map::Map(const HashParams &hash_params) {
   hash_table_.Resize(hash_params);
+  blocks_.Resize(hash_params.value_capacity);
 
   Reset();
-
-  checkCudaErrors(cudaMalloc(&blocks_,
-                             sizeof(VoxelBlock) * hash_params.value_capacity));
-  ResetBlocks(hash_params.value_capacity);
 
   /// Shared mesh
   checkCudaErrors(cudaMalloc(&mesh_data_.vertex_heap,
@@ -191,19 +180,8 @@ Map::~Map() {
 void Map::Reset() {
   integrated_frame_count_ = 0;
   hash_table_.Reset();
+  blocks_.Reset();
 }
-
-void Map::ResetBlocks(int capacity){
-  const int threads_per_block = 64;
-  const dim3 grid_size((kMaxVertexCount + threads_per_block - 1)
-                       / threads_per_block, 1);
-  const dim3 block_size(threads_per_block, 1);
-
-  ResetBlocksKernel<<<grid_size, block_size>>>(blocks_, capacity);
-  checkCudaErrors(cudaDeviceSynchronize());
-  checkCudaErrors(cudaGetLastError());
-}
-
 
 void Map::Recycle() {
   // TODO(wei): change it via global parameters
@@ -235,7 +213,7 @@ void Map::StarveOccupiedVoxels() {
   const dim3 grid_size(processing_block_count, 1);
   const dim3 block_size(threads_per_block, 1);
 
-  StarveOccupiedVoxelsKernel<<<grid_size, block_size >>>(gpu_data(), blocks_);
+  StarveOccupiedVoxelsKernel<<<grid_size, block_size >>>(gpu_data(), blocks_.gpu_data());
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }
@@ -254,7 +232,7 @@ void Map::CollectInvalidBlockInfo() {
   const dim3 grid_size(processing_block_count, 1);
   const dim3 block_size(threads_per_block, 1);
 
-  CollectInvalidBlockInfoKernel <<<grid_size, block_size >>>(gpu_data(), blocks_);
+  CollectInvalidBlockInfoKernel <<<grid_size, block_size >>>(gpu_data(), blocks_.gpu_data());
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }
@@ -274,7 +252,7 @@ void Map::RecycleInvalidBlock() {
                        / threads_per_block, 1);
   const dim3 block_size(threads_per_block, 1);
 
-  RecycleInvalidBlockKernel << <grid_size, block_size >> >(gpu_data(), blocks_);
+  RecycleInvalidBlockKernel << <grid_size, block_size >> >(gpu_data(), blocks_.gpu_data());
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }
