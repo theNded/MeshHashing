@@ -465,7 +465,7 @@ void AssignVertexRemapperKernel(MeshGPU        mesh,
   if (idx < kMaxVertexCount && compact_mesh.vertices_ref_count[idx] > 0) {
     int addr = atomicAdd(compact_mesh.vertex_counter, 1);
     compact_mesh.vertex_index_remapper[idx] = addr;
-    compact_mesh.vertices[addr] = mesh.vertices[idx];
+    compact_mesh.vertices[addr] = mesh.vertices[idx].pos;
   }
 }
 
@@ -475,13 +475,13 @@ void AssignTrianglesKernel(MeshGPU        mesh,
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (idx < kMaxVertexCount && compact_mesh.triangles_ref_count[idx] > 0) {
     int addr = atomicAdd(compact_mesh.triangle_counter, 1);
-    compact_mesh.triangles[addr].vertex_ptrs.x
+    compact_mesh.triangles[addr].x
             = compact_mesh.vertex_index_remapper[
             mesh.triangles[idx].vertex_ptrs.x];
-    compact_mesh.triangles[addr].vertex_ptrs.y
+    compact_mesh.triangles[addr].y
             = compact_mesh.vertex_index_remapper[
             mesh.triangles[idx].vertex_ptrs.y];
-    compact_mesh.triangles[addr].vertex_ptrs.z
+    compact_mesh.triangles[addr].z
             = compact_mesh.vertex_index_remapper[
             mesh.triangles[idx].vertex_ptrs.z];
   }
@@ -608,28 +608,28 @@ void Map::SaveMesh(std::string path) {
                              sizeof(uint), cudaMemcpyDeviceToHost));
   LOG(INFO) << "Triangles: " << compact_triangle_count;
 
-  Vertex* vertices    = new Vertex[compact_vertex_count];
-  Triangle* triangles = new Triangle[compact_triangle_count];
+  float3* vertices = new float3[compact_vertex_count];
+  int3* triangles  = new int3  [compact_triangle_count];
   checkCudaErrors(cudaMemcpy(vertices, compact_mesh_.gpu_data().vertices,
-                             sizeof(Vertex) * compact_vertex_count,
+                             sizeof(float3) * compact_vertex_count,
                              cudaMemcpyDeviceToHost));
   checkCudaErrors(cudaMemcpy(triangles, compact_mesh_.gpu_data().triangles,
-                             sizeof(Triangle) * compact_triangle_count,
+                             sizeof(int3) * compact_triangle_count,
                              cudaMemcpyDeviceToHost));
 
   std::ofstream out(path);
   std::stringstream ss;
   for (uint i = 0; i < compact_vertex_count; ++i) {
     ss.str("");
-    ss <<  "v " << vertices[i].pos.x << " "
-       << vertices[i].pos.y << " "
-       << vertices[i].pos.z << "\n";
+    ss <<  "v " << vertices[i].x << " "
+       << vertices[i].y << " "
+       << vertices[i].z << "\n";
     out << ss.str();
   }
 
   for (uint i = 0; i < compact_triangle_count; ++i) {
     ss.str("");
-    int3 idx = triangles[i].vertex_ptrs;
+    int3 idx = triangles[i];
     ss << "f " << idx.x + 1 << " " << idx.y + 1 << " " << idx.z + 1 << "\n";
     out << ss.str();
   }

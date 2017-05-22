@@ -20,7 +20,7 @@
 
 #include "config_reader.h"
 
-#define TDVCR
+#define SUN3D
 #if defined(ICL)
 const std::string kDefaultDatasetPath = "/home/wei/data/ICL/lv1/";
 #elif defined(TUM)
@@ -28,13 +28,13 @@ const std::string kDefaultDatasetPath =
         "/home/wei/data/TUM/rgbd_dataset_freiburg3_long_office_household/";
 #elif defined(SUN3D)
 const std::string kDefaultDatasetPath =
-        "/home/wei/data/SUN3D/lounge/";
+        "/home/wei/data/SUN3D/copyroom/";
 #elif defined(SUN3D_ORI)
 const std::string kDefaultDatasetPath =
         "/home/wei/data/SUN3D-Princeton/hotel_umd/maryland_hotel3/";
 #elif defined(TDVCR)
 const std::string kDefaultDatasetPath =
-        "/home/wei/data/3DVCR/lab1/";
+        "/home/wei/data/3DVCR/hall1/";
 #endif
 
 /// Refer to constant.cu
@@ -112,5 +112,5 @@ int main(int argc, char** argv) {
   LOG(INFO) << "Total time: " << seconds.count();
   LOG(INFO) << "Fps: " << frames / seconds.count();
 
-  voxel_map.SaveMesh("test20.obj");
+  voxel_map.SaveMesh("kkk.obj");
 }

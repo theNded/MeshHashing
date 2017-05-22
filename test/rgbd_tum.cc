@@ -97,9 +97,14 @@ int main(int argc, char **argv) {
   vector<string> vstrImageFilenamesD;
   vector<double> vTimestamps;
   LOG(INFO) << "Loading image list";
+
   string strAssociationFilename =
-          "/home/wei/data/TUM/rgbd_dataset_freiburg3_long_office_household"
-                  "/rgb_depth_association.txt";
+          "/home/wei/data/TUM/rgbd_dataset_freiburg1_xyz"
+          "/rgb_depth_association.txt";
+  string path_to_vocabulary = "/home/wei/softwares/ORB_SLAM2/Vocabulary/ORBvoc.txt";
+  string path_to_config = "/home/wei/softwares/ORB_SLAM2/Examples/RGB-D/TUM1.yaml";
+  string dataset_path = "/home/wei/data/TUM/rgbd_dataset_freiburg1_xyz";
+
   LoadImages(strAssociationFilename, vstrImageFilenamesRGB, vstrImageFilenamesD,
              vTimestamps);
 
@@ -112,10 +117,6 @@ int main(int argc, char **argv) {
     cerr << endl << "Different number of images for rgb and depth." << endl;
     return 1;
   }
-
-  string path_to_vocabulary = "/home/wei/softwares/ORB_SLAM2/Vocabulary/ORBvoc.txt";
-  string path_to_config = "/home/wei/softwares/ORB_SLAM2/Examples/RGB-D/TUM3.yaml";
-  string dataset_path = "/home/wei/data/TUM/rgbd_dataset_freiburg3_long_office_household";
 
   // Create SLAM system. It initializes all system threads and gets ready to process frames.
   LOG(INFO) << "Loading vocabulary";
@@ -130,8 +131,9 @@ int main(int argc, char **argv) {
   cout << "Start processing sequence ..." << endl;
   cout << "Images in the sequence: " << nImages << endl << endl;
 
+
   ConfigReader config;
-  config.LoadConfig("../config/tum3.yml");
+  config.LoadConfig("../config/tum1.yml");
   SetConstantSDFParams(config.sdf_params);
 
   Map voxel_map(config.hash_params);

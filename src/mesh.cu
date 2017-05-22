@@ -99,14 +99,14 @@ void CompactMesh::Alloc(uint vertex_count, uint triangle_count) {
   checkCudaErrors(cudaMalloc(&gpu_data_.vertices_ref_count,
                              sizeof(int) * kMaxVertexCount));
   checkCudaErrors(cudaMalloc(&gpu_data_.vertices,
-                             sizeof(Vertex) * kMaxVertexCount));
+                             sizeof(float3) * kMaxVertexCount));
 
   checkCudaErrors(cudaMalloc(&gpu_data_.triangle_counter,
                              sizeof(uint)));
   checkCudaErrors(cudaMalloc(&gpu_data_.triangles_ref_count,
                              sizeof(int) * kMaxVertexCount));
   checkCudaErrors(cudaMalloc(&gpu_data_.triangles,
-                             sizeof(Triangle) * kMaxVertexCount));
+                             sizeof(int3) * kMaxVertexCount));
 }
 
 void CompactMesh::Free() {

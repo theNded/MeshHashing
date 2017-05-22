@@ -91,11 +91,11 @@ struct CompactMeshGPU {
   // Remap from the separated vertices to the compacted vertices
   int*      vertex_index_remapper;
 
-  Vertex*   vertices;
+  float3*   vertices;
   int*      vertices_ref_count;
   uint*     vertex_counter;
 
-  Triangle* triangles;
+  int3*     triangles;
   int*      triangles_ref_count;
   uint*     triangle_counter;
 };

@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 
 #include <opencv2/opencv.hpp>
 #include <glog/logging.h>
@@ -237,23 +238,18 @@ void Load3DVCR(std::string dataset_path,
                std::vector<std::string> &depth_image_list,
                std::vector<std::string> &color_image_list,
                std::vector<float4x4>& wTcs) {
-  std::ifstream color_stream(dataset_path + "rgb.txt");
-  std::string img_name;
-  while (color_stream >> img_name) {
-    color_image_list.push_back(dataset_path + "rgb/" + img_name);
-  }
-
-  std::ifstream depth_stream(dataset_path + "depth.txt");
-  while (depth_stream >> img_name) {
-    depth_image_list.push_back(dataset_path + "depth/" + img_name);
-  }
 
   std::ifstream traj_stream(dataset_path + "trajectory.txt");
   std::string ts_img, img_path, ts_gt;
-  float tx, ty, tz, qx, qy, qz, qw;
-  while (traj_stream >> ts_img
+  float ts, tx, ty, tz, qx, qy, qz, qw;
+
+  std::unordered_set<int> tracked_ts;
+  while (traj_stream >> ts
                      >> tx >> ty >> tz
                      >> qx >> qy >> qz >> qw) {
+    tracked_ts.emplace((int)ts);
+    LOG(INFO) << (int)ts;
+
     float4x4 wTc;
     wTc.setIdentity();
 
@@ -271,6 +267,28 @@ void Load3DVCR(std::string dataset_path,
     wTc.m34 = tz;
     wTc.m44 = 1;
     wTcs.push_back(wTc);
+  }
+
+  std::ifstream color_stream(dataset_path + "rgb.txt");
+  std::string img_name;
+
+  int count = 0;
+  while (color_stream >> img_name) {
+    if (tracked_ts.find(count) != tracked_ts.end()) {
+      LOG(INFO) << dataset_path + "rgb/" + img_name;
+      color_image_list.push_back(dataset_path + "rgb/" + img_name);
+    }
+    ++count;
+  }
+
+  count = 0;
+  std::ifstream depth_stream(dataset_path + "depth.txt");
+  while (depth_stream >> img_name) {
+    if (tracked_ts.find(count) != tracked_ts.end()) {
+      LOG(INFO) << dataset_path + "depth/" + img_name;
+      depth_image_list.push_back(dataset_path + "depth/" + img_name);
+    }
+    ++count;
   }
 }
 

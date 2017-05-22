@@ -1,13 +1,13 @@
 %YAML:1.0
 # Hash params
-bucket_count:      400000
+bucket_count:      800000
 bucket_size:       10
-entry_count:       4000000
+entry_count:       8000000
 linked_list_size:  7
-value_capacity:    100000
+value_capacity:    200000
 
 # SDF params
-voxel_size:                0.008
+voxel_size:                0.02
 sdf_upper_bound:           4.0
 truncation_distance_scale: 0.01
 truncation_distance:       0.02
@@ -20,7 +20,7 @@ fy:              350.2863
 cx:              315.0930
 cy:              173.4571
 min_depth_range: 0.5
-max_depth_range: 3.0
+max_depth_range: 5.0
 range_factor:    0.001
 height:          360
 width:           640
