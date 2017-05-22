@@ -15,16 +15,6 @@
 #include "matrix.h"
 #include "params.h"
 
-void LoadSDFParams(std::string path, SDFParams& params) {
-  cv::FileStorage fs(path, cv::FileStorage::READ);
-  params.voxel_size                = (float)fs["voxel_size"];
-  params.sdf_upper_bound           = (float)fs["sdf_upper_bound"];
-  params.truncation_distance_scale = (float)fs["truncation_distance_scale"];
-  params.truncation_distance       = (float)fs["truncation_distance"];
-  params.weight_sample             = (int)fs["weight_sample"];
-  params.weight_upper_bound        = (int)fs["weight_upper_bound"];
-}
-
 void LoadHashParams(std::string path, HashParams& params) {
   cv::FileStorage fs(path, cv::FileStorage::READ);
   params.bucket_count     = (int)fs["bucket_count"];
@@ -34,16 +24,14 @@ void LoadHashParams(std::string path, HashParams& params) {
   params.value_capacity   = (int)fs["value_capacity"];
 }
 
-void LoadRayCasterParams(std::string path, RayCasterParams& params) {
+void LoadSDFParams(std::string path, SDFParams& params) {
   cv::FileStorage fs(path, cv::FileStorage::READ);
-  params.width                = (int)  fs["width"];
-  params.height               = (int)  fs["height"];
-  params.min_raycast_depth    = (float)fs["min_raycast_depth"];
-  params.max_raycast_depth    = (float)fs["max_raycast_depth"];
-  params.raycast_step         = (float)fs["raycast_step"];
-  params.sample_sdf_threshold = (float)fs["sample_sdf_threshold"];
-  params.sdf_threshold        = (float)fs["sdf_threshold"];
-  params.enable_gradients     = (int)fs["enable_gradient"];
+  params.voxel_size                = (float)fs["voxel_size"];
+  params.sdf_upper_bound           = (float)fs["sdf_upper_bound"];
+  params.truncation_distance_scale = (float)fs["truncation_distance_scale"];
+  params.truncation_distance       = (float)fs["truncation_distance"];
+  params.weight_sample             = (int)fs["weight_sample"];
+  params.weight_upper_bound        = (int)fs["weight_upper_bound"];
 }
 
 void LoadSensorParams(std::string path, SensorParams& params) {
@@ -58,6 +46,43 @@ void LoadSensorParams(std::string path, SensorParams& params) {
   params.width  = (int)fs["width"];
   params.height = (int)fs["height"];
 }
+
+void LoadRayCasterParams(std::string path, RayCasterParams& params) {
+  cv::FileStorage fs(path, cv::FileStorage::READ);
+  params.min_raycast_depth    = (float)fs["min_raycast_depth"];
+  params.max_raycast_depth    = (float)fs["max_raycast_depth"];
+  params.raycast_step         = (float)fs["raycast_step"];
+  params.sample_sdf_threshold = (float)fs["sample_sdf_threshold"];
+  params.sdf_threshold        = (float)fs["sdf_threshold"];
+  params.enable_gradients     = (int)fs["enable_gradient"];
+}
+
+struct ConfigReader {
+  HashParams      hash_params;
+  SDFParams       sdf_params;
+  SensorParams    sensor_params;
+  RayCasterParams ray_caster_params;
+
+  void LoadConfig(std::string config_path) {
+    LoadHashParams(config_path, hash_params);
+    LoadSDFParams(config_path, sdf_params);
+    LoadSensorParams(config_path, sensor_params);
+    LoadRayCasterParams(config_path, ray_caster_params);
+
+    ray_caster_params.width  = sensor_params.width;
+    ray_caster_params.height = sensor_params.height;
+    ray_caster_params.fx = sensor_params.fx;
+    ray_caster_params.fy = sensor_params.fy;
+    ray_caster_params.cx = sensor_params.cx;
+    ray_caster_params.cy = sensor_params.cy;
+
+    LOG(INFO) << sensor_params.fx;
+    LOG(INFO) << sensor_params.fy;
+    LOG(INFO) << sensor_params.cx;
+    LOG(INFO) << sensor_params.cy;
+  }
+};
+
 
 /// 1-1-1 correspondences
 void LoadICL(std::string dataset_path,

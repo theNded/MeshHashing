@@ -29,17 +29,44 @@ private:
   RayCasterDataGPU gpu_data_;
   RayCasterParams  ray_caster_params_;
 
+  cv::Mat          normal_image_;
+  cv::Mat          color_image_;
+
 public:
   RayCaster(const RayCasterParams& params);
   ~RayCaster(void);
 
   void Cast(Map& map, const float4x4& c_T_w);
 
+  const cv::Mat& normal_image() {
+    return normal_image_;
+  }
+  const cv::Mat& color_image() {
+    return color_image_;
+  }
   const RayCasterDataGPU& gpu_data() {
     return gpu_data_;
   }
   const RayCasterParams& ray_caster_params() const {
     return ray_caster_params_;
+  }
+
+  /// To write images into a video, use this function
+  static cv::Mat Mat4fToMat3b(const cv::Mat &mat4f) {
+    cv::Mat mat3b = cv::Mat(mat4f.rows, mat4f.cols, CV_8UC3);
+    for (int i = 0; i < mat4f.rows; ++i) {
+      for (int j = 0; j < mat4f.cols; ++j) {
+        cv::Vec4f cf = mat4f.at<cv::Vec4f>(i, j);
+        if (std::isinf(cf[0])) {
+          mat3b.at<cv::Vec3b>(i, j) = cv::Vec3b(0, 0, 0);
+        } else {
+          mat3b.at<cv::Vec3b>(i, j) = cv::Vec3b(255 * fabs(cf[0]),
+                                               255 * fabs(cf[1]),
+                                               255 * fabs(cf[2]));
+        }
+      }
+    }
+    return mat3b;
   }
 };
 

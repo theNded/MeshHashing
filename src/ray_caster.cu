@@ -308,6 +308,9 @@ RayCaster::RayCaster(const RayCasterParams& params) {
   checkCudaErrors(cudaMalloc(&gpu_data_.vertex_image, sizeof(float4) * image_size));
   checkCudaErrors(cudaMalloc(&gpu_data_.normal_image, sizeof(float4) * image_size));
   checkCudaErrors(cudaMalloc(&gpu_data_.color_image, sizeof(float4) * image_size));
+
+  normal_image_ = cv::Mat(params.height, params.width, CV_32FC4);
+  color_image_  = cv::Mat(params.height, params.width, CV_32FC4);
 }
 
 RayCaster::~RayCaster() {
@@ -336,4 +339,12 @@ void RayCaster::Cast(Map& map, const float4x4& c_T_w) {
           gpu_data_, ray_caster_params_, c_T_w, w_T_c);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
+
+  uint image_size = ray_caster_params_.height * ray_caster_params_.width;
+  checkCudaErrors(cudaMemcpy(normal_image_.data, gpu_data_.normal_image,
+                             sizeof(float) * 4 * image_size,
+                             cudaMemcpyDeviceToHost));
+  checkCudaErrors(cudaMemcpy(color_image_.data, gpu_data_.color_image,
+                             sizeof(float) * 4 * image_size,
+                             cudaMemcpyDeviceToHost));
 }

@@ -66,35 +66,6 @@ void LoadImages(const string &strAssociationFilename,
   }
 }
 
-cv::Mat GPUFloat4ToMat(float4 *cuda_memory) {
-  static float cpu_memory[640 * 480 * 4];
-  cv::Mat matf = cv::Mat(480, 640, CV_32FC4, cpu_memory);
-
-  checkCudaErrors(cudaMemcpy(cpu_memory, cuda_memory,
-                             sizeof(float) * 4 * 640 * 480,
-                             cudaMemcpyDeviceToHost));
-
-#define WRITE
-#ifdef WRITE
-  cv::Mat matb = cv::Mat(480, 640, CV_8UC3);
-  for (int i = 0; i < 480; ++i) {
-    for (int j = 0; j < 640; ++j) {
-      cv::Vec4f cf = matf.at<cv::Vec4f>(i, j);
-      if (std::isinf(cf[0])) {
-        matb.at<cv::Vec3b>(i, j) = cv::Vec3b(0, 0, 0);
-      } else {
-        matb.at<cv::Vec3b>(i, j) = cv::Vec3b(255 * fabs(cf[0]),
-                                             255 * fabs(cf[1]),
-                                             255 * fabs(cf[2]));
-      }
-    }
-  }
-  return matb;
-#else
-  return matf;
-#endif
-}
-
 float4x4 MatTofloat4x4(cv::Mat m) {
   float4x4 T;
   T.setIdentity();
@@ -159,30 +130,17 @@ int main(int argc, char **argv) {
   cout << "Start processing sequence ..." << endl;
   cout << "Images in the sequence: " << nImages << endl << endl;
 
-  SDFParams sdf_params;
-  LoadSDFParams("../config/sdf.yml", sdf_params);
-  SetConstantSDFParams(sdf_params);
+  ConfigReader config;
+  config.LoadConfig("../config/tum3.yml");
+  SetConstantSDFParams(config.sdf_params);
 
-  HashParams hash_params;
-  LoadHashParams("../config/hash.yml", hash_params);
-
-  SensorParams sensor_params;
-  LoadSensorParams("../config/sensor_tum3.yml", sensor_params);
-
-  RayCasterParams ray_cast_params;
-  LoadRayCasterParams("../config/ray_caster.yml", ray_cast_params);
-  ray_cast_params.fx = sensor_params.fx;
-  ray_cast_params.fy = sensor_params.fy;
-  ray_cast_params.cx = sensor_params.cx;
-  ray_cast_params.cy = sensor_params.cy;
-
-  Map voxel_map(hash_params);
+  Map voxel_map(config.hash_params);
   LOG(INFO) << "map allocated";
 
-  Sensor sensor(sensor_params);
+  Sensor sensor(config.sensor_params);
   sensor.BindGPUTexture();
 
-  RayCaster ray_caster(ray_cast_params);
+  RayCaster ray_caster(config.ray_caster_params);
 
   // Main loop
   cv::Mat imRGB, imD;
@@ -229,8 +187,7 @@ int main(int argc, char **argv) {
     }
 
     ray_caster.Cast(voxel_map, cTw.getInverse());
-    cv::Mat n = GPUFloat4ToMat(ray_caster.gpu_data().normal_image);
-    cv::imshow("normal", n);
+    cv::imshow("normal", ray_caster.normal_image());
     cv::waitKey(1);
   }
 
