@@ -208,4 +208,45 @@ void LoadTUM(std::string dataset_path,
   }
 }
 
+void Load3DVCR(std::string dataset_path,
+               std::vector<std::string> &depth_image_list,
+               std::vector<std::string> &color_image_list,
+               std::vector<float4x4>& wTcs) {
+  std::ifstream color_stream(dataset_path + "rgb.txt");
+  std::string img_name;
+  while (color_stream >> img_name) {
+    color_image_list.push_back(dataset_path + "rgb/" + img_name);
+  }
+
+  std::ifstream depth_stream(dataset_path + "depth.txt");
+  while (depth_stream >> img_name) {
+    depth_image_list.push_back(dataset_path + "depth/" + img_name);
+  }
+
+  std::ifstream traj_stream(dataset_path + "trajectory.txt");
+  std::string ts_img, img_path, ts_gt;
+  float tx, ty, tz, qx, qy, qz, qw;
+  while (traj_stream >> ts_img
+                     >> tx >> ty >> tz
+                     >> qx >> qy >> qz >> qw) {
+    float4x4 wTc;
+    wTc.setIdentity();
+
+    wTc.m11 = 1 - 2 * qy * qy - 2 * qz * qz;
+    wTc.m12 = 2 * qx * qy - 2 * qz * qw;
+    wTc.m13 = 2 * qx * qz + 2 * qy * qw;
+    wTc.m14 = tx;
+    wTc.m21 = 2 * qx * qy + 2 * qz * qw;
+    wTc.m22 = 1 - 2 * qx * qx - 2 * qz * qz;
+    wTc.m23 = 2 * qy * qz - 2 * qx * qw;
+    wTc.m24 = ty;
+    wTc.m31 = 2 * qx * qz - 2 * qy * qw;
+    wTc.m32 = 2 * qy * qz + 2 * qx * qw;
+    wTc.m33 = 1 - 2 * qx * qx - 2 * qy * qy;
+    wTc.m34 = tz;
+    wTc.m44 = 1;
+    wTcs.push_back(wTc);
+  }
+}
+
 #endif //VH_CONFIG_READER

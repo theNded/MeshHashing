@@ -20,7 +20,7 @@
 
 #include "config_reader.h"
 
-#define SUN3D
+#define TDVCR
 #if defined(ICL)
 const std::string kDefaultDatasetPath = "/home/wei/data/ICL/lv1/";
 #elif defined(TUM)
@@ -32,6 +32,9 @@ const std::string kDefaultDatasetPath =
 #elif defined(SUN3D_ORI)
 const std::string kDefaultDatasetPath =
         "/home/wei/data/SUN3D-Princeton/hotel_umd/maryland_hotel3/";
+#elif defined(TDVCR)
+const std::string kDefaultDatasetPath =
+        "/home/wei/data/3DVCR/lab1/";
 #endif
 
 /// Only test over 480x640 images
@@ -44,17 +47,17 @@ cv::Mat GPUFloatToMat(float* cuda_memory) {
   return matf;
 }
 cv::Mat GPUFloat4ToMat(float4 *cuda_memory) {
-  static float cpu_memory[640 * 480 * 4];
-  cv::Mat matf = cv::Mat(480, 640, CV_32FC4, cpu_memory);
+  static float cpu_memory[640 * 360 * 4];
+  cv::Mat matf = cv::Mat(360, 640, CV_32FC4, cpu_memory);
 
   checkCudaErrors(cudaMemcpy(cpu_memory, cuda_memory,
-                             sizeof(float) * 4 * 640 * 480,
+                             sizeof(float) * 4 * 640 * 360,
                              cudaMemcpyDeviceToHost));
 
 #define WRITE
 #ifdef WRITE
-  cv::Mat matb = cv::Mat(480, 640, CV_8UC3);
-  for (int i = 0; i < 480; ++i) {
+  cv::Mat matb = cv::Mat(360, 640, CV_8UC3);
+  for (int i = 0; i < 360; ++i) {
     for (int j = 0; j < 640; ++j) {
       cv::Vec4f cf = matf.at<cv::Vec4f>(i, j);
       if (std::isinf(cf[0])) {
@@ -89,6 +92,8 @@ int main(int argc, char** argv) {
   LoadSUN3D(kDefaultDatasetPath, depth_img_list, color_img_list, wTc);
 #elif defined(SUN3D_ORI)
   LoadSUN3DOriginal(kDefaultDatasetPath, depth_img_list, color_img_list, wTc);
+#elif defined(TDVCR)
+  Load3DVCR(kDefaultDatasetPath, depth_img_list, color_img_list, wTc);
 #endif
 
   SDFParams sdf_params;
@@ -108,6 +113,8 @@ int main(int argc, char** argv) {
   LoadSensorParams("../config/sensor_sun3d.yml", sensor_params);
 #elif defined(SUN3D_ORI)
   LoadSensorParams("../config/sensor_sun3d_ori.yml", sensor_params);
+#elif defined(TDVCR)
+  LoadSensorParams("../config/sensor_3dvcr.yml", sensor_params);
 #endif
 
   RayCasterParams ray_cast_params;

@@ -209,16 +209,6 @@ int main(int argc, char **argv) {
             t2 - t1).count();
     vTimesTrack[ni] = ttrack;
 
-    // Wait to load the next frame
-    double T = 0;
-    if (ni < nImages - 1)
-      T = vTimestamps[ni + 1] - tframe;
-    else if (ni > 0)
-      T = tframe - vTimestamps[ni - 1];
-
-    if (ttrack < T)
-      usleep((T - ttrack) * 1e6);
-
     /// Voxel hashing
     cv::cvtColor(imRGB, imRGB, CV_BGR2BGRA);
 

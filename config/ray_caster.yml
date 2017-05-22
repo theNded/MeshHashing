@@ -1,6 +1,6 @@
 %YAML:1.0
 width:                640
-height:               480
+height:               360
 min_raycast_depth:    0.5
 max_raycast_depth:    5.5
 raycast_step:         0.016
