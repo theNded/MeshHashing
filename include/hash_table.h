@@ -20,8 +20,6 @@ struct __ALIGN__(8) HashEntry {
   int		ptr;	     // pointer into heap to SDFBlock
   uint	offset;		 // offset for collisions
 
-  // uint padding
-
   __device__
   void operator=(const struct HashEntry& e) {
     ((long long*)this)[0] = ((const long long*)&e)[0];

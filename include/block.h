@@ -8,7 +8,7 @@
 #include "common.h"
 #include <helper_math.h>
 
-struct __ALIGN__(8) Voxel {
+struct __ALIGN__(4) Voxel {
   float   sdf;		// signed distance function
   uchar3	color;	// color
   uchar	  weight;	// accumulated sdf weight
@@ -48,7 +48,7 @@ struct __ALIGN__(4) MeshCube {
 
 /// Block
 /// Typically Block is a 8x8x8 voxel cluster
-struct __ALIGN__(8) VoxelBlock {
+struct __ALIGN__(4) VoxelBlock {
   Voxel    voxels[BLOCK_SIZE];
   MeshCube cubes [BLOCK_SIZE];
 

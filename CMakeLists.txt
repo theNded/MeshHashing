@@ -134,3 +134,7 @@ TARGET_LINK_LIBRARIES(test_voxel_hashing GL_UTILS
         voxel-hashing cuda-voxel-hashing
         glog ${CUDA_DEPENDENCIES} ${OTHER_DEPENDENCIES})
 
+ADD_EXECUTABLE(voxel-hashing-cli test/voxel_hashing_cli.cc)
+TARGET_LINK_LIBRARIES(voxel-hashing-cli GL_UTILS
+        voxel-hashing cuda-voxel-hashing
+        glog ${CUDA_DEPENDENCIES} ${OTHER_DEPENDENCIES})

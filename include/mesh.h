@@ -6,9 +6,10 @@
 #define VH_MESH_H
 
 #include "common.h"
+#include <helper_cuda.h>
 #include <helper_math.h>
 
-struct Vertex {
+struct __ALIGN__(4) Vertex {
   float3 pos;
   int    ref_count;
 
@@ -19,7 +20,7 @@ struct Vertex {
   }
 };
 
-struct Triangle {
+struct __ALIGN__(4) Triangle {
   int3 vertex_ptrs;
 
   __device__

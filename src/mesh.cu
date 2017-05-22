@@ -57,6 +57,7 @@ void Mesh::Free() {
 
 void Mesh::Resize(uint vertex_count, uint triangle_count) {
   Alloc(vertex_count, triangle_count);
+  Reset();
 }
 
 void Mesh::Reset() {

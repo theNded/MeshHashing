@@ -43,6 +43,7 @@ void LoadRayCasterParams(std::string path, RayCasterParams& params) {
   params.raycast_step         = (float)fs["raycast_step"];
   params.sample_sdf_threshold = (float)fs["sample_sdf_threshold"];
   params.sdf_threshold        = (float)fs["sdf_threshold"];
+  params.enable_gradients     = (int)fs["enable_gradient"];
 }
 
 void LoadSensorParams(std::string path, SensorParams& params) {

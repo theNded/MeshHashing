@@ -13,7 +13,7 @@
 #include "common.h"
 #include <matrix.h>
 
-struct __ALIGN__(16) HashParams {
+struct HashParams {
   uint  bucket_count;               // 500000
   uint  bucket_size;                // 10 (entries)
 
@@ -21,8 +21,6 @@ struct __ALIGN__(16) HashParams {
   uint  linked_list_size;           // 7
 
   uint  value_capacity;             // 1000000
-
-  uint3 dummy;
 };
 
 struct __ALIGN__(16) SDFParams {
@@ -38,7 +36,7 @@ struct __ALIGN__(16) SDFParams {
   uint2 padding;
 };
 
-struct __ALIGN__(16) RayCasterParams {
+struct RayCasterParams {
   float  fx;
   float  fy;
   float  cx;
@@ -54,15 +52,11 @@ struct __ALIGN__(16) RayCasterParams {
   float  sample_sdf_threshold; /// 50.5f * s_rayIncrement
   float  sdf_threshold;        /// 50.0f * s_rayIncrement
   bool   enable_gradients;
-
-  /// Strange alignment requirement
-  uchar3 dummy0;
-  float4 dummy1;
 };
 
 /// We may generate a virtual camera for LiDAR
 /// where many points are null
-struct __ALIGN__(16) SensorParams {
+struct SensorParams {
   float fx;              /// Set manually
   float fy;
   float cx;
@@ -74,8 +68,6 @@ struct __ALIGN__(16) SensorParams {
   float min_depth_range; /// 0.5f
   float max_depth_range; /// 5.0f, might need modify for LiDAR
   float range_factor;    /// 1/5000 for TUM and ICL, 1/1000 for SUN3D
-
-  int3  padding;
 };
 
 #endif //VH_PARAMS_H

@@ -492,7 +492,7 @@ void AssignTrianglesKernel(MeshGPU        mesh,
 ////////////////////
 void Map::MarchingCubes() {
   uint occupied_block_count = compact_hash_table_.entry_count();
-  LOG(INFO) << "marching cubes block count: " << occupied_block_count;
+  LOG(INFO) << "Marching cubes block count: " << occupied_block_count;
   if (occupied_block_count <= 0)
     return;
 
