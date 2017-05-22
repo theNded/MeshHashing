@@ -35,6 +35,7 @@
 cmake-build-release/
 cmake-build-debug/
 bin/
+lib/
 .idea/
 # Others
 *~

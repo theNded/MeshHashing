@@ -134,7 +134,22 @@ TARGET_LINK_LIBRARIES(test_voxel_hashing GL_UTILS
         voxel-hashing cuda-voxel-hashing
         glog ${CUDA_DEPENDENCIES} ${OTHER_DEPENDENCIES})
 
+
+### A formal executable
 ADD_EXECUTABLE(voxel-hashing-cli test/voxel_hashing_cli.cc)
 TARGET_LINK_LIBRARIES(voxel-hashing-cli GL_UTILS
+        voxel-hashing cuda-voxel-hashing
+        glog ${CUDA_DEPENDENCIES} ${OTHER_DEPENDENCIES})
+
+### An ORB test
+FIND_PACKAGE(Pangolin REQUIRED)
+INCLUDE_DIRECTORIES(~/softwares/ORB_SLAM2/include
+        ~/softwares/ORB_SLAM2
+        ${EIGEN3_INCLUDE_DIR})
+ADD_EXECUTABLE(rgbd-tum test/rgbd_tum.cc)
+TARGET_LINK_LIBRARIES(rgbd-tum
+        ${PROJECT_SOURCE_DIR}/lib/libORB_SLAM2.so
+        ${Pangolin_LIBRARIES}
+        GL_UTILS
         voxel-hashing cuda-voxel-hashing
         glog ${CUDA_DEPENDENCIES} ${OTHER_DEPENDENCIES})
