@@ -42,8 +42,8 @@ void Control::UpdateCameraPose() {
   float delta_time        = float(current_time - last_time);
 
   // Get mouse position
-//#define ROTATION_FROM_KBD
-#define ROTATION_FROM_MOUSE
+#define ROTATION_FROM_KBD
+//#define ROTATION_FROM_MOUSE
 #ifdef ROTATION_FROM_MOUSE
   double xpos, ypos;
   glfwGetCursorPos(window_, &xpos, &ypos);
@@ -103,8 +103,6 @@ void Control::UpdateCameraPose() {
     position_ += up * move_speed_ * delta_time;
   }
 
-  projection_mat_ = glm::perspective(fov_, (float)width_ / (float)height_,
-                                     0.1f, 100.0f);
   // Camera matrix
   view_mat_ = glm::lookAt(
       position_,
@@ -122,5 +120,7 @@ void Control::InitParameters() {
   fov_              = 45.0f;
   move_speed_       = 1.0f;
   rotate_speed_     = 0.005f;
+  projection_mat_ = glm::perspective(fov_, (float)width_ / (float)height_,
+                                     0.1f, 100.0f);
 }
 }

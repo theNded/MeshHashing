@@ -543,6 +543,9 @@ void Map::MarchingCubes() {
   checkCudaErrors(cudaGetLastError());
 }
 
+/// Assume this operation is following
+/// CollectInFrustumBlocks or
+/// CollectAllBlocks
 void Map::CompressMesh() {
   compact_mesh_.Reset();
 

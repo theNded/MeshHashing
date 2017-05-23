@@ -8,26 +8,20 @@
 ////////////////////
 /// class RendererBase
 ////////////////////
-bool RendererBase::is_gl_init_ = false;
-bool RendererBase::is_cuda_init_ = false;
-gl_utils::Context* RendererBase::gl_context_ = nullptr;
 
-void RendererBase::InitGLWindow(std::string name, uint width, uint height) {
-  if (is_gl_init_) return;
+bool RendererBase::is_cuda_init_ = false;
+
+RendererBase::RendererBase(std::string name, uint width, uint height) {
   gl_context_ = new gl_utils::Context(name, width, height);
   is_gl_init_ = true;
 }
 
-void RendererBase::DestroyGLWindow() {
+RendererBase::~RendererBase() {
   if (is_gl_init_) delete gl_context_;
 }
 
 void RendererBase::InitCUDA() {
   if (is_cuda_init_) return;
-  if (! is_gl_init_) {
-    LOG(ERROR) << "Please initialize OpenGL before initialize CUDA";
-    return;
-  }
 
   /// !!! We assume that the Rendering & Compting are performed
   /// !!! on the same device
@@ -73,9 +67,11 @@ const GLubyte FrameRenderer::kIndices[6] = {
         0, 2, 3
 };
 
-FrameRenderer::FrameRenderer() {
+FrameRenderer::FrameRenderer(std::string name, uint width, uint height)
+        : RendererBase(name, width, height) {
   CHECK(is_gl_init_) << "OpenGL not initialized";
-  CHECK(is_cuda_init_) << "CUDA not initialized";
+
+  InitCUDA();
 
   /// VAO: variable groups
   glGenVertexArrays(1, &vao_);
@@ -149,12 +145,13 @@ void FrameRenderer::Render(float4 *image) {
 ////////////////////
 /// class FrameRenderer
 ////////////////////
-MeshRenderer::MeshRenderer() {
+MeshRenderer::MeshRenderer(std::string name, uint width, uint height)
+        : RendererBase(name, width, height) {
   const int kMaxVertices  = 10000000;
   const int kMaxTriangles = 10000000;
 
   CHECK(is_gl_init_) << "OpenGL not initialized";
-  CHECK(is_cuda_init_) << "CUDA not initialized";
+  InitCUDA();
 
   glGenVertexArrays(1, &vao_);
   glBindVertexArray(vao_);
@@ -177,6 +174,12 @@ MeshRenderer::MeshRenderer() {
   checkCudaErrors(cudaGraphicsGLRegisterBuffer(
           &cuda_triangles_, vbo_[1], cudaGraphicsMapFlagsNone));
 
+  glEnable(GL_DEPTH_TEST);
+  glDepthFunc(GL_LESS);
+
+  control_ = new gl_utils::Control(gl_context_->window(),
+                                   gl_context_->width(),
+                                   gl_context_->height());
 }
 
 MeshRenderer::~MeshRenderer() {
@@ -186,12 +189,14 @@ MeshRenderer::~MeshRenderer() {
 
   checkCudaErrors(cudaGraphicsUnregisterResource(cuda_vertices_));
   checkCudaErrors(cudaGraphicsUnregisterResource(cuda_triangles_));
+
   delete[] vbo_;
+  delete[] control_;
 }
 
 void MeshRenderer::Render(float3 *vertices, size_t vertex_count,
                           int3 *triangles, size_t triangle_count,
-                          float* mvp) {
+                          float4x4 cTw) {
 
   LOG(INFO) << "Transfering from CUDA to OpenGL";
   float3 *map_ptr;
@@ -219,7 +224,30 @@ void MeshRenderer::Render(float3 *vertices, size_t vertex_count,
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   glUseProgram(program_);
-  glUniformMatrix4fv(uniforms_[0], 1, GL_FALSE, mvp);
+
+  glm::mat4 transform = glm::mat4(1);
+  transform[1][1] = -1;
+  transform[2][2] = -1;
+
+  glm::mat4 view_mat;
+  cTw = cTw.getTranspose();
+  for (int i = 0; i < 4; ++i)
+    for (int j = 0; j < 4; ++j)
+      view_mat[i][j] = cTw.entries2[i][j];
+
+  glm::mat4 mvp;
+  if (free_walk_) {
+    control_->UpdateCameraPose();
+    mvp = control_->projection_mat() *
+            transform *
+            control_->view_mat();
+  } else {
+    mvp = control_->projection_mat() *
+            transform *
+            view_mat;// * transform * transform;
+  }
+
+  glUniformMatrix4fv(uniforms_[0], 1, GL_FALSE, &mvp[0][0]);
   glBindVertexArray(vao_);
   //glDrawElements(GL_TRIANGLES, triangle_count * 3, GL_UNSIGNED_INT, 0);
   glDrawArrays(GL_POINTS, 0, vertex_count);

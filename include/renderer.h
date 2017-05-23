@@ -12,6 +12,7 @@
 
 #include "shader.h"
 #include "context.h"
+#include "control.h"
 
 /// this should go after gl_utils
 #include <cuda_gl_interop.h>
@@ -19,9 +20,10 @@
 class RendererBase {
 protected:
   /// Shared
-  static bool is_gl_init_;
   static bool is_cuda_init_;
-  static gl_utils::Context *gl_context_;
+
+  bool is_gl_init_ = false;
+  gl_utils::Context *gl_context_;
 
   GLuint vao_;
   GLuint* vbo_;
@@ -30,10 +32,12 @@ protected:
   GLuint texture_;
 
 public:
-  static void InitGLWindow(std::string name, uint width, uint height);
-  static void DestroyGLWindow();
   static void InitCUDA();
-  static GLFWwindow* window() {
+
+  RendererBase(std::string name, uint width, uint height);
+  ~RendererBase();
+
+  GLFWwindow* window() {
     return gl_context_->window();
   }
 
@@ -49,21 +53,26 @@ private:
   cudaGraphicsResource* cuda_resource_;
 
 public:
-  FrameRenderer();
+  FrameRenderer(std::string name, uint width, uint height);
   ~FrameRenderer();
   void Render(float4* image);
 };
 
 class MeshRenderer : public RendererBase {
 private:
+  bool free_walk_;
   cudaGraphicsResource* cuda_vertices_;
   cudaGraphicsResource* cuda_triangles_;
+  gl_utils::Control*    control_;
 
 public:
-  MeshRenderer();
+  bool &free_walk() {
+    return free_walk_;
+  }
+  MeshRenderer(std::string name, uint width, uint height);
   ~MeshRenderer();
   void Render(float3* vertices, size_t vertex_count,
               int3* triangles,  size_t triangle_count,
-              float* mvp);
+              float4x4 mvp);
 };
 #endif //VH_RENDERER_H
