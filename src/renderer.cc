@@ -2,6 +2,7 @@
 // Created by wei on 17-3-20.
 //
 
+#include <matrix.h>
 #include "renderer.h"
 
 ////////////////////
@@ -49,13 +50,15 @@ void RendererBase::InitCUDA() {
 
 void RendererBase::CompileShader(std::string vert_glsl_path,
                                  std::string frag_glsl_path,
-                                 std::string tex_sampler_name) {
+                                 std::vector<std::string>& uniform_names) {
   CHECK(is_gl_init_) << "OpenGL not initialized";
 
   gl_utils::LoadShaders(vert_glsl_path, frag_glsl_path, program_);
-  int sampler = glGetUniformLocation(program_, tex_sampler_name.c_str());
-  CHECK(sampler >= 0) << "Invalid sampler!";
-  sampler_ = (uint)sampler;
+  for (auto &uniform_name : uniform_names) {
+    int uniform = glGetUniformLocation(program_, uniform_name.c_str());
+    CHECK(uniform >= 0) << "Invalid uniform!";
+    uniforms_.push_back((uint)uniform);
+  }
 }
 
 ////////////////////
@@ -101,10 +104,9 @@ FrameRenderer::FrameRenderer() {
   glBindTexture(GL_TEXTURE_2D, 0);
 
   /// Bind texture to cuda resources
-  checkCudaErrors(
-          cudaGraphicsGLRegisterImage(&cuda_resource_, texture_,
-                                      GL_TEXTURE_2D,
-                                      cudaGraphicsRegisterFlagsNone));
+  checkCudaErrors(cudaGraphicsGLRegisterImage(
+          &cuda_resource_, texture_, GL_TEXTURE_2D,
+          cudaGraphicsRegisterFlagsNone));
 }
 
 FrameRenderer::~FrameRenderer() {
@@ -113,6 +115,7 @@ FrameRenderer::~FrameRenderer() {
   glDeleteVertexArrays(1, &vao_);
   glDeleteProgram(program_);
 
+  checkCudaErrors(cudaGraphicsUnregisterResource(cuda_resource_));
   delete[] vbo_;
 }
 
@@ -135,10 +138,96 @@ void FrameRenderer::Render(float4 *image) {
   glUseProgram(program_);
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, texture_);
-  glUniform1i(sampler_, 0);
+  glUniform1i(uniforms_[0], 0);
   glBindVertexArray(vao_);
   glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_BYTE, 0);
 
   glfwSwapBuffers(gl_context_->window());
   glfwPollEvents();
+}
+
+////////////////////
+/// class FrameRenderer
+////////////////////
+MeshRenderer::MeshRenderer() {
+  const int kMaxVertices  = 10000000;
+  const int kMaxTriangles = 10000000;
+
+  CHECK(is_gl_init_) << "OpenGL not initialized";
+  CHECK(is_cuda_init_) << "CUDA not initialized";
+
+  glGenVertexArrays(1, &vao_);
+  glBindVertexArray(vao_);
+
+  vbo_ = new GLuint[2];
+  glGenBuffers(2, vbo_);
+
+  glEnableVertexAttribArray(0);
+  glBindBuffer(GL_ARRAY_BUFFER, vbo_[0]);
+  glBufferData(GL_ARRAY_BUFFER, kMaxVertices * sizeof(float3),
+               NULL, GL_STATIC_DRAW);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo_[1]);
+  glBufferData(GL_ELEMENT_ARRAY_BUFFER, kMaxTriangles * sizeof(int3),
+               NULL, GL_STATIC_DRAW);
+
+  checkCudaErrors(cudaGraphicsGLRegisterBuffer(
+          &cuda_vertices_, vbo_[0], cudaGraphicsMapFlagsNone));
+  checkCudaErrors(cudaGraphicsGLRegisterBuffer(
+          &cuda_triangles_, vbo_[1], cudaGraphicsMapFlagsNone));
+
+}
+
+MeshRenderer::~MeshRenderer() {
+  glDeleteProgram(program_);
+  glDeleteBuffers(2, vbo_);
+  glDeleteVertexArrays(1, &vao_);
+
+  checkCudaErrors(cudaGraphicsUnregisterResource(cuda_vertices_));
+  checkCudaErrors(cudaGraphicsUnregisterResource(cuda_triangles_));
+  delete[] vbo_;
+}
+
+void MeshRenderer::Render(float3 *vertices, size_t vertex_count,
+                          int3 *triangles, size_t triangle_count,
+                          float* mvp) {
+
+  LOG(INFO) << "Transfering from CUDA to OpenGL";
+  float3 *map_ptr;
+  size_t map_size;
+
+  map_ptr = NULL;
+  checkCudaErrors(cudaGraphicsMapResources(1, &cuda_vertices_));
+  checkCudaErrors(cudaGraphicsResourceGetMappedPointer(
+          (void **)&map_ptr, &map_size, cuda_vertices_));
+  checkCudaErrors(cudaMemcpy(map_ptr, vertices,
+                             vertex_count * sizeof(float3),
+                             cudaMemcpyDeviceToDevice));
+  checkCudaErrors(cudaGraphicsUnmapResources(1, &cuda_vertices_, 0));
+
+  map_ptr = NULL;
+  checkCudaErrors(cudaGraphicsMapResources(1, &cuda_triangles_));
+  checkCudaErrors(cudaGraphicsResourceGetMappedPointer(
+          (void **)&map_ptr, &map_size, cuda_triangles_));
+  checkCudaErrors(cudaMemcpy(map_ptr, triangles,
+                             triangle_count * sizeof(int3),
+                             cudaMemcpyDeviceToDevice));
+  checkCudaErrors(cudaGraphicsUnmapResources(1, &cuda_triangles_, 0));
+
+  LOG(INFO) << "OpenGL rendering";
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  glUseProgram(program_);
+  glUniformMatrix4fv(uniforms_[0], 1, GL_FALSE, mvp);
+  glBindVertexArray(vao_);
+  //glDrawElements(GL_TRIANGLES, triangle_count * 3, GL_UNSIGNED_INT, 0);
+  glDrawArrays(GL_POINTS, 0, vertex_count);
+
+  glfwSwapBuffers(gl_context_->window());
+  glfwPollEvents();
+
+  if (glfwGetKey(gl_context_->window(), GLFW_KEY_ESCAPE) == GLFW_PRESS ) {
+    exit(0);
+  }
 }

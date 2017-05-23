@@ -12,9 +12,11 @@ int main() {
   RendererBase::InitGLWindow("Display", 640, 480);
   RendererBase::InitCUDA();
   FrameRenderer renderer;
-  renderer.CompileShader("../shader/vertex.glsl",
-                         "../shader/fragment.glsl",
-                         "texture_sampler");
+  std::vector<std::string> uniform_names;
+  uniform_names.push_back("texture_sampler");
+  renderer.CompileShader("../shader/frame_vertex.glsl",
+                         "../shader/frame_fragment.glsl",
+                         uniform_names);
 
   ////////// Load data here
   float * cpu_mem;

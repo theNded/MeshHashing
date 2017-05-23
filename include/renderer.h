@@ -26,7 +26,7 @@ protected:
   GLuint vao_;
   GLuint* vbo_;
   GLuint program_;
-  GLuint sampler_;
+  std::vector<GLuint> uniforms_;
   GLuint texture_;
 
 public:
@@ -39,7 +39,7 @@ public:
 
   void CompileShader(std::string vert_glsl_path,
                      std::string frag_glsl_path,
-                     std::string tex_sampler_name);
+                     std::vector<std::string>& uniform_names);
 };
 
 class FrameRenderer : public RendererBase {
@@ -54,4 +54,16 @@ public:
   void Render(float4* image);
 };
 
+class MeshRenderer : public RendererBase {
+private:
+  cudaGraphicsResource* cuda_vertices_;
+  cudaGraphicsResource* cuda_triangles_;
+
+public:
+  MeshRenderer();
+  ~MeshRenderer();
+  void Render(float3* vertices, size_t vertex_count,
+              int3* triangles,  size_t triangle_count,
+              float* mvp);
+};
 #endif //VH_RENDERER_H

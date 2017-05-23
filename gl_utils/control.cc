@@ -42,7 +42,8 @@ void Control::UpdateCameraPose() {
   float delta_time        = float(current_time - last_time);
 
   // Get mouse position
-#define ROTATION_FROM_KBD
+//#define ROTATION_FROM_KBD
+#define ROTATION_FROM_MOUSE
 #ifdef ROTATION_FROM_MOUSE
   double xpos, ypos;
   glfwGetCursorPos(window_, &xpos, &ypos);
@@ -53,16 +54,16 @@ void Control::UpdateCameraPose() {
   vertical_angle_   += rotate_speed_ * float(height_ / 2 - ypos);
 #elif defined ROTATION_FROM_KBD
   if (glfwGetKey(window_, GLFW_KEY_I) == GLFW_PRESS) {
-    vertical_angle_ += 0.01f;
+    vertical_angle_ += 0.1f;
   }
   if (glfwGetKey(window_, GLFW_KEY_K) == GLFW_PRESS) {
-    vertical_angle_ -= 0.01f;
+    vertical_angle_ -= 0.1f;
   }
   if (glfwGetKey(window_, GLFW_KEY_J) == GLFW_PRESS) {
-    horizontal_angle_ -= 0.01f;
+    horizontal_angle_ -= 0.1f;
   }
   if (glfwGetKey(window_, GLFW_KEY_L) == GLFW_PRESS) {
-    horizontal_angle_ += 0.01f;
+    horizontal_angle_ += 0.1f;
   }
 #endif
 
@@ -115,7 +116,7 @@ void Control::UpdateCameraPose() {
 
 void Control::InitParameters() {
   position_         = glm::vec3(0, 0, 0);
-  horizontal_angle_ = (float)M_PI;
+  horizontal_angle_ = 0.0f;
   vertical_angle_   = 0.0f;
   // In later glm versions, fov_ = glm::radians(45.0f)
   fov_              = 45.0f;

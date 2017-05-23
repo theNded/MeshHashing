@@ -34,9 +34,11 @@ private:
 
   /// Compress entries
   void CollectInFrustumBlocks(Sensor& sensor);
-  void CollectAllBlocks();
+
 
 public:
+  void CollectAllBlocks();
+
   /// Life cycle
   Map(const HashParams& hash_params);
   ~Map();
@@ -76,6 +78,9 @@ public:
   }
   VoxelBlocks& blocks() {
     return blocks_;
+  }
+  CompactMesh& compact_mesh() {
+    return compact_mesh_;
   }
 };
 

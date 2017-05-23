@@ -588,6 +588,9 @@ void Map::CompressMesh() {
     checkCudaErrors(cudaDeviceSynchronize());
     checkCudaErrors(cudaGetLastError());
   }
+
+  LOG(INFO) << "Vertices: " << compact_mesh_.vertex_count();
+  LOG(INFO) << "Triangles: " << compact_mesh_.triangle_count();
 }
 
 void Map::SaveMesh(std::string path) {
@@ -596,16 +599,9 @@ void Map::SaveMesh(std::string path) {
   CollectAllBlocks();
   CompressMesh();
 
-  uint compact_vertex_count;
-  checkCudaErrors(cudaMemcpy(&compact_vertex_count,
-                             compact_mesh_.gpu_data().vertex_counter,
-                             sizeof(uint), cudaMemcpyDeviceToHost));
+  uint compact_vertex_count = compact_mesh_.vertex_count();
+  uint compact_triangle_count = compact_mesh_.triangle_count();
   LOG(INFO) << "Vertices: " << compact_vertex_count;
-
-  uint compact_triangle_count;
-  checkCudaErrors(cudaMemcpy(&compact_triangle_count,
-                             compact_mesh_.gpu_data().triangle_counter,
-                             sizeof(uint), cudaMemcpyDeviceToHost));
   LOG(INFO) << "Triangles: " << compact_triangle_count;
 
   float3* vertices = new float3[compact_vertex_count];

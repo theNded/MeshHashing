@@ -111,6 +111,16 @@ public:
   CompactMesh();
   ~CompactMesh();
 
+  uint vertex_count();
+  uint triangle_count();
+
+  float3* vertices() {
+    return gpu_data_.vertices;
+  }
+  int3* triangles() {
+    return gpu_data_.triangles;
+  }
+
   void Resize(uint vertex_count, uint triangle_count);
   void Reset();
 

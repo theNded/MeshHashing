@@ -135,9 +135,11 @@ int main(int argc, char **argv) {
   RendererBase::InitGLWindow("Display", 640, 480);
   RendererBase::InitCUDA();
   FrameRenderer renderer;
-  renderer.CompileShader("../shader/vertex.glsl",
-                         "../shader/fragment.glsl",
-                         "texture_sampler");
+  std::vector<std::string> uniform_names;
+  uniform_names.push_back("texture_sampler");
+  renderer.CompileShader("../shader/frame_vertex.glsl",
+                         "../shader/frame_fragment.glsl",
+                         uniform_names);
   ConfigReader config;
   config.LoadConfig("../config/tum1.yml");
   SetConstantSDFParams(config.sdf_params);

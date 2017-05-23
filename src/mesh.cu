@@ -139,3 +139,19 @@ void CompactMesh::Reset() {
   checkCudaErrors(cudaMemset(gpu_data_.triangle_counter,
                              0, sizeof(uint)));
 }
+
+uint CompactMesh::vertex_count() {
+  uint compact_vertex_count;
+  checkCudaErrors(cudaMemcpy(&compact_vertex_count,
+                             gpu_data_.vertex_counter,
+                             sizeof(uint), cudaMemcpyDeviceToHost));
+  return compact_vertex_count;
+}
+
+uint CompactMesh::triangle_count() {
+  uint compact_triangle_count;
+  checkCudaErrors(cudaMemcpy(&compact_triangle_count,
+                             gpu_data_.triangle_counter,
+                             sizeof(uint), cudaMemcpyDeviceToHost));
+  return compact_triangle_count;
+}
