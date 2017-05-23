@@ -20,7 +20,7 @@
 
 #include "config_reader.h"
 
-#define SUN3D
+#define TUM
 #if defined(ICL)
 const std::string kDefaultDatasetPath = "/home/wei/data/ICL/lv1/";
 #elif defined(TUM)
@@ -41,6 +41,13 @@ const std::string kDefaultDatasetPath =
 extern void SetConstantSDFParams(const SDFParams& params);
 
 int main(int argc, char** argv) {
+  Renderer renderer;
+  renderer.InitGL("test", 640, 480,
+                  "../shader/vertex.glsl",
+                  "../shader/fragment.glsl",
+                  "texture_sampler");
+  renderer.InitCUDA();
+
   /// Load images
   std::vector<std::string> depth_img_list;
   std::vector<std::string> color_img_list;
@@ -103,8 +110,10 @@ int main(int argc, char** argv) {
     }
 
     ray_caster.Cast(voxel_map, T.getInverse());
-    cv::imshow("display", ray_caster.normal_image());
-    cv::waitKey(1);
+    renderer.Render(ray_caster.gpu_data().normal_image, true);
+
+    //cv::imshow("display", ray_caster.normal_image());
+    //cv::waitKey(1);
   }
 
   end = std::chrono::system_clock::now();

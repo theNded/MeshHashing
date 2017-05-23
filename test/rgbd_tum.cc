@@ -34,6 +34,7 @@
 #include "map.h"
 #include "sensor.h"
 #include "ray_caster.h"
+#include "renderer.h"
 
 using namespace std;
 
@@ -92,6 +93,13 @@ float4x4 MatTofloat4x4(cv::Mat m) {
 }
 
 int main(int argc, char **argv) {
+  Renderer renderer;
+  renderer.InitGL("test", 640, 480,
+                  "../shader/vertex.glsl",
+                  "../shader/fragment.glsl",
+                  "texture_sampler");
+  renderer.InitCUDA();
+
   // Retrieve paths to images
   vector<string> vstrImageFilenamesRGB;
   vector<string> vstrImageFilenamesD;
@@ -189,8 +197,9 @@ int main(int argc, char **argv) {
     }
 
     ray_caster.Cast(voxel_map, cTw.getInverse());
-    cv::imshow("normal", ray_caster.normal_image());
-    cv::waitKey(1);
+    renderer.Render(ray_caster.gpu_data().normal_image, true);
+    //cv::imshow("normal", ray_caster.normal_image());
+    //cv::waitKey(1);
   }
 
   // Stop all threads

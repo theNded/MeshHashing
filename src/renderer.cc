@@ -82,12 +82,19 @@ void Renderer::InitCUDA() {
 
   int device_id = gpuGetMaxGflopsDeviceId();
   cudaDeviceProp device_prop;
-  checkCudaErrors(cudaGLSetGLDevice(device_id));
-  checkCudaErrors(cudaGetDeviceProperties(&device_prop, device_id));
-  LOG(INFO) << "Device id: " << device_id
-            << ", name: " << device_prop.name
-            << ", with compute capability" << device_prop.major << '.' << device_prop.minor;
+  uint gl_device_count = 2;
+  int gl_device[2];
+  checkCudaErrors(cudaGLGetDevices(&gl_device_count, gl_device,
+                                   gl_device_count,
+                                   cudaGLDeviceListAll));
+  for (int i = 0; i < gl_device_count; ++i) {
+    checkCudaErrors(cudaGetDeviceProperties(&device_prop, gl_device[i]));
+    LOG(INFO) << "Device id: " << gl_device[i]
+              << ", name: " << device_prop.name
+              << ", with compute capability" << device_prop.major << '.' << device_prop.minor;
+  }
 
+  checkCudaErrors(cudaSetDevice(0));
   /// Bind GL texture with CUDA resources
   checkCudaErrors(cudaGraphicsGLRegisterImage(&cuda_resource_, texture_, GL_TEXTURE_2D,
                                               cudaGraphicsRegisterFlagsNone));
@@ -108,11 +115,17 @@ void Renderer::Render(float4 *cuda_mem, bool on_gl) {
     checkCudaErrors(cudaGraphicsUnmapResources(1, &cuda_resource_, 0));
 
     LOG(INFO) << "OpenGL rendering";
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glFinish();
+
     glUseProgram(program_);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture_);
     glUniform1i(sampler_, 0);
     glBindVertexArray(vao_);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_BYTE, 0);
+
+    glfwSwapBuffers(gl_context_->window());
+    glfwPollEvents();
   }
 }

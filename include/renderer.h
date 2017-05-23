@@ -59,6 +59,7 @@ public:
 
   /// READ
   void Render(float4 *cuda_mem, bool on_gl = false);
+
 };
 
 
