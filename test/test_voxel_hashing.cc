@@ -20,7 +20,7 @@
 
 #include "config_reader.h"
 
-#define TUM
+#define TDVCR
 #if defined(ICL)
 const std::string kDefaultDatasetPath = "/home/wei/data/ICL/lv1/";
 #elif defined(TUM)
@@ -41,13 +41,6 @@ const std::string kDefaultDatasetPath =
 extern void SetConstantSDFParams(const SDFParams& params);
 
 int main(int argc, char** argv) {
-  Renderer renderer;
-  renderer.InitGL("test", 640, 480,
-                  "../shader/vertex.glsl",
-                  "../shader/fragment.glsl",
-                  "texture_sampler");
-  renderer.InitCUDA();
-
   /// Load images
   std::vector<std::string> depth_img_list;
   std::vector<std::string> color_img_list;
@@ -70,6 +63,11 @@ int main(int argc, char** argv) {
   Load3DVCR(kDefaultDatasetPath, depth_img_list, color_img_list, wTc);
   config.LoadConfig("../config/3dvcr.yml");
 #endif
+
+  RendererBase::InitGLWindow("Display",
+                             config.ray_caster_params.width,
+                             config.ray_caster_params.height);
+  RendererBase::InitCUDA();
   SetConstantSDFParams(config.sdf_params);
 
   Map voxel_map(config.hash_params);
@@ -82,6 +80,11 @@ int main(int argc, char** argv) {
 
   //cv::VideoWriter writer("icl-vh.avi", CV_FOURCC('X','V','I','D'),
   //                       30, cv::Size(640, 480));
+
+  FrameRenderer renderer;
+  renderer.CompileShader("../shader/vertex.glsl",
+                         "../shader/fragment.glsl",
+                         "texture_sampler");
 
   std::chrono::time_point<std::chrono::system_clock> start, end;
   start = std::chrono::system_clock::now();
@@ -110,7 +113,7 @@ int main(int argc, char** argv) {
     }
 
     ray_caster.Cast(voxel_map, T.getInverse());
-    renderer.Render(ray_caster.gpu_data().normal_image, true);
+    renderer.Render(ray_caster.gpu_data().normal_image);
 
     //cv::imshow("display", ray_caster.normal_image());
     //cv::waitKey(1);
@@ -122,4 +125,5 @@ int main(int argc, char** argv) {
   LOG(INFO) << "Fps: " << frames / seconds.count();
 
   voxel_map.SaveMesh("kkk.obj");
+  RendererBase::DestroyGLWindow();
 }

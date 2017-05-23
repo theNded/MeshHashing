@@ -93,13 +93,6 @@ float4x4 MatTofloat4x4(cv::Mat m) {
 }
 
 int main(int argc, char **argv) {
-  Renderer renderer;
-  renderer.InitGL("test", 640, 480,
-                  "../shader/vertex.glsl",
-                  "../shader/fragment.glsl",
-                  "texture_sampler");
-  renderer.InitCUDA();
-
   // Retrieve paths to images
   vector<string> vstrImageFilenamesRGB;
   vector<string> vstrImageFilenamesD;
@@ -139,7 +132,12 @@ int main(int argc, char **argv) {
   cout << "Start processing sequence ..." << endl;
   cout << "Images in the sequence: " << nImages << endl << endl;
 
-
+  RendererBase::InitGLWindow("Display", 640, 480);
+  RendererBase::InitCUDA();
+  FrameRenderer renderer;
+  renderer.CompileShader("../shader/vertex.glsl",
+                         "../shader/fragment.glsl",
+                         "texture_sampler");
   ConfigReader config;
   config.LoadConfig("../config/tum1.yml");
   SetConstantSDFParams(config.sdf_params);
@@ -197,7 +195,7 @@ int main(int argc, char **argv) {
     }
 
     ray_caster.Cast(voxel_map, cTw.getInverse());
-    renderer.Render(ray_caster.gpu_data().normal_image, true);
+    renderer.Render(ray_caster.gpu_data().normal_image);
     //cv::imshow("normal", ray_caster.normal_image());
     //cv::waitKey(1);
   }

@@ -61,7 +61,7 @@ void Mesh::Resize(uint vertex_count, uint triangle_count) {
 }
 
 void Mesh::Reset() {
-  uint val = kMaxVertexCount;
+  uint val = kMaxVertexCount - 1;
   checkCudaErrors(cudaMemcpy(gpu_data_.vertex_heap_counter, &val,
                              sizeof(uint),
                              cudaMemcpyHostToDevice));
@@ -123,6 +123,7 @@ void CompactMesh::Free() {
 
 void CompactMesh::Resize(uint vertex_count, uint triangle_count) {
   Alloc(vertex_count, triangle_count);
+  Reset();
 }
 
 /// Reset
