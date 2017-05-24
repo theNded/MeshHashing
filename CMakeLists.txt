@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.6)
 PROJECT(voxel-hashing)
+cmake_policy(SET CMP0015 NEW)
 
 #----------
 # C++ version setting
@@ -31,7 +32,7 @@ FIND_PACKAGE(OpenCV REQUIRED)
 FIND_PACKAGE(CUDA REQUIRED)
 
 # Log utilities
-FIND_PACKAGE(glog REQUIRED)
+FIND_PACKAGE(Glog REQUIRED)
 
 #----------
 ## Found Headers
@@ -64,8 +65,6 @@ LIST(APPEND
         ${CUDA_CUDART_LIBRARY}
         ${CUDA_CUDA_LIBRARY})
 
-SET(OTHER_DEPENDENCIES ${OpenCV_LIBRARIES})
-
 MESSAGE(STATUS "Found libraries:")
 foreach(library ${OPENGL_DEPENDENCIES})
     MESSAGE(STATUS ${library})
@@ -83,27 +82,29 @@ SET(VH ${PROJECT_SOURCE_DIR})
 MESSAGE(STATUS ${CUDA_TOOLKIT_INCLUDE})
 
 INCLUDE_DIRECTORIES(
-        test/include
         ${VH}/include
         ${VH}/gl_utils
         ${VH}/cuda_utils
+        ${GLOG_INCLUDE_DIRS}
         ${CUDA_TOOLKIT_INCLUDE})
 
 #----------
 ## Building Libraries
 ### 1. OpenGL utils
-ADD_LIBRARY(GL_UTILS
+ADD_LIBRARY(gl-utils SHARED
         ${VH}/gl_utils/context.cc
         ${VH}/gl_utils/control.cc
         ${VH}/gl_utils/shader.cc)
-TARGET_LINK_LIBRARIES(GL_UTILS glog ${OPENGL_DEPENDENCIES})
+TARGET_LINK_LIBRARIES(gl-utils
+        ${GLOG_LIBRARIES}
+        ${OPENGL_DEPENDENCIES})
 
 ### 2. VoxelHashing CUDA
 SET(CUDA_SEPARABLE_COMPILATION ON)
 # sm MUST >= 50, otherwise separable compilation will be disabled...
 # compute_35, sm_50 is ok
 LIST(APPEND CUDA_NVCC_FLAGS -gencode=arch=compute_52,code=sm_52)
-CUDA_ADD_LIBRARY(cuda-voxel-hashing
+CUDA_ADD_LIBRARY(voxel-hashing-cuda
         ${VH}/src/constant.cu
         ${VH}/src/hash_table.cu
         ${VH}/src/block.cu
@@ -113,36 +114,46 @@ CUDA_ADD_LIBRARY(cuda-voxel-hashing
         ${VH}/src/map_fusion.cu
         ${VH}/src/map_mesh.cu
         ${VH}/src/ray_caster.cu)
-TARGET_LINK_LIBRARIES(cuda-voxel-hashing ${OpenCV_LIBRARIES} glog)
+TARGET_LINK_LIBRARIES(voxel-hashing-cuda
+        ${OpenCV_LIBRARIES} ${GLOG_LIBRARIES})
 
 ### 3. VoxelHashing C++
-ADD_LIBRARY(voxel-hashing
+ADD_LIBRARY(voxel-hashing SHARED
         ${VH}/src/renderer.cc)
-TARGET_LINK_LIBRARIES(voxel-hashing GL_UTILS)
+TARGET_LINK_LIBRARIES(voxel-hashing
+        voxel-hashing-cuda
+        gl-utils)
 
 #----------
 ## Unit tests
 ### CUDA - OpenGL intergration
-ADD_EXECUTABLE(test_cuda_gl test/test_cuda_gl.cc)
-TARGET_LINK_LIBRARIES(test_cuda_gl GL_UTILS
+ADD_EXECUTABLE(cuda_gl_interp test/cuda_gl_interp.cc)
+TARGET_LINK_LIBRARIES(cuda_gl_interp
         voxel-hashing
-        glog ${CUDA_DEPENDENCIES} ${OTHER_DEPENDENCIES})
+        ${CUDA_DEPENDENCIES}
+        ${GLOG_LIBRARIES}
+        ${OpenCV_LIBRARIES})
 
 ### Loop over
-ADD_EXECUTABLE(test_voxel_hashing test/test_voxel_hashing.cc)
-TARGET_LINK_LIBRARIES(test_voxel_hashing GL_UTILS
-        voxel-hashing cuda-voxel-hashing
-        glog ${CUDA_DEPENDENCIES} ${OTHER_DEPENDENCIES})
+ADD_EXECUTABLE(voxel_hashing test/voxel_hashing.cc)
+TARGET_LINK_LIBRARIES(voxel_hashing
+        voxel-hashing
+        ${CUDA_DEPENDENCIES}
+        ${GLOG_LIBRARIES}
+        ${OpenCV_LIBRARIES})
 
 ### An ORB test
 FIND_PACKAGE(Pangolin REQUIRED)
-INCLUDE_DIRECTORIES(~/softwares/ORB_SLAM2/include
-        ~/softwares/ORB_SLAM2
+INCLUDE_DIRECTORIES(
+        ../orb_slam2/
+        ../orb_slam2/include
         ${EIGEN3_INCLUDE_DIR})
-ADD_EXECUTABLE(rgbd-tum test/rgbd_tum.cc)
-TARGET_LINK_LIBRARIES(rgbd-tum
-        ${PROJECT_SOURCE_DIR}/lib/libORB_SLAM2.so
+LINK_DIRECTORIES(../orb_slam2/lib)
+ADD_EXECUTABLE(rgbd-orb test/rgbd_orb.cc)
+TARGET_LINK_LIBRARIES(rgbd-orb
+        voxel-hashing
+        ORB_SLAM2
         ${Pangolin_LIBRARIES}
-        GL_UTILS
-        voxel-hashing cuda-voxel-hashing
-        glog ${CUDA_DEPENDENCIES} ${OTHER_DEPENDENCIES})
+        ${CUDA_DEPENDENCIES}
+        ${GLOG_LIBRARIES}
+        ${OpenCV_LIBRARIES})

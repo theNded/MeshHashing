@@ -32,10 +32,10 @@ const std::string kDefaultDatasetPath =
         "/home/wei/data/SUN3D/copyroom/";
 #elif defined(SUN3D_ORI)
 const std::string kDefaultDatasetPath =
-        "/home/wei/data/SUN3D-Princeton/hotel_umd/maryland_hotel3/";
+        "/home/wei/data/SUN3D-Princeton/hotel_umd/maryland_hote`l3/";
 #elif defined(TDVCR)
 const std::string kDefaultDatasetPath =
-        "/home/wei/data/3DVCR/hall1/";
+        "/home/wei/data/3DVCR/lab4/";
 #endif
 
 /// Refer to constant.cu
@@ -69,18 +69,9 @@ int main(int argc, char** argv) {
   MeshRenderer mesh_renderer("Mesh",
                              config.ray_caster_params.width,
                              config.ray_caster_params.height);
-  mesh_renderer.free_walk() = false;
+  mesh_renderer.free_walk() = true;
 
   /// Support only one GL instance yet
-//  uniform_names.clear();
-//  uniform_names.push_back("texture_sampler");
-//  FrameRenderer frame_renderer("RayCasting",
-//                               config.ray_caster_params.width,
-//                               config.ray_caster_params.height);
-//  frame_renderer.CompileShader("../shader/frame_vertex.glsl",
-//                               "../shader/frame_fragment.glsl",
-//                               uniform_names);
-
   uniform_names.clear();
   uniform_names.push_back("mvp");
   mesh_renderer.CompileShader("../shader/mesh_vertex.glsl",
@@ -93,11 +84,6 @@ int main(int argc, char** argv) {
 
   Sensor sensor(config.sensor_params);
   sensor.BindGPUTexture();
-  float4x4 K; K.setIdentity();
-  K.m11 = config.sensor_params.fx;
-  K.m13 = config.sensor_params.cx;
-  K.m22 = config.sensor_params.fy;
-  K.m23 = config.sensor_params.cy;
 
   RayCaster ray_caster(config.ray_caster_params);
 
@@ -123,7 +109,6 @@ int main(int argc, char** argv) {
     voxel_map.MarchingCubes();
 
     ray_caster.Cast(voxel_map, c0Tc.getInverse());
-//    frame_renderer.Render(ray_caster.gpu_data().normal_image);
     cv::imshow("display", ray_caster.normal_image());
     cv::waitKey(1);
 

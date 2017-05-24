@@ -9,14 +9,13 @@
 #include "renderer.h"
 
 int main() {
-  RendererBase::InitGLWindow("Display", 640, 480);
-  RendererBase::InitCUDA();
-  FrameRenderer renderer;
+  FrameRenderer renderer("frame", 640, 480);
   std::vector<std::string> uniform_names;
   uniform_names.push_back("texture_sampler");
   renderer.CompileShader("../shader/frame_vertex.glsl",
                          "../shader/frame_fragment.glsl",
                          uniform_names);
+  renderer.InitCUDA();
 
   ////////// Load data here
   float * cpu_mem;
@@ -44,6 +43,6 @@ int main() {
   LOG(INFO) << "Begin Loop";
   do {
     renderer.Render(cuda_mem);
-  } while( glfwGetKey(RendererBase::window(), GLFW_KEY_ESCAPE ) != GLFW_PRESS &&
-           glfwWindowShouldClose(RendererBase::window()) == 0);
+  } while( glfwGetKey(renderer.window(), GLFW_KEY_ESCAPE ) != GLFW_PRESS &&
+           glfwWindowShouldClose(renderer.window()) == 0);
 }

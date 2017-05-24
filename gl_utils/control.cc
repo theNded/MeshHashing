@@ -114,7 +114,7 @@ void Control::UpdateCameraPose() {
 
 void Control::InitParameters() {
   position_         = glm::vec3(0, 0, 0);
-  horizontal_angle_ = 0.0f;
+  horizontal_angle_ = M_PI;
   vertical_angle_   = 0.0f;
   // In later glm versions, fov_ = glm::radians(45.0f)
   fov_              = 45.0f;

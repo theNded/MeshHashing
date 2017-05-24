@@ -15,6 +15,7 @@
 #include "control.h"
 
 /// this should go after gl_utils
+#include "matrix.h"
 #include <cuda_gl_interop.h>
 
 class RendererBase {
