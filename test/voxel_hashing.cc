@@ -21,9 +21,9 @@
 #include "config_reader.h"
 #include "control.h"
 
-#define TUM
+#define ICL
 #if defined(ICL)
-const std::string kDefaultDatasetPath = "/home/wei/data/ICL/lv2/";
+const std::string kDefaultDatasetPath = "/home/wei/data/ICL/lv1/";
 #elif defined(TUM)
 const std::string kDefaultDatasetPath =
         "/home/wei/data/TUM/rgbd_dataset_freiburg3_long_office_household/";
@@ -35,7 +35,7 @@ const std::string kDefaultDatasetPath =
         "/home/wei/data/SUN3D-Princeton/hotel_umd/maryland_hote`l3/";
 #elif defined(TDVCR)
 const std::string kDefaultDatasetPath =
-        "/home/wei/data/3DVCR/lab4/";
+        "/home/wei/data/3DVCR/hall2/";
 #endif
 
 /// Refer to constant.cu
@@ -69,7 +69,7 @@ int main(int argc, char** argv) {
   MeshRenderer mesh_renderer("Mesh",
                              config.ray_caster_params.width,
                              config.ray_caster_params.height);
-  mesh_renderer.free_walk() = true;
+  mesh_renderer.free_walk() = false;
 
   /// Support only one GL instance yet
   uniform_names.clear();
@@ -87,8 +87,8 @@ int main(int argc, char** argv) {
 
   RayCaster ray_caster(config.ray_caster_params);
 
-  cv::VideoWriter writer("icl-vh.avi", CV_FOURCC('X','V','I','D'),
-                         30, cv::Size(640, 480));
+//  cv::VideoWriter writer("icl-vh.avi", CV_FOURCC('X','V','I','D'),
+//                         30, cv::Size(640, 480));
 
   std::chrono::time_point<std::chrono::system_clock> start, end;
   start = std::chrono::system_clock::now();
@@ -108,11 +108,11 @@ int main(int argc, char** argv) {
     voxel_map.Integrate(sensor, NULL);
     voxel_map.MarchingCubes();
 
-    ray_caster.Cast(voxel_map, c0Tc.getInverse());
-    cv::imshow("display", ray_caster.normal_image());
-    cv::waitKey(1);
+//    ray_caster.Cast(voxel_map, c0Tc.getInverse());
+//    cv::imshow("display", ray_caster.normal_image());
+//    cv::waitKey(1);
 
-    voxel_map.CollectAllBlocks();
+    //voxel_map.CollectAllBlocks();
     voxel_map.CompressMesh();
     mesh_renderer.Render(voxel_map.compact_mesh().vertices(),
                          (size_t)voxel_map.compact_mesh().vertex_count(),

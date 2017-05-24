@@ -12,6 +12,7 @@
 bool RendererBase::is_cuda_init_ = false;
 
 RendererBase::RendererBase(std::string name, uint width, uint height) {
+  // TODO: fix this wierd bug during destruction
   gl_context_.Init(width, height, name);
   is_gl_init_ = true;
 }
@@ -266,8 +267,8 @@ void MeshRenderer::Render(float3 *vertices, size_t vertex_count,
 
   glUniformMatrix4fv(uniforms_[0], 1, GL_FALSE, &mvp[0][0]);
   glBindVertexArray(vao_);
-  //glDrawElements(GL_TRIANGLES, triangle_count * 3, GL_UNSIGNED_INT, 0);
-  glDrawArrays(GL_POINTS, 0, vertex_count);
+  glDrawElements(GL_TRIANGLES, triangle_count * 3, GL_UNSIGNED_INT, 0);
+  //glDrawArrays(GL_POINTS, 0, vertex_count);
 
   glfwSwapBuffers(gl_context_.window());
   glfwPollEvents();
