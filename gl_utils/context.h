@@ -15,15 +15,17 @@
 namespace gl_utils {
 class Context {
 public:
-  Context(std::string window_name, size_t width, size_t height);
+  /// GLFWwindow* should exist on stack instead of heap
+  Context();
+  ~Context();
+
+  int Init(size_t width, size_t height, std::string window_name);
 
   GLFWwindow *window() const;
   size_t width();
   size_t height();
 
 private:
-  int Init(std::string window_name);
-
   GLFWwindow *window_;
   size_t width_;
   size_t height_;

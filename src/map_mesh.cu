@@ -371,6 +371,16 @@ void MarchingCubesKernel(HashTableGPU        hash_table,
     triangle.vertex_ptrs.y = vertex_ptr[kTriangleTable[cube_index][t + 1]];
     triangle.vertex_ptrs.z = vertex_ptr[kTriangleTable[cube_index][t + 2]];
 
+    float3 p0 = mesh_data.vertices[triangle.vertex_ptrs.x].pos;
+    float3 p1 = mesh_data.vertices[triangle.vertex_ptrs.y].pos;
+    float3 p2 = mesh_data.vertices[triangle.vertex_ptrs.z].pos;
+
+    // TODO: make it more reasonable
+    float3 n = normalize(cross((p1 - p0), (p2 - p0)));
+    mesh_data.vertices[triangle.vertex_ptrs.x].normal = n;
+    mesh_data.vertices[triangle.vertex_ptrs.y].normal = n;
+    mesh_data.vertices[triangle.vertex_ptrs.z].normal = n;
+
     atomicAdd(&mesh_data.vertices[triangle.vertex_ptrs.y].ref_count, 1);
     atomicAdd(&mesh_data.vertices[triangle.vertex_ptrs.x].ref_count, 1);
     atomicAdd(&mesh_data.vertices[triangle.vertex_ptrs.z].ref_count, 1);
@@ -466,6 +476,7 @@ void AssignVertexRemapperKernel(MeshGPU        mesh,
     int addr = atomicAdd(compact_mesh.vertex_counter, 1);
     compact_mesh.vertex_index_remapper[idx] = addr;
     compact_mesh.vertices[addr] = mesh.vertices[idx].pos;
+    compact_mesh.normals[addr]  = mesh.vertices[idx].normal;
   }
 }
 
@@ -608,8 +619,12 @@ void Map::SaveMesh(std::string path) {
   LOG(INFO) << "Triangles: " << compact_triangle_count;
 
   float3* vertices = new float3[compact_vertex_count];
+  float3* normals  = new float3[compact_vertex_count];
   int3* triangles  = new int3  [compact_triangle_count];
   checkCudaErrors(cudaMemcpy(vertices, compact_mesh_.gpu_data().vertices,
+                             sizeof(float3) * compact_vertex_count,
+                             cudaMemcpyDeviceToHost));
+  checkCudaErrors(cudaMemcpy(normals, compact_mesh_.gpu_data().normals,
                              sizeof(float3) * compact_vertex_count,
                              cudaMemcpyDeviceToHost));
   checkCudaErrors(cudaMemcpy(triangles, compact_mesh_.gpu_data().triangles,
@@ -618,6 +633,7 @@ void Map::SaveMesh(std::string path) {
 
   std::ofstream out(path);
   std::stringstream ss;
+  LOG(INFO) << "Writing vertices";
   for (uint i = 0; i < compact_vertex_count; ++i) {
     ss.str("");
     ss <<  "v " << vertices[i].x << " "
@@ -626,13 +642,31 @@ void Map::SaveMesh(std::string path) {
     out << ss.str();
   }
 
-  for (uint i = 0; i < compact_triangle_count; ++i) {
+  LOG(INFO) << "Writing normals";
+  for (uint i = 0; i < compact_vertex_count; ++i) {
     ss.str("");
-    int3 idx = triangles[i];
-    ss << "f " << idx.x + 1 << " " << idx.y + 1 << " " << idx.z + 1 << "\n";
+    ss <<  "vn " << normals[i].x << " "
+       << normals[i].y << " "
+       << normals[i].z << "\n";
     out << ss.str();
   }
 
+  LOG(INFO) << "Writing faces";
+  for (uint i = 0; i < compact_triangle_count; ++i) {
+    ss.str("");
+    int3 idx = triangles[i] + make_int3(1);
+    ss << "f "
+       << idx.x << "//" << idx.x << " "
+       << idx.y << "//" << idx.y << " "
+       << idx.z << "//" << idx.z << "\n";
+    out << ss.str();
+  }
+  out.close();
+
+  LOG(INFO) << "Finishing vertices";
   delete[] vertices;
+  LOG(INFO) << "Finishing normals";
+  delete[] normals;
+  LOG(INFO) << "Finishing triangles";
   delete[] triangles;
 }

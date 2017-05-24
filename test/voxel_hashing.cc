@@ -21,7 +21,7 @@
 #include "config_reader.h"
 #include "control.h"
 
-#define TDVCR
+#define TUM
 #if defined(ICL)
 const std::string kDefaultDatasetPath = "/home/wei/data/ICL/lv2/";
 #elif defined(TUM)
@@ -87,8 +87,8 @@ int main(int argc, char** argv) {
 
   RayCaster ray_caster(config.ray_caster_params);
 
-  //cv::VideoWriter writer("icl-vh.avi", CV_FOURCC('X','V','I','D'),
-  //                       30, cv::Size(640, 480));
+  cv::VideoWriter writer("icl-vh.avi", CV_FOURCC('X','V','I','D'),
+                         30, cv::Size(640, 480));
 
   std::chrono::time_point<std::chrono::system_clock> start, end;
   start = std::chrono::system_clock::now();
@@ -116,6 +116,8 @@ int main(int argc, char** argv) {
     voxel_map.CompressMesh();
     mesh_renderer.Render(voxel_map.compact_mesh().vertices(),
                          (size_t)voxel_map.compact_mesh().vertex_count(),
+                         voxel_map.compact_mesh().normals(),
+                         (size_t)voxel_map.compact_mesh().vertex_count(),
                          voxel_map.compact_mesh().triangles(),
                          (size_t)voxel_map.compact_mesh().triangle_count(),
                          c0Tc.getInverse());
@@ -127,4 +129,5 @@ int main(int argc, char** argv) {
   LOG(INFO) << "Fps: " << frames / seconds.count();
 
   voxel_map.SaveMesh("kkk.obj");
+  return 0;
 }

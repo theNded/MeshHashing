@@ -146,9 +146,11 @@ int main(int argc, char **argv) {
     voxel_map.CompressMesh();
 
     //ray_caster.Cast(voxel_map, cTw.getInverse());
-    //voxel_map.CollectAllBlocks();
-    //voxel_map.CompressMesh();
+    voxel_map.CollectAllBlocks();
+    voxel_map.CompressMesh();
     renderer.Render(voxel_map.compact_mesh().vertices(),
+                    (size_t)voxel_map.compact_mesh().vertex_count(),
+                    voxel_map.compact_mesh().normals(),
                     (size_t)voxel_map.compact_mesh().vertex_count(),
                     voxel_map.compact_mesh().triangles(),
                     (size_t)voxel_map.compact_mesh().triangle_count(),

@@ -9,13 +9,19 @@
 #include <glog/logging.h>
 
 namespace gl_utils {
-Context::Context(std::string window_name, size_t width, size_t height) {
-  width_ = width;
-  height_ = height;
-  Init(window_name);
+Context::Context() {
+  width_ = height_ = 0;
+  window_ = NULL;
 }
 
-int Context::Init(std::string window_name) {
+Context::~Context() {
+  glfwDestroyWindow(window_);
+  glfwTerminate();
+}
+
+int Context::Init(size_t width, size_t height, std::string window_name) {
+  width_ = width;
+  height_ = height;
   // Initialise GLFW
   if (!glfwInit()) {
     LOG(ERROR) << "Failed to initialize GLFW.";

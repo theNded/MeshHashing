@@ -12,13 +12,11 @@
 bool RendererBase::is_cuda_init_ = false;
 
 RendererBase::RendererBase(std::string name, uint width, uint height) {
-  gl_context_ = new gl_utils::Context(name, width, height);
+  gl_context_.Init(width, height, name);
   is_gl_init_ = true;
 }
 
-RendererBase::~RendererBase() {
-  if (is_gl_init_) delete gl_context_;
-}
+RendererBase::~RendererBase() {}
 
 void RendererBase::InitCUDA() {
   if (is_cuda_init_) return;
@@ -95,7 +93,7 @@ FrameRenderer::FrameRenderer(std::string name, uint width, uint height)
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
   ///////////////////////////!!! GL_RGBA32F !!!
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F,
-               gl_context_->width(), gl_context_->height(), 0,
+               gl_context_.width(), gl_context_.height(), 0,
                GL_RGBA, GL_FLOAT, NULL);
   glBindTexture(GL_TEXTURE_2D, 0);
 
@@ -124,7 +122,7 @@ void FrameRenderer::Render(float4 *image) {
   checkCudaErrors(cudaMemcpyToArray(in_array, 0, 0,
                                     image,
                                     sizeof(float4) *
-                                    gl_context_->width() * gl_context_->height(),
+                                    gl_context_.width() * gl_context_.height(),
                                     cudaMemcpyDeviceToDevice));
   checkCudaErrors(cudaGraphicsUnmapResources(1, &cuda_resource_, 0));
 
@@ -138,7 +136,7 @@ void FrameRenderer::Render(float4 *image) {
   glBindVertexArray(vao_);
   glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_BYTE, 0);
 
-  glfwSwapBuffers(gl_context_->window());
+  glfwSwapBuffers(gl_context_.window());
   glfwPollEvents();
 }
 
@@ -156,8 +154,8 @@ MeshRenderer::MeshRenderer(std::string name, uint width, uint height)
   glGenVertexArrays(1, &vao_);
   glBindVertexArray(vao_);
 
-  vbo_ = new GLuint[2];
-  glGenBuffers(2, vbo_);
+  vbo_ = new GLuint[3];
+  glGenBuffers(3, vbo_);
 
   glEnableVertexAttribArray(0);
   glBindBuffer(GL_ARRAY_BUFFER, vbo_[0]);
@@ -165,29 +163,38 @@ MeshRenderer::MeshRenderer(std::string name, uint width, uint height)
                NULL, GL_STATIC_DRAW);
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo_[1]);
+  glEnableVertexAttribArray(1);
+  glBindBuffer(GL_ARRAY_BUFFER, vbo_[1]);
+  glBufferData(GL_ARRAY_BUFFER, kMaxVertices * sizeof(float3),
+               NULL, GL_STATIC_DRAW);
+  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo_[2]);
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, kMaxTriangles * sizeof(int3),
                NULL, GL_STATIC_DRAW);
 
   checkCudaErrors(cudaGraphicsGLRegisterBuffer(
           &cuda_vertices_, vbo_[0], cudaGraphicsMapFlagsNone));
   checkCudaErrors(cudaGraphicsGLRegisterBuffer(
-          &cuda_triangles_, vbo_[1], cudaGraphicsMapFlagsNone));
+          &cuda_normals_, vbo_[1], cudaGraphicsMapFlagsNone));
+  checkCudaErrors(cudaGraphicsGLRegisterBuffer(
+          &cuda_triangles_, vbo_[2], cudaGraphicsMapFlagsNone));
 
   glEnable(GL_DEPTH_TEST);
   glDepthFunc(GL_LESS);
 
-  control_ = new gl_utils::Control(gl_context_->window(),
-                                   gl_context_->width(),
-                                   gl_context_->height());
+  control_ = new gl_utils::Control(gl_context_.window(),
+                                   gl_context_.width(),
+                                   gl_context_.height());
 }
 
 MeshRenderer::~MeshRenderer() {
   glDeleteProgram(program_);
-  glDeleteBuffers(2, vbo_);
+  glDeleteBuffers(3, vbo_);
   glDeleteVertexArrays(1, &vao_);
 
   checkCudaErrors(cudaGraphicsUnregisterResource(cuda_vertices_));
+  checkCudaErrors(cudaGraphicsUnregisterResource(cuda_normals_));
   checkCudaErrors(cudaGraphicsUnregisterResource(cuda_triangles_));
 
   delete[] vbo_;
@@ -195,6 +202,7 @@ MeshRenderer::~MeshRenderer() {
 }
 
 void MeshRenderer::Render(float3 *vertices, size_t vertex_count,
+                          float3 *normals,  size_t normal_count,
                           int3 *triangles, size_t triangle_count,
                           float4x4 cTw) {
 
@@ -210,6 +218,15 @@ void MeshRenderer::Render(float3 *vertices, size_t vertex_count,
                              vertex_count * sizeof(float3),
                              cudaMemcpyDeviceToDevice));
   checkCudaErrors(cudaGraphicsUnmapResources(1, &cuda_vertices_, 0));
+
+  map_ptr = NULL;
+  checkCudaErrors(cudaGraphicsMapResources(1, &cuda_normals_));
+  checkCudaErrors(cudaGraphicsResourceGetMappedPointer(
+          (void **)&map_ptr, &map_size, cuda_normals_));
+  checkCudaErrors(cudaMemcpy(map_ptr, normals,
+                             normal_count * sizeof(float3),
+                             cudaMemcpyDeviceToDevice));
+  checkCudaErrors(cudaGraphicsUnmapResources(1, &cuda_normals_, 0));
 
   map_ptr = NULL;
   checkCudaErrors(cudaGraphicsMapResources(1, &cuda_triangles_));
@@ -252,10 +269,10 @@ void MeshRenderer::Render(float3 *vertices, size_t vertex_count,
   //glDrawElements(GL_TRIANGLES, triangle_count * 3, GL_UNSIGNED_INT, 0);
   glDrawArrays(GL_POINTS, 0, vertex_count);
 
-  glfwSwapBuffers(gl_context_->window());
+  glfwSwapBuffers(gl_context_.window());
   glfwPollEvents();
 
-  if (glfwGetKey(gl_context_->window(), GLFW_KEY_ESCAPE) == GLFW_PRESS ) {
+  if (glfwGetKey(gl_context_.window(), GLFW_KEY_ESCAPE) == GLFW_PRESS ) {
     exit(0);
   }
 }

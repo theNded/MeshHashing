@@ -11,6 +11,7 @@
 
 struct __ALIGN__(4) Vertex {
   float3 pos;
+  float3 normal;
   int    ref_count;
 
   __device__
@@ -92,6 +93,7 @@ struct CompactMeshGPU {
   int*      vertex_index_remapper;
 
   float3*   vertices;
+  float3*   normals;
   int*      vertices_ref_count;
   uint*     vertex_counter;
 
@@ -116,6 +118,9 @@ public:
 
   float3* vertices() {
     return gpu_data_.vertices;
+  }
+  float3* normals() {
+    return gpu_data_.normals;
   }
   int3* triangles() {
     return gpu_data_.triangles;

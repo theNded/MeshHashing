@@ -24,7 +24,7 @@ protected:
   static bool is_cuda_init_;
 
   bool is_gl_init_ = false;
-  gl_utils::Context *gl_context_;
+  gl_utils::Context gl_context_;
 
   GLuint vao_;
   GLuint* vbo_;
@@ -39,7 +39,7 @@ public:
   ~RendererBase();
 
   GLFWwindow* window() {
-    return gl_context_->window();
+    return gl_context_.window();
   }
 
   void CompileShader(std::string vert_glsl_path,
@@ -63,6 +63,7 @@ class MeshRenderer : public RendererBase {
 private:
   bool free_walk_;
   cudaGraphicsResource* cuda_vertices_;
+  cudaGraphicsResource* cuda_normals_;
   cudaGraphicsResource* cuda_triangles_;
   gl_utils::Control*    control_;
 
@@ -73,6 +74,7 @@ public:
   MeshRenderer(std::string name, uint width, uint height);
   ~MeshRenderer();
   void Render(float3* vertices, size_t vertex_count,
+              float3* normals,  size_t normal_count,
               int3* triangles,  size_t triangle_count,
               float4x4 mvp);
 };
