@@ -21,7 +21,7 @@
 #include "config_reader.h"
 #include "control.h"
 
-#define ICL
+#define TUM
 #if defined(ICL)
 const std::string kDefaultDatasetPath = "/home/wei/data/ICL/lv1/";
 #elif defined(TUM)
@@ -69,7 +69,7 @@ int main(int argc, char** argv) {
   MeshRenderer mesh_renderer("Mesh",
                              config.ray_caster_params.width,
                              config.ray_caster_params.height);
-  mesh_renderer.free_walk() = false;
+  mesh_renderer.free_walk() = true;
 
   /// Support only one GL instance yet
   uniform_names.clear();

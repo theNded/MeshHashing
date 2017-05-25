@@ -158,12 +158,14 @@ MeshRenderer::MeshRenderer(std::string name, uint width, uint height)
   vbo_ = new GLuint[3];
   glGenBuffers(3, vbo_);
 
+  /// Vertex positions
   glEnableVertexAttribArray(0);
   glBindBuffer(GL_ARRAY_BUFFER, vbo_[0]);
   glBufferData(GL_ARRAY_BUFFER, kMaxVertices * sizeof(float3),
                NULL, GL_STATIC_DRAW);
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
+  /// Vertex normals
   glEnableVertexAttribArray(1);
   glBindBuffer(GL_ARRAY_BUFFER, vbo_[1]);
   glBufferData(GL_ARRAY_BUFFER, kMaxVertices * sizeof(float3),
@@ -267,6 +269,10 @@ void MeshRenderer::Render(float3 *vertices, size_t vertex_count,
 
   glUniformMatrix4fv(uniforms_[0], 1, GL_FALSE, &mvp[0][0]);
   glBindVertexArray(vao_);
+
+  // If render mesh only:
+  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+  /// NOTE: Use GL_UNSIGNED_INT instead of GL_INT, otherwise it won't work
   glDrawElements(GL_TRIANGLES, triangle_count * 3, GL_UNSIGNED_INT, 0);
   //glDrawArrays(GL_POINTS, 0, vertex_count);
 

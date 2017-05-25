@@ -7,5 +7,5 @@ out vec3 color;
 
 void main() {
 	float g = abs(dot(normal_frag, normalize(vec3(0, 2, 0) - position_frag)));
-	color = vec3(g, g, g);
+	color = vec3(0,1,0);
 }
