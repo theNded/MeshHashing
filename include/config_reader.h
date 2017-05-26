@@ -16,6 +16,16 @@
 #include "matrix.h"
 #include "params.h"
 
+enum DatasetType {
+  TUM1,
+  TUM2,
+  TUM3,
+  ICL,
+  SUN3D,
+  SUN3D_ORIGINAL,
+  PKU
+};
+
 void LoadHashParams(std::string path, HashParams& params) {
   cv::FileStorage fs(path, cv::FileStorage::READ);
   params.bucket_count     = (int)fs["bucket_count"];
@@ -57,32 +67,6 @@ void LoadRayCasterParams(std::string path, RayCasterParams& params) {
   params.sdf_threshold        = (float)fs["sdf_threshold"];
   params.enable_gradients     = (int)fs["enable_gradient"];
 }
-
-struct ConfigReader {
-  HashParams      hash_params;
-  SDFParams       sdf_params;
-  SensorParams    sensor_params;
-  RayCasterParams ray_caster_params;
-
-  void LoadConfig(std::string config_path) {
-    LoadHashParams(config_path, hash_params);
-    LoadSDFParams(config_path, sdf_params);
-    LoadSensorParams(config_path, sensor_params);
-    LoadRayCasterParams(config_path, ray_caster_params);
-
-    ray_caster_params.width  = sensor_params.width;
-    ray_caster_params.height = sensor_params.height;
-    ray_caster_params.fx = sensor_params.fx;
-    ray_caster_params.fy = sensor_params.fy;
-    ray_caster_params.cx = sensor_params.cx;
-    ray_caster_params.cy = sensor_params.cy;
-
-    LOG(INFO) << sensor_params.fx;
-    LOG(INFO) << sensor_params.fy;
-    LOG(INFO) << sensor_params.cx;
-    LOG(INFO) << sensor_params.cy;
-  }
-};
 
 
 /// 1-1-1 correspondences
@@ -144,10 +128,10 @@ void LoadSUN3D(std::string dataset_path,
   int dummy;
   float4x4 wTc;
   while (traj_stream >> dummy >> dummy >> dummy
-          >> wTc.m11 >> wTc.m12 >> wTc.m13 >> wTc.m14
-          >> wTc.m21 >> wTc.m22 >> wTc.m23 >> wTc.m24
-          >> wTc.m31 >> wTc.m32 >> wTc.m33 >> wTc.m34
-          >> wTc.m41 >> wTc.m42 >> wTc.m43 >> wTc.m44) {
+                     >> wTc.m11 >> wTc.m12 >> wTc.m13 >> wTc.m14
+                     >> wTc.m21 >> wTc.m22 >> wTc.m23 >> wTc.m24
+                     >> wTc.m31 >> wTc.m32 >> wTc.m33 >> wTc.m34
+                     >> wTc.m41 >> wTc.m42 >> wTc.m43 >> wTc.m44) {
     wTcs.push_back(wTc);
   }
 }
@@ -291,5 +275,70 @@ void Load3DVCR(std::string dataset_path,
     ++count;
   }
 }
+
+
+struct ConfigReader {
+  HashParams      hash_params;
+  SDFParams       sdf_params;
+  SensorParams    sensor_params;
+  RayCasterParams ray_caster_params;
+
+  void LoadConfig(std::string config_path) {
+    LoadHashParams(config_path, hash_params);
+    LoadSDFParams(config_path, sdf_params);
+    LoadSensorParams(config_path, sensor_params);
+    LoadRayCasterParams(config_path, ray_caster_params);
+
+    ray_caster_params.width  = sensor_params.width;
+    ray_caster_params.height = sensor_params.height;
+    ray_caster_params.fx = sensor_params.fx;
+    ray_caster_params.fy = sensor_params.fy;
+    ray_caster_params.cx = sensor_params.cx;
+    ray_caster_params.cy = sensor_params.cy;
+
+    LOG(INFO) << sensor_params.fx;
+    LOG(INFO) << sensor_params.fy;
+    LOG(INFO) << sensor_params.cx;
+    LOG(INFO) << sensor_params.cy;
+  }
+
+  void Load(std::string dataset_path,
+            std::vector<std::string> &depth_image_list,
+            std::vector<std::string> &color_image_list,
+            std::vector<float4x4>& wTcs,
+            DatasetType dataset_type) {
+    switch (dataset_type) {
+      case ICL:
+        LoadICL(dataset_path, depth_image_list, color_image_list, wTcs);
+        LoadConfig("../config/icl.yml");
+        break;
+      case SUN3D:
+        LoadSUN3D(dataset_path, depth_image_list, color_image_list, wTcs);
+        LoadConfig("../config/sun3d.yml");
+        break;
+      case SUN3D_ORIGINAL:
+        LoadSUN3DOriginal(dataset_path, depth_image_list, color_image_list, wTcs);
+        LoadConfig("../config/sun3d_ori.yml");
+        break;
+      case TUM1:
+        LoadTUM(dataset_path, depth_image_list, color_image_list, wTcs);
+        LoadConfig("../config/tum1.yml");
+        break;
+      case TUM2:
+        LoadTUM(dataset_path, depth_image_list, color_image_list, wTcs);
+        LoadConfig("../config/tum2.yml");
+        break;
+      case TUM3:
+        LoadTUM(dataset_path, depth_image_list, color_image_list, wTcs);
+        LoadConfig("../config/tum3.yml");
+        break;
+      case PKU:
+        Load3DVCR(dataset_path, depth_image_list, color_image_list, wTcs);
+        LoadConfig("../config/3dvcr.yml");
+        break;
+    }
+  }
+};
+
 
 #endif //VH_CONFIG_READER

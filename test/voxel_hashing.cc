@@ -21,22 +21,22 @@
 #include "config_reader.h"
 #include "control.h"
 
-#define TUM
-#if defined(ICL)
-const std::string kDefaultDatasetPath = "/home/wei/data/ICL/lv1/";
-#elif defined(TUM)
-const std::string kDefaultDatasetPath =
+const DatasetType dataset_type = TUM2;
+
+const std::string kICLPath   =
+        "/home/wei/data/ICL/lv1/";
+const std::string kTUM1Path  =
+        "/home/wei/data/TUM/rgbd_dataset_freiburg1_xyz/";
+const std::string kTUM2Path  =
+        "/home/wei/data/TUM/rgbd_dataset_freiburg2_xyz/";
+const std::string kTUM3Path  =
         "/home/wei/data/TUM/rgbd_dataset_freiburg3_long_office_household/";
-#elif defined(SUN3D)
-const std::string kDefaultDatasetPath =
+const std::string kSUN3DPath =
         "/home/wei/data/SUN3D/copyroom/";
-#elif defined(SUN3D_ORI)
-const std::string kDefaultDatasetPath =
+const std::string kSUN3DOriginalPath =
         "/home/wei/data/SUN3D-Princeton/hotel_umd/maryland_hote`l3/";
-#elif defined(TDVCR)
-const std::string kDefaultDatasetPath =
+const std::string kPKUPath   =
         "/home/wei/data/3DVCR/hall2/";
-#endif
 
 /// Refer to constant.cu
 extern void SetConstantSDFParams(const SDFParams& params);
@@ -48,22 +48,34 @@ int main(int argc, char** argv) {
   std::vector<float4x4>    wTc;
 
   ConfigReader config;
-#if defined(ICL)
-  LoadICL(kDefaultDatasetPath, depth_img_list, color_img_list, wTc);
-  config.LoadConfig("../config/icl.yml");
-#elif defined(TUM)
-  LoadTUM(kDefaultDatasetPath, depth_img_list, color_img_list, wTc);
-  config.LoadConfig("../config/tum3.yml");
-#elif defined(SUN3D)
-  LoadSUN3D(kDefaultDatasetPath, depth_img_list, color_img_list, wTc);
-  config.LoadConfig("../config/sun3d.yml");
-#elif defined(SUN3D_ORI)
-  LoadSUN3DOriginal(kDefaultDatasetPath, depth_img_list, color_img_list, wTc);
-  config.LoadConfig("../config/sun3d_ori.yml");
-#elif defined(TDVCR)
-  Load3DVCR(kDefaultDatasetPath, depth_img_list, color_img_list, wTc);
-  config.LoadConfig("../config/3dvcr.yml");
-#endif
+  std::string dataset_path = "";
+
+  /// Probably the path will change
+  switch (dataset_type) {
+    case TUM1:
+      config.Load(kTUM1Path, depth_img_list, color_img_list, wTc, TUM1);
+      break;
+    case TUM2:
+      config.Load(kTUM2Path, depth_img_list, color_img_list, wTc, TUM2);
+      break;
+    case TUM3:
+      config.Load(kTUM3Path, depth_img_list, color_img_list, wTc, TUM3);
+      break;
+    case ICL:
+      config.Load(kICLPath, depth_img_list, color_img_list, wTc, ICL);
+      break;
+    case SUN3D:
+      config.Load(kSUN3DPath, depth_img_list, color_img_list, wTc, SUN3D);
+      break;
+    case SUN3D_ORIGINAL:
+      config.Load(kSUN3DOriginalPath, depth_img_list, color_img_list, wTc, SUN3D_ORIGINAL);
+      break;
+    case PKU:
+      config.Load(kPKUPath, depth_img_list, color_img_list, wTc, PKU);
+      break;
+    default:
+      break;
+  }
 
   std::vector<std::string> uniform_names;
   MeshRenderer mesh_renderer("Mesh",
