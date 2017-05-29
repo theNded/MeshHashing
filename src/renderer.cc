@@ -259,8 +259,8 @@ void MeshRenderer::Render(float3 *vertices, size_t vertex_count,
   if (free_walk_) {
     control_->UpdateCameraPose();
     mvp = control_->projection_mat() *
-            transform *
-            control_->view_mat();
+            control_->view_mat() *
+            transform;
   } else {
     mvp = control_->projection_mat() *
             transform *

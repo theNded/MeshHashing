@@ -60,10 +60,10 @@ void Control::UpdateCameraPose() {
     vertical_angle_ -= 0.1f;
   }
   if (glfwGetKey(window_, GLFW_KEY_J) == GLFW_PRESS) {
-    horizontal_angle_ -= 0.1f;
+    horizontal_angle_ += 0.1f;
   }
   if (glfwGetKey(window_, GLFW_KEY_L) == GLFW_PRESS) {
-    horizontal_angle_ += 0.1f;
+    horizontal_angle_ -= 0.1f;
   }
 #endif
 
@@ -85,10 +85,10 @@ void Control::UpdateCameraPose() {
   glm::vec3 up = glm::cross(right, look_direction);
 
   if (glfwGetKey(window_, GLFW_KEY_W) == GLFW_PRESS) {
-    position_ -= look_direction * move_speed_ * delta_time;
+    position_ += look_direction * move_speed_ * delta_time;
   }
   if (glfwGetKey(window_, GLFW_KEY_S) == GLFW_PRESS) {
-    position_ += look_direction * move_speed_ * delta_time;
+    position_ -= look_direction * move_speed_ * delta_time;
   }
   if (glfwGetKey(window_, GLFW_KEY_D) == GLFW_PRESS) {
     position_ += right * move_speed_ * delta_time;
@@ -97,10 +97,10 @@ void Control::UpdateCameraPose() {
     position_ -= right * move_speed_ * delta_time;
   }
   if (glfwGetKey(window_, GLFW_KEY_SPACE) == GLFW_PRESS) {
-    position_ -= up * move_speed_ * delta_time;
+    position_ += up * move_speed_ * delta_time;
   }
   if (glfwGetKey(window_, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) {
-    position_ += up * move_speed_ * delta_time;
+    position_ -= up * move_speed_ * delta_time;
   }
 
   // Camera matrix
