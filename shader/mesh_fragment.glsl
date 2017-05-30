@@ -7,5 +7,5 @@ out vec3 color;
 
 void main() {
 	float g = abs(dot(normal_frag, normalize(vec3(0, 2, 0) - position_frag)));
-	color = g * vec3(0.88f, 0.78f, 0.70f); // Magic color
+	color = g * vec3(0.88f, 0.72f, 0.62f); // Magic color
 }

@@ -21,7 +21,7 @@
 #include "config_reader.h"
 #include "control.h"
 
-const DatasetType dataset_type = TUM3;
+const DatasetType dataset_type = PKU;
 
 const std::string kICLPath   =
         "/home/wei/data/ICL/lv1/";
@@ -36,7 +36,7 @@ const std::string kSUN3DPath =
 const std::string kSUN3DOriginalPath =
         "/home/wei/data/SUN3D-Princeton/hotel_umd/maryland_hotel3/";
 const std::string kPKUPath   =
-        "/home/wei/data/3DVCR/lab3/";
+        "/home/wei/data/3DVCR/hall2/";
 
 /// Refer to constant.cu
 extern void SetConstantSDFParams(const SDFParams& params);
@@ -106,7 +106,7 @@ int main(int argc, char** argv) {
   start = std::chrono::system_clock::now();
   int frames = depth_img_list.size() - 1;
 
-  for (int i = 0; i < frames; ++i) {
+  for (int i = 0; i < 10; ++i) {
     LOG(INFO) << i;
     cv::Mat depth = cv::imread(depth_img_list[i], -1);
     cv::Mat color = cv::imread(color_img_list[i]);
@@ -133,6 +133,10 @@ int main(int argc, char** argv) {
                          voxel_map.compact_mesh().triangles(),
                          (size_t)voxel_map.compact_mesh().triangle_count(),
                          c0Tc.getInverse());
+
+    end = std::chrono::system_clock::now();
+    std::chrono::duration<double> seconds = end - start;
+    LOG(INFO) << "Fps: " << (i + 1) / seconds.count();
   }
 
   end = std::chrono::system_clock::now();
@@ -141,5 +145,6 @@ int main(int argc, char** argv) {
   LOG(INFO) << "Fps: " << frames / seconds.count();
 
   voxel_map.SaveMesh("kkk.obj");
+
   return 0;
 }

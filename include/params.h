@@ -23,6 +23,13 @@ struct HashParams {
   uint  value_capacity;             // 1000000
 };
 
+struct MeshParams {
+  uint max_vertex_count;
+  uint max_triangle_count;
+
+  bool use_fine_gradient;
+};
+
 struct __ALIGN__(16) SDFParams {
   float	voxel_size;                 // 0.004 (m)
 
