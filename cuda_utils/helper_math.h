@@ -1470,4 +1470,8 @@ inline __host__ __device__ int2 sign(float2 s) {
   return make_int2(sign(s.x), sign(s.y));
 }
 
+inline __host__ __device__ float2 make_float2(uchar2 s) {
+  return make_float2(s.x, s.y);
+}
+
 #endif

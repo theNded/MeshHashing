@@ -29,9 +29,10 @@ void StarveOccupiedBlocksKernel(CompactHashTableGPU compact_hash_table,
   const uint idx = blockIdx.x;
   const HashEntry& entry = compact_hash_table.compacted_entries[idx];
 
-  int weight = blocks[entry.ptr].voxels[threadIdx.x].weight;
-  weight = max(0, weight-1);
-  blocks[entry.ptr].voxels[threadIdx.x].weight = (uchar)weight;
+  uchar2 sweight = blocks[entry.ptr].voxels[threadIdx.x].sweight;
+  sweight.x = max(0, (int)sweight.x-1);
+  sweight.y = max(0, (int)sweight.y-1);
+  blocks[entry.ptr].voxels[threadIdx.x].sweight = sweight;
 }
 
 /// Collect dead voxels
@@ -45,13 +46,14 @@ void CollectGarbageBlocksKernel(CompactHashTableGPU compact_hash_table,
   Voxel v0 = blocks[entry.ptr].voxels[2*threadIdx.x+0];
   Voxel v1 = blocks[entry.ptr].voxels[2*threadIdx.x+1];
 
-  if (v0.weight == 0)	v0.sdf = PINF;
-  if (v1.weight == 0)	v1.sdf = PINF;
+  float sdf0 = v0.sdf(), sdf1 = v1.sdf();
+  if (v0.weight() == 0)	sdf0 = PINF;
+  if (v1.weight() == 0)	sdf1 = PINF;
 
   __shared__ float	shared_min_sdf   [BLOCK_SIZE / 2];
   __shared__ uint		shared_max_weight[BLOCK_SIZE / 2];
-  shared_min_sdf[threadIdx.x] = fminf(fabsf(v0.sdf), fabsf(v1.sdf));
-  shared_max_weight[threadIdx.x] = max(v0.weight, v1.weight);
+  shared_min_sdf[threadIdx.x] = fminf(fabsf(sdf0), fabsf(sdf1));
+  shared_max_weight[threadIdx.x] = max(v0.weight(), v1.weight());
 
   /// reducing operation
 #pragma unroll 1

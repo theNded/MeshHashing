@@ -120,9 +120,9 @@ int main(int argc, char** argv) {
     voxel_map.Integrate(sensor, NULL);
     voxel_map.MarchingCubes();
 
-//    ray_caster.Cast(voxel_map, c0Tc.getInverse());
-//    cv::imshow("display", ray_caster.normal_image());
-//    cv::waitKey(1);
+    ray_caster.Cast(voxel_map, c0Tc.getInverse());
+    cv::imshow("display", ray_caster.normal_image());
+    cv::waitKey(1);
 
     voxel_map.CollectAllBlocks();
     voxel_map.CompressMesh();

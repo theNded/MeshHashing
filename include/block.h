@@ -8,21 +8,31 @@
 #include "common.h"
 #include <helper_math.h>
 
-struct __ALIGN__(4) Voxel {
-  float   sdf;		// signed distance function
+struct __ALIGN__(8) Voxel {
+  float2  ssdf;		// signed distance function
+  uchar2  sweight;	// accumulated sdf weight
   uchar3	color;	// color
-  uchar	  weight;	// accumulated sdf weight
 
-  __device__
-  void operator=(const struct Voxel& v) {
-    ((long long*)this)[0] = ((const long long*)&v)[0];
-  }
+//  __device__
+//  void operator=(const struct Voxel& v) {
+//    ((long long*)this)[0] = ((const long long*)&v)[0];
+//  }
 
   __device__
   void Clear() {
-    sdf    = 0.0;
-    color  = make_uchar3(0, 0, 0);
-    weight = 0;
+    ssdf    = make_float2(0.0f, 0.0f);
+    sweight = make_uchar2(0, 0);
+    color   = make_uchar3(0, 0, 0);
+  }
+
+  __device__
+  float sdf() {
+    return (ssdf.x * sweight.x + ssdf.y * sweight.y) / (sweight.x + sweight.y);
+  }
+
+  __device__
+  uchar weight() {
+    return (sweight.x + sweight.y);
   }
 };
 
@@ -48,7 +58,7 @@ struct __ALIGN__(4) MeshCube {
 
 /// Block
 /// Typically Block is a 8x8x8 voxel cluster
-struct __ALIGN__(4) VoxelBlock {
+struct __ALIGN__(8) VoxelBlock {
   Voxel    voxels[BLOCK_SIZE];
   MeshCube cubes [BLOCK_SIZE];
 
@@ -65,18 +75,25 @@ struct __ALIGN__(4) VoxelBlock {
 
   __device__
   void Update(int i, const Voxel& update) {
-
     Voxel& in = voxels[i];
     float3 c_in     = make_float3(in.color.x, in.color.y, in.color.z);
     float3 c_update = make_float3(update.color.x, update.color.y, update.color.z);
     float3 c_out = 0.5f * c_in + 0.5f * c_update;
 
     uchar3 color = make_uchar3(c_out.x + 0.5f, c_out.y + 0.5f, c_out.z + 0.5f);
-
     in.color.x = color.x, in.color.y = color.y, in.color.z = color.z;
-    in.sdf = (in.sdf * (float)in.weight + update.sdf * (float)update.weight)
-             / ((float)in.weight + (float)update.weight);
-    in.weight = min(255, (uint)in.weight + (uint)update.weight);
+
+    in.ssdf = (in.ssdf * make_float2(in.sweight)
+               + update.ssdf * make_float2(update.sweight))
+             / (make_float2(in.sweight) + make_float2(update.sweight));
+    float2 sweight = make_float2(in.sweight) + make_float2(update.sweight);
+    float factor = 255.0f / (sweight.x + sweight.y);
+    factor = fminf(factor, 1.0);
+    in.sweight = make_uchar2((uchar)(factor * sweight.x),
+                             (uchar)(factor * sweight.y));
+
+    if (in.sweight.x == 0) in.ssdf.x = 0;
+    if (in.sweight.y == 0) in.ssdf.y = 0;
   }
 };
 

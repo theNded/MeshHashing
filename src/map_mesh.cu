@@ -169,44 +169,44 @@ void MarchingCubesKernel(HashTableGPU        hash_table,
 
   float voxel_size = kSDFParams.voxel_size;
   v = GetVoxel(hash_table, blocks, map_entry, voxel_local_pos, make_uint3(0, 1, 1));
-  if (v.weight == 0) return;
+  if (v.weight() == 0) return;
   p[0] = world_pos + voxel_size * make_float3(0, 1, 1);
-  d[0] = v.sdf;
+  d[0] = v.sdf();
 
   v = GetVoxel(hash_table, blocks, map_entry, voxel_local_pos, make_uint3(1, 1, 1));
-  if (v.weight == 0) return;
+  if (v.weight() == 0) return;
   p[1] = world_pos + voxel_size * make_float3(1, 1, 1);
-  d[1] = v.sdf;
+  d[1] = v.sdf();
 
   v = GetVoxel(hash_table, blocks, map_entry, voxel_local_pos, make_uint3(1, 1, 0));
-  if (v.weight == 0) return;
+  if (v.weight() == 0) return;
   p[2] = world_pos + voxel_size * make_float3(1, 1, 0);
-  d[2] = v.sdf;
+  d[2] = v.sdf();
 
   v = GetVoxel(hash_table, blocks, map_entry, voxel_local_pos, make_uint3(0, 1, 0));
-  if (v.weight == 0) return;
+  if (v.weight() == 0) return;
   p[3] = world_pos + voxel_size * make_float3(0, 1, 0);
-  d[3] = v.sdf;
+  d[3] = v.sdf();
 
   v = GetVoxel(hash_table, blocks, map_entry, voxel_local_pos, make_uint3(0, 0, 1));
-  if (v.weight == 0) return;
+  if (v.weight() == 0) return;
   p[4] = world_pos + voxel_size * make_float3(0, 0, 1);
-  d[4] = v.sdf;
+  d[4] = v.sdf();
 
   v = GetVoxel(hash_table, blocks, map_entry, voxel_local_pos, make_uint3(1, 0, 1));
-  if (v.weight == 0) return;
+  if (v.weight() == 0) return;
   p[5] = world_pos + voxel_size * make_float3(1, 0, 1);
-  d[5] = v.sdf;
+  d[5] = v.sdf();
 
   v = GetVoxel(hash_table, blocks, map_entry, voxel_local_pos, make_uint3(1, 0, 0));
-  if (v.weight == 0) return;
+  if (v.weight() == 0) return;
   p[6] = world_pos + voxel_size * make_float3(1, 0, 0);
-  d[6] = v.sdf;
+  d[6] = v.sdf();
 
   v = GetVoxel(hash_table, blocks, map_entry, voxel_local_pos, make_uint3(0, 0, 0));
-  if (v.weight == 0) return;
+  if (v.weight() == 0) return;
   p[7] = world_pos + voxel_size * make_float3(0, 0, 0);
-  d[7] = v.sdf;
+  d[7] = v.sdf();
 
   //////////
   /// 2. Determine cube type
