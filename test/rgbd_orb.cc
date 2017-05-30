@@ -85,7 +85,7 @@ int main(int argc, char **argv) {
   config.LoadConfig("../config/tum1.yml");
 #elif defined(TUM3)
   LoadTUM(kDefaultDatasetPath, depth_img_list, color_img_list, wTcs);
-  config.LoadConfig("../config/tum3.yml");
+  config.LoadConfig("../config/TUM3.yml");
 #elif defined(SUN3D)
   LoadSUN3D(kDefaultDatasetPath, depth_img_list, color_img_list, wTcs);
   config.LoadConfig("../config/sun3d.yml");

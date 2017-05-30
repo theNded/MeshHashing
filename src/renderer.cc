@@ -271,7 +271,7 @@ void MeshRenderer::Render(float3 *vertices, size_t vertex_count,
   glBindVertexArray(vao_);
 
   // If render mesh only:
-  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+  //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
   /// NOTE: Use GL_UNSIGNED_INT instead of GL_INT, otherwise it won't work
   glDrawElements(GL_TRIANGLES, triangle_count * 3, GL_UNSIGNED_INT, 0);
   //glDrawArrays(GL_POINTS, 0, vertex_count);

@@ -310,31 +310,31 @@ struct ConfigReader {
     switch (dataset_type) {
       case ICL:
         LoadICL(dataset_path, depth_image_list, color_image_list, wTcs);
-        LoadConfig("../config/icl.yml");
+        LoadConfig("../config/ICL.yml");
         break;
       case SUN3D:
         LoadSUN3D(dataset_path, depth_image_list, color_image_list, wTcs);
-        LoadConfig("../config/sun3d.yml");
+        LoadConfig("../config/SUN3D.yml");
         break;
       case SUN3D_ORIGINAL:
         LoadSUN3DOriginal(dataset_path, depth_image_list, color_image_list, wTcs);
-        LoadConfig("../config/sun3d_ori.yml");
+        LoadConfig("../config/SUN3D_ORIGINAL.yml");
         break;
       case TUM1:
         LoadTUM(dataset_path, depth_image_list, color_image_list, wTcs);
-        LoadConfig("../config/tum1.yml");
+        LoadConfig("../config/TUM1.yml");
         break;
       case TUM2:
         LoadTUM(dataset_path, depth_image_list, color_image_list, wTcs);
-        LoadConfig("../config/tum2.yml");
+        LoadConfig("../config/TUM2.yml");
         break;
       case TUM3:
         LoadTUM(dataset_path, depth_image_list, color_image_list, wTcs);
-        LoadConfig("../config/tum3.yml");
+        LoadConfig("../config/TUM3.yml");
         break;
       case PKU:
         Load3DVCR(dataset_path, depth_image_list, color_image_list, wTcs);
-        LoadConfig("../config/3dvcr.yml");
+        LoadConfig("../config/PKU.yml");
         break;
     }
   }

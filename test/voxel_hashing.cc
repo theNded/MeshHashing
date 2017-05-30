@@ -21,7 +21,7 @@
 #include "config_reader.h"
 #include "control.h"
 
-const DatasetType dataset_type = TUM2;
+const DatasetType dataset_type = TUM3;
 
 const std::string kICLPath   =
         "/home/wei/data/ICL/lv1/";
@@ -34,9 +34,9 @@ const std::string kTUM3Path  =
 const std::string kSUN3DPath =
         "/home/wei/data/SUN3D/copyroom/";
 const std::string kSUN3DOriginalPath =
-        "/home/wei/data/SUN3D-Princeton/hotel_umd/maryland_hote`l3/";
+        "/home/wei/data/SUN3D-Princeton/hotel_umd/maryland_hotel3/";
 const std::string kPKUPath   =
-        "/home/wei/data/3DVCR/hall2/";
+        "/home/wei/data/3DVCR/lab3/";
 
 /// Refer to constant.cu
 extern void SetConstantSDFParams(const SDFParams& params);
@@ -124,7 +124,7 @@ int main(int argc, char** argv) {
 //    cv::imshow("display", ray_caster.normal_image());
 //    cv::waitKey(1);
 
-    //voxel_map.CollectAllBlocks();
+    voxel_map.CollectAllBlocks();
     voxel_map.CompressMesh();
     mesh_renderer.Render(voxel_map.compact_mesh().vertices(),
                          (size_t)voxel_map.compact_mesh().vertex_count(),

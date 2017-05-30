@@ -6,7 +6,7 @@
 #include "gradient.h"
 
 //#define REDUCTION
-//#define FINE_GRADIENT
+#define FINE_GRADIENT
 
 ////////////////////
 /// class Map - meshing
