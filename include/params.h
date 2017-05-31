@@ -23,6 +23,11 @@ struct HashParams {
   uint  value_capacity;             // 1000000
 };
 
+struct MeshParams {
+  uint max_vertex_count;
+  uint max_triangle_count;
+};
+
 struct __ALIGN__(16) SDFParams {
   float	voxel_size;                 // 0.004 (m)
 
@@ -68,6 +73,24 @@ struct SensorParams {
   float min_depth_range; /// 0.5f
   float max_depth_range; /// 5.0f, might need modify for LiDAR
   float range_factor;    /// 1/5000 for TUM and ICL, 1/1000 for SUN3D
+};
+
+/// Just a supersede of argv editing...
+struct RuntimeParams {
+  int  dataset_type;
+
+  bool free_walk;
+  bool line_only;
+  bool new_mesh_only;
+  bool fine_gradient;
+
+  bool ray_casting;
+
+  bool record_video;
+  bool save_mesh;
+  std::string filename_prefix;
+
+  int run_frames;
 };
 
 #endif //VH_PARAMS_H

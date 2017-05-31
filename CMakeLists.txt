@@ -96,8 +96,8 @@ ADD_LIBRARY(gl-utils SHARED
         ${VH}/gl_utils/control.cc
         ${VH}/gl_utils/shader.cc)
 TARGET_LINK_LIBRARIES(gl-utils
-        ${GLOG_LIBRARIES}
-        ${OPENGL_DEPENDENCIES})
+        ${OPENGL_DEPENDENCIES}
+        ${GLOG_LIBRARIES})
 
 ### 2. VoxelHashing CUDA
 SET(CUDA_SEPARABLE_COMPILATION ON)
@@ -115,10 +115,13 @@ CUDA_ADD_LIBRARY(voxel-hashing-cuda
         ${VH}/src/map_mesh.cu
         ${VH}/src/ray_caster.cu)
 TARGET_LINK_LIBRARIES(voxel-hashing-cuda
-        ${OpenCV_LIBRARIES} ${GLOG_LIBRARIES})
+        ${CUDA_DEPENDENCIES}
+        ${OpenCV_LIBRARIES} # cv::Mat in sensor
+        ${GLOG_LIBRARIES})
 
 ### 3. VoxelHashing C++
 ADD_LIBRARY(voxel-hashing SHARED
+        ${VH}/src/dataset_manager.cc
         ${VH}/src/renderer.cc)
 TARGET_LINK_LIBRARIES(voxel-hashing
         voxel-hashing-cuda
@@ -130,17 +133,17 @@ TARGET_LINK_LIBRARIES(voxel-hashing
 ADD_EXECUTABLE(cuda_gl_interp test/cuda_gl_interp.cc)
 TARGET_LINK_LIBRARIES(cuda_gl_interp
         voxel-hashing
-        ${CUDA_DEPENDENCIES}
-        ${GLOG_LIBRARIES}
-        ${OpenCV_LIBRARIES})
+        ${OpenCV_LIBRARIES}
+        ${GLOG_LIBRARIES})
 
 ### Loop over
-ADD_EXECUTABLE(voxel_hashing test/voxel_hashing.cc)
+MESSAGE(STATUS ${GLOG_LIBRARIES})
+ADD_EXECUTABLE(voxel_hashing
+        test/voxel_hashing.cc)
 TARGET_LINK_LIBRARIES(voxel_hashing
         voxel-hashing
-        ${CUDA_DEPENDENCIES}
-        ${GLOG_LIBRARIES}
-        ${OpenCV_LIBRARIES})
+        ${OpenCV_LIBRARIES}
+        ${GLOG_LIBRARIES})
 
 ### An ORB test
 FIND_PACKAGE(Pangolin REQUIRED)
@@ -149,11 +152,10 @@ INCLUDE_DIRECTORIES(
         ../orb_slam2/include
         ${EIGEN3_INCLUDE_DIR})
 LINK_DIRECTORIES(../orb_slam2/lib)
-ADD_EXECUTABLE(rgbd-orb test/rgbd_orb.cc)
-TARGET_LINK_LIBRARIES(rgbd-orb
+ADD_EXECUTABLE(rgbd_orb test/rgbd_orb.cc)
+TARGET_LINK_LIBRARIES(rgbd_orb
         voxel-hashing
         ORB_SLAM2
         ${Pangolin_LIBRARIES}
-        ${CUDA_DEPENDENCIES}
-        ${GLOG_LIBRARIES}
-        ${OpenCV_LIBRARIES})
+        ${OpenCV_LIBRARIES}
+        ${GLOG_LIBRARIES})

@@ -22,6 +22,7 @@ private:
   CompactMesh      compact_mesh_;
 
   uint integrated_frame_count_;
+  bool use_fine_gradient_;
 
 ////////////////////
 /// Core
@@ -40,7 +41,7 @@ public:
   void CollectAllBlocks();
 
   /// Life cycle
-  Map(const HashParams& hash_params);
+  Map(const HashParams& hash_params, const MeshParams& mesh_params);
   ~Map();
 
   /// Reset and recycle
@@ -55,7 +56,7 @@ private:
   void AllocBlocks(Sensor& sensor);
 
 public:
-  void Integrate(Sensor &sensor, unsigned int* is_streamed_mask);
+  void Integrate(Sensor &sensor);
 
 ////////////////////
 /// Meshing
@@ -70,6 +71,9 @@ public:
   /// The other part of the hash_table should be hidden
   const uint& frame_count() {
     return integrated_frame_count_;
+  }
+  bool& use_fine_gradient() {
+    return use_fine_gradient_;
   }
 
   /// Access for RayCaster

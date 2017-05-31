@@ -30,34 +30,15 @@
 #include <glog/logging.h>
 
 #include "params.h"
-#include "config_reader.h"
+#include "dataset_manager.h"
 #include "map.h"
 #include "sensor.h"
 #include "ray_caster.h"
 #include "renderer.h"
+#include "datasets.h"
 
-#define TUM3
-#if defined(ICL)
-const std::string kDefaultDatasetPath = "/home/wei/data/ICL/lv2/";
-#elif defined(TUM1)
-const std::string kDefaultDatasetPath =
-        "/home/wei/data/TUM/rgbd_dataset_freiburg1_xyz/";
-#elif defined(TUM3)
-const std::string kDefaultDatasetPath =
-        "/home/wei/data/TUM/rgbd_dataset_freiburg3_long_office_household/";
-#elif defined(SUN3D)
-const std::string kDefaultDatasetPath =
-        "/home/wei/data/SUN3D/copyroom/";
-#elif defined(SUN3D_ORI)
-const std::string kDefaultDatasetPath =
-        "/home/wei/data/SUN3D-Princeton/hotel_umd/maryland_hotel3/";
-#elif defined(TDVCR)
-const std::string kDefaultDatasetPath =
-        "/home/wei/data/3DVCR/lab3/";
-#endif
 
 std::string path_to_vocabulary = "../../orb_slam2/Vocabulary/ORBvoc.bin";
-std::string path_to_orb_config = "../config/orb/TUM3.yaml";
 
 extern void SetConstantSDFParams(const SDFParams& params);
 
@@ -71,96 +52,101 @@ float4x4 MatTofloat4x4(cv::Mat m) {
 }
 
 int main(int argc, char **argv) {
-  /// Load images
-  std::vector<std::string> depth_img_list;
-  std::vector<std::string> color_img_list;
-  std::vector<float4x4>    wTcs;
+  /// Use this to substitute tedious argv parsing
+  RuntimeParams args;
+  LoadRuntimeParams("../config/args.yml", args);
 
-  ConfigReader config;
-#if defined(ICL)
-  LoadICL(kDefaultDatasetPath, depth_img_list, color_img_list, wTcs);
-  config.LoadConfig("../config/icl.yml");
-#elif defined(TUM1)
-  LoadTUM(kDefaultDatasetPath, depth_img_list, color_img_list, wTcs);
-  config.LoadConfig("../config/tum1.yml");
-#elif defined(TUM3)
-  LoadTUM(kDefaultDatasetPath, depth_img_list, color_img_list, wTcs);
-  config.LoadConfig("../config/TUM3.yml");
-#elif defined(SUN3D)
-  LoadSUN3D(kDefaultDatasetPath, depth_img_list, color_img_list, wTcs);
-  config.LoadConfig("../config/sun3d.yml");
-#elif defined(SUN3D_ORI)
-  LoadSUN3DOriginal(kDefaultDatasetPath, depth_img_list, color_img_list, wTcs);
-  config.LoadConfig("../config/sun3d_ori.yml");
-#elif defined(TDVCR)
-  Load3DVCR(kDefaultDatasetPath, depth_img_list, color_img_list, wTcs);
-  config.LoadConfig("../config/3dvcr.yml");
-#endif
+  ConfigManager config;
+  DataManager   rgbd_data;
 
-  ORB_SLAM2::System SLAM(path_to_vocabulary, path_to_orb_config,
-                         ORB_SLAM2::System::RGBD, true);
+  DatasetType dataset_type = DatasetType(args.dataset_type);
+  config.LoadConfig(dataset_type);
+  rgbd_data.LoadDataset(datasets[dataset_type]);
 
-  MeshRenderer renderer("Mesh",
-                        config.sensor_params.width,
-                        config.sensor_params.height);
-  renderer.free_walk() = false;
+  MapMeshRenderer mesh_renderer("Mesh",
+                                config.sensor_params.width,
+                                config.sensor_params.height,
+                                config.mesh_params.max_vertex_count,
+                                config.mesh_params.max_triangle_count);
 
-  std::vector<std::string> uniform_names;
-  uniform_names.push_back("mvp");
-  renderer.CompileShader("../shader/mesh_vertex.glsl",
-                         "../shader/mesh_fragment.glsl",
-                         uniform_names);
   SetConstantSDFParams(config.sdf_params);
-
-  Map voxel_map(config.hash_params);
-  LOG(INFO) << "Map allocated";
-
-  Sensor sensor(config.sensor_params);
-  sensor.BindGPUTexture();
-
+  Map       map(config.hash_params, config.mesh_params);
+  Sensor    sensor(config.sensor_params);
   RayCaster ray_caster(config.ray_caster_params);
 
-  // Main loop
-  int frames = depth_img_list.size() - 1;
+  mesh_renderer.free_walk()     = args.free_walk;
+  mesh_renderer.line_only()     = args.line_only;
+  mesh_renderer.new_mesh_only() = args.new_mesh_only;
+  map.use_fine_gradient()       = args.fine_gradient;
 
-  for (int i = 0; i < frames; ++i) {
-    LOG(INFO) << i;
-    cv::Mat depth = cv::imread(depth_img_list[i], -1);
-    cv::Mat color = cv::imread(color_img_list[i]);
+  cv::VideoWriter writer;
+  cv::Mat screen;
+  if (args.record_video) {
+    writer = cv::VideoWriter(args.filename_prefix + ".avi",
+                             CV_FOURCC('X','V','I','D'),
+                             30, cv::Size(config.sensor_params.width,
+                                          config.sensor_params.height));
+    screen = cv::Mat(config.sensor_params.height,
+                     config.sensor_params.width, CV_8UC3);
+  }
 
-    cv::cvtColor(color, color, CV_BGR2BGRA);
-    sensor.Process(depth, color);
+  ORB_SLAM2::System SLAM(path_to_vocabulary,
+                         orb_configs[dataset_type],
+                         ORB_SLAM2::System::RGBD,
+                         true);
+
+  cv::Mat color, depth;
+  float4x4 cTw, wTc;
+  double tframe;
+
+  int frame_count = 0;
+  while (rgbd_data.ProvideData(depth, color, wTc)) {
+    if (args.run_frames > 0
+        && frame_count ++ > args.run_frames)
+
+    sensor.Process(depth, color); // abandon wTc
 
     cv::Mat color_slam = color.clone();
     cv::Mat depth_slam = depth.clone();
-    double tframe;
-    cv::Mat Tcw = SLAM.TrackRGBD(color_slam, depth_slam, tframe);
-    if (Tcw.empty()) continue;
+    cv::Mat cTw_orb = SLAM.TrackRGBD(color_slam, depth_slam, tframe);
+    if (cTw_orb.empty()) continue;
 
-    float4x4 cTw = MatTofloat4x4(Tcw);
-    float4x4 wTc = cTw.getInverse();
+    cTw = MatTofloat4x4(cTw_orb);
+    wTc = cTw.getInverse();
     sensor.set_transform(wTc);
 
-    voxel_map.Integrate(sensor, NULL);
-    voxel_map.MarchingCubes();
-    voxel_map.CompressMesh();
+    map.Integrate(sensor);
+    map.MarchingCubes();
 
-    //ray_caster.Cast(voxel_map, cTw.getInverse());
-    voxel_map.CollectAllBlocks();
-    voxel_map.CompressMesh();
-    renderer.Render(voxel_map.compact_mesh().vertices(),
-                    (size_t)voxel_map.compact_mesh().vertex_count(),
-                    voxel_map.compact_mesh().normals(),
-                    (size_t)voxel_map.compact_mesh().vertex_count(),
-                    voxel_map.compact_mesh().triangles(),
-                    (size_t)voxel_map.compact_mesh().triangle_count(),
-                    cTw);
-    //cv::imshow("normal", ray_caster.normal_image());
-    //cv::waitKey(1);
+    if (args.ray_casting) {
+      ray_caster.Cast(map, cTw);
+      cv::imshow("RayCasting", ray_caster.normal_image());
+      cv::waitKey(1);
+    }
+
+    if (! args.new_mesh_only) {
+      map.CollectAllBlocks();
+    }
+    map.CompressMesh();
+    mesh_renderer.Render(map.compact_mesh().vertices(),
+                         (size_t)map.compact_mesh().vertex_count(),
+                         map.compact_mesh().normals(),
+                         (size_t)map.compact_mesh().vertex_count(),
+                         map.compact_mesh().triangles(),
+                         (size_t)map.compact_mesh().triangle_count(),
+                         cTw);
+
+    if (args.record_video) {
+      mesh_renderer.ScreenCapture(screen.data, screen.cols, screen.rows);
+      cv::flip(screen, screen, 0);
+      writer << screen;
+    }
   }
 
-  // Stop all threads
-  SLAM.Shutdown();
+  if (args.save_mesh) {
+    map.SaveMesh(args.filename_prefix + ".obj");
+  }
 
+  SLAM.Shutdown();
   return 0;
 }

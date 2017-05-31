@@ -32,3 +32,6 @@ raycast_step:         0.016
 sample_sdf_threshold: 0.808
 sdf_threshold:        0.800
 enable_gradient:      1
+
+max_vertex_count:     10000000
+max_triangle_count:   10000000

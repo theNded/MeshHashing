@@ -30,7 +30,7 @@ void RendererBase::InitCUDA() {
   checkCudaErrors(cudaGLGetDevices(&gl_device_count, gl_device,
                                    gl_device_count,
                                    cudaGLDeviceListAll));
-  for (int i = 0; i < gl_device_count; ++i) {
+  for (uint i = 0; i < gl_device_count; ++i) {
     checkCudaErrors(cudaGetDeviceProperties(&device_prop, gl_device[i]));
     LOG(INFO) << "Device id: " << gl_device[i]
               << ", name: " << device_prop.name
@@ -49,9 +49,17 @@ void RendererBase::CompileShader(std::string vert_glsl_path,
   gl_utils::LoadShaders(vert_glsl_path, frag_glsl_path, program_);
   for (auto &uniform_name : uniform_names) {
     int uniform = glGetUniformLocation(program_, uniform_name.c_str());
-    CHECK(uniform >= 0) << "Invalid uniform!";
+    LOG(INFO) << uniform << " : " << uniform_name.c_str();
+    CHECK(uniform >= 0) << "Invalid uniform! ";
     uniforms_.push_back((uint)uniform);
   }
+}
+
+void RendererBase::ScreenCapture(unsigned char* data, int width, int height) {
+  CHECK(data) << "Invalid image ptr!";
+
+  glReadBuffer(GL_FRONT);
+  glReadPixels(0, 0, width, height, GL_BGR, GL_UNSIGNED_BYTE, data);
 }
 
 ////////////////////
@@ -144,13 +152,14 @@ void FrameRenderer::Render(float4 *image) {
 ////////////////////
 /// class FrameRenderer
 ////////////////////
-MeshRenderer::MeshRenderer(std::string name, uint width, uint height)
+MeshRenderer::MeshRenderer(std::string name, uint width, uint height,
+                           int max_vertex_count, int max_triangle_count)
         : RendererBase(name, width, height) {
-  const int kMaxVertices  = 10000000;
-  const int kMaxTriangles = 10000000;
-
   CHECK(is_gl_init_) << "OpenGL not initialized";
   InitCUDA();
+
+  max_vertex_count_ = max_vertex_count;
+  max_triangle_count_ = max_triangle_count;
 
   glGenVertexArrays(1, &vao_);
   glBindVertexArray(vao_);
@@ -161,19 +170,19 @@ MeshRenderer::MeshRenderer(std::string name, uint width, uint height)
   /// Vertex positions
   glEnableVertexAttribArray(0);
   glBindBuffer(GL_ARRAY_BUFFER, vbo_[0]);
-  glBufferData(GL_ARRAY_BUFFER, kMaxVertices * sizeof(float3),
+  glBufferData(GL_ARRAY_BUFFER, max_vertex_count * sizeof(float3),
                NULL, GL_STATIC_DRAW);
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
   /// Vertex normals
   glEnableVertexAttribArray(1);
   glBindBuffer(GL_ARRAY_BUFFER, vbo_[1]);
-  glBufferData(GL_ARRAY_BUFFER, kMaxVertices * sizeof(float3),
+  glBufferData(GL_ARRAY_BUFFER, max_vertex_count * sizeof(float3),
                NULL, GL_STATIC_DRAW);
   glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo_[2]);
-  glBufferData(GL_ELEMENT_ARRAY_BUFFER, kMaxTriangles * sizeof(int3),
+  glBufferData(GL_ELEMENT_ARRAY_BUFFER, max_triangle_count * sizeof(int3),
                NULL, GL_STATIC_DRAW);
 
   checkCudaErrors(cudaGraphicsGLRegisterBuffer(
@@ -245,9 +254,9 @@ void MeshRenderer::Render(float3 *vertices, size_t vertex_count,
 
   glUseProgram(program_);
 
-  glm::mat4 transform = glm::mat4(1);
-  transform[1][1] = -1;
-  transform[2][2] = -1;
+  glm::mat4 model_mat = glm::mat4(1);
+  model_mat[1][1] = -1;
+  model_mat[2][2] = -1;
 
   glm::mat4 view_mat;
   cTw = cTw.getTranspose();
@@ -258,20 +267,22 @@ void MeshRenderer::Render(float3 *vertices, size_t vertex_count,
   glm::mat4 mvp;
   if (free_walk_) {
     control_->UpdateCameraPose();
-    mvp = control_->projection_mat() *
-            control_->view_mat() *
-            transform;
+    view_mat = control_->view_mat();
   } else {
-    mvp = control_->projection_mat() *
-            transform *
-            view_mat;// * transform * transform;
+    view_mat = model_mat * view_mat * glm::inverse(model_mat);
   }
+  mvp = gl_context_.projection_mat() * view_mat * model_mat;
 
+  // TODO: make it more general
   glUniformMatrix4fv(uniforms_[0], 1, GL_FALSE, &mvp[0][0]);
+  glUniformMatrix4fv(uniforms_[1], 1, GL_FALSE, &view_mat[0][0]);
+  glUniformMatrix4fv(uniforms_[2], 1, GL_FALSE, &model_mat[0][0]);
   glBindVertexArray(vao_);
 
   // If render mesh only:
-  //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+  if (line_only_) {
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+  }
   /// NOTE: Use GL_UNSIGNED_INT instead of GL_INT, otherwise it won't work
   glDrawElements(GL_TRIANGLES, triangle_count * 3, GL_UNSIGNED_INT, 0);
   //glDrawArrays(GL_POINTS, 0, vertex_count);

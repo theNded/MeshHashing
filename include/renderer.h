@@ -37,7 +37,6 @@ public:
 
   RendererBase(std::string name, uint width, uint height);
   ~RendererBase();
-
   GLFWwindow* window() {
     return gl_context_.window();
   }
@@ -45,6 +44,7 @@ public:
   void CompileShader(std::string vert_glsl_path,
                      std::string frag_glsl_path,
                      std::vector<std::string>& uniform_names);
+  void ScreenCapture(unsigned char* data, int width, int height);
 };
 
 class FrameRenderer : public RendererBase {
@@ -60,22 +60,52 @@ public:
 };
 
 class MeshRenderer : public RendererBase {
-private:
-  bool free_walk_;
+protected:
+  bool free_walk_     = false;
+  bool line_only_     = false;
+
   cudaGraphicsResource* cuda_vertices_;
   cudaGraphicsResource* cuda_normals_;
   cudaGraphicsResource* cuda_triangles_;
   gl_utils::Control*    control_;
 
+  int max_vertex_count_;
+  int max_triangle_count_;
+
 public:
   bool &free_walk() {
     return free_walk_;
   }
-  MeshRenderer(std::string name, uint width, uint height);
+  bool &line_only() {
+    return line_only_;
+  }
+
+  /// Assume vertex_count == normal_count at current
+  MeshRenderer(std::string name, uint width, uint height,
+               int max_vertex_count, int triangle_count);
   ~MeshRenderer();
   void Render(float3* vertices, size_t vertex_count,
               float3* normals,  size_t normal_count,
               int3* triangles,  size_t triangle_count,
               float4x4 mvp);
+};
+
+/// An instance of MeshRenderer for easier use
+class MapMeshRenderer : public MeshRenderer {
+public:
+  MapMeshRenderer(std::string name, uint width, uint height,
+                  int max_vertex_count, int triangle_count)
+          : MeshRenderer(name, width, height,
+                         max_vertex_count, triangle_count) {
+    std::vector<std::string> uniform_names;
+    uniform_names.clear();
+    uniform_names.push_back("mvp");
+    uniform_names.push_back("view_mat");
+    uniform_names.push_back("model_mat");
+
+    CompileShader("../shader/mesh_vertex.glsl",
+                  "../shader/mesh_fragment.glsl",
+                  uniform_names);
+  }
 };
 #endif //VH_RENDERER_H

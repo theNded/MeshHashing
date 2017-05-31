@@ -176,13 +176,13 @@ void AllocBlocksKernel(HashTableGPU   hash_table,
 ////////////////////
 /// Host code
 ////////////////////
-void Map::Integrate(Sensor& sensor, uint *is_streamed_mask) {
+void Map::Integrate(Sensor& sensor) {
   AllocBlocks(sensor);
 
   CollectInFrustumBlocks(sensor);
   UpdateBlocks(sensor);
 
-  Recycle();
+  //Recycle();
 
   integrated_frame_count_ ++;
 }

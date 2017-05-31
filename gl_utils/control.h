@@ -15,33 +15,32 @@
 namespace gl_utils {
 class Control {
 public:
-  Control(gl_utils::Context *context);
-  Control(GLFWwindow *window, int width, int height);
+  Control(const Context& context);
+  Control(GLFWwindow *window, size_t width, size_t height);
   void UpdateCameraPose();
 
-  glm::mat4 view_mat();
-  glm::mat4 projection_mat();
+  glm::mat4 view_mat() {
+    return view_mat_;
+  }
 
 private:
   void InitParameters();
 
   // Descartes-system
   glm::mat4 view_mat_;
-  glm::mat4 projection_mat_;
   glm::vec3 position_;
 
   // Polar-system parameters
   float horizontal_angle_;
   float vertical_angle_;
-  float fov_;
 
   // Interaction parameters
   float rotate_speed_;
   float move_speed_;
 
-  int width_;
-  int height_;
   GLFWwindow *window_;
+  size_t width_;
+  size_t height_;
 };
 }
 

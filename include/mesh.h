@@ -9,6 +9,8 @@
 #include <helper_cuda.h>
 #include <helper_math.h>
 
+#include "params.h"
+
 struct __ALIGN__(4) Vertex {
   float3 pos;
   float3 normal;
@@ -30,8 +32,6 @@ struct __ALIGN__(4) Triangle {
   }
 };
 
-static const int kMaxVertexCount = 10000000;
-
 struct MeshGPU {
   // Dynamic memory management for vertices
   // We need compact operation,
@@ -48,6 +48,9 @@ struct MeshGPU {
   __device__
   uint AllocVertex() {
     uint addr = atomicSub(&vertex_heap_counter[0], 1);
+    if (addr < 100) {
+      printf("v: %d -> %d\n", addr, vertex_heap[addr]);
+    }
     return vertex_heap[addr];
   }
   __device__
@@ -59,6 +62,9 @@ struct MeshGPU {
   __device__
   uint AllocTriangle() {
     uint addr = atomicSub(&triangle_heap_counter[0], 1);
+    if (addr < 100) {
+      printf("t: %d -> %d\n", addr, vertex_heap[addr]);
+    }
     return triangle_heap[addr];
   }
   __device__
@@ -72,19 +78,23 @@ struct MeshGPU {
 class Mesh {
 private:
   MeshGPU gpu_data_;
+  MeshParams mesh_params_;
 
-  void Alloc(uint vertex_count, uint triangle_count);
+  void Alloc(const MeshParams &mesh_params);
   void Free();
 
 public:
   Mesh();
   ~Mesh();
 
-  void Resize(uint vertex_count, uint triangle_count);
+  void Resize(const MeshParams &mesh_params);
   void Reset();
 
   MeshGPU& gpu_data() {
     return gpu_data_;
+  }
+  const MeshParams& params() {
+    return mesh_params_;
   }
 };
 
@@ -105,8 +115,9 @@ struct CompactMeshGPU {
 class CompactMesh {
 private:
   CompactMeshGPU gpu_data_;
+  MeshParams     mesh_params_;
 
-  void Alloc(uint vertex_count, uint triangle_count);
+  void Alloc(const MeshParams& mesh_params);
   void Free();
 
 public:
@@ -126,7 +137,7 @@ public:
     return gpu_data_.triangles;
   }
 
-  void Resize(uint vertex_count, uint triangle_count);
+  void Resize(const MeshParams &mesh_params);
   void Reset();
 
   CompactMeshGPU& gpu_data() {
