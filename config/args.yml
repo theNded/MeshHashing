@@ -13,7 +13,7 @@ new_mesh_only:   0
 fine_gradient:   1
 
 # Additional support
-ray_casting:     0
+ray_casting:     1
 
 # Result saving
 record_video:    0

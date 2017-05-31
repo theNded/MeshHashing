@@ -71,6 +71,7 @@ int main(int argc, char** argv) {
     if (args.run_frames > 0
         && frame_count ++ > args.run_frames)
       break;
+
     sensor.Process(depth, color);
     sensor.set_transform(wTc);
     cTw = wTc.getInverse();
