@@ -74,10 +74,9 @@ int main(int argc, char **argv) {
   Sensor    sensor(config.sensor_params);
   RayCaster ray_caster(config.ray_caster_params);
 
-  mesh_renderer.free_walk()     = args.free_walk;
-  mesh_renderer.line_only()     = args.line_only;
-  mesh_renderer.new_mesh_only() = args.new_mesh_only;
-  map.use_fine_gradient()       = args.fine_gradient;
+  mesh_renderer.free_walk() = args.free_walk;
+  mesh_renderer.line_only() = args.line_only;
+  map.use_fine_gradient()   = args.fine_gradient;
 
   cv::VideoWriter writer;
   cv::Mat screen;
@@ -103,6 +102,7 @@ int main(int argc, char **argv) {
   while (rgbd_data.ProvideData(depth, color, wTc)) {
     if (args.run_frames > 0
         && frame_count ++ > args.run_frames)
+      break;
 
     sensor.Process(depth, color); // abandon wTc
 

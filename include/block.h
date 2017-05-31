@@ -34,6 +34,14 @@ struct __ALIGN__(8) Voxel {
   uchar weight() {
     return (sweight.x + sweight.y);
   }
+
+  __device__
+  float entropy() {
+    float wp = sweight.x * exp(- ssdf.x);
+    float wn = sweight.y * exp(- ssdf.y);
+    float r = wp / (wp + wn);
+    return - (r * log(r) + (1 - r) * log(1 - r));
+  }
 };
 
 struct __ALIGN__(4) MeshCube {

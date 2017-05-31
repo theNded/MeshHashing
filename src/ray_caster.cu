@@ -28,6 +28,7 @@ void CastKernel(const HashTableGPU hash_table,
   gpu_data.vertex_image[pixel_idx] = make_float4(MINF, MINF, MINF, MINF);
   gpu_data.normal_image[pixel_idx] = make_float4(MINF, MINF, MINF, MINF);
   gpu_data.color_image [pixel_idx] = make_float4(1, 1, 1, 1);
+  gpu_data.surface_image[pixel_idx] = make_float4(0, 0, 0, 0);
 
   /// 1. Determine ray direction
   float3 camera_dir = normalize(ImageReprojectToCamera(x, y, 1.0f,
@@ -47,6 +48,7 @@ void CastKernel(const HashTableGPU hash_table,
                                            world_dir_homo.z));
 
   RayCasterSample prev_sample;
+  prev_sample.entropy = 0;
   prev_sample.sdf = 0.0f;
   prev_sample.t = 0.0f;
   prev_sample.weight = 0;
@@ -56,9 +58,11 @@ void CastKernel(const HashTableGPU hash_table,
   for (float t = t_min; t < t_max; t += ray_caster_params.raycast_step) {
     float3 world_pos_sample = world_pos_camera_origin + t * world_dir;
     float sdf;
+    float entropy = 0;
     uchar3 color;
 
-    if (TrilinearInterpolation(hash_table, blocks, world_pos_sample, sdf, color)) {
+    if (TrilinearInterpolation(hash_table, blocks, world_pos_sample,
+                               sdf, entropy, color)) {
       /// Zero crossing
       if (prev_sample.weight > 0 && prev_sample.sdf > 0.0f && sdf < 0.0f) {
 
@@ -101,6 +105,25 @@ void CastKernel(const HashTableGPU hash_table,
               float4 n = c_T_w * make_float4(normal, 0.0f);
               gpu_data.normal_image[pixel_idx]
                       = make_float4(n.x, n.y, n.z, 1.0f);
+
+              /// Shading here
+              // TODO(wei): light position uniform
+              float3 light_pos = make_float3(0, -2, -3);
+              float3 n3 = normalize(make_float3(normal.x, normal.y, normal.z));
+              float3 l3 = normalize(light_pos - world_pos_isosurface);
+              float distance = length(light_pos - world_pos_isosurface);
+              // bgr
+              float3 c3 = make_float3(0.62f, 0.72f, 0.88) * dot(-n3, l3)
+                          * 20.0f / (distance * distance);
+              float e = 1.0f-entropy;
+              if (e < 0.0f)	e = 0.0f;
+              if (e > 1.0f)	e = 1.0f;
+
+              e = 360.0f*e - 120.0f;
+              if (e < 0.0f) e += 359.0f;
+              float3 rgb = HSVToRGB(make_float3(e, 1.0f, 0.5f));
+              gpu_data.surface_image[pixel_idx]
+                      = make_float4(rgb.x, rgb.y, rgb.z, 1.0f);
             }
 
             return;
@@ -110,6 +133,7 @@ void CastKernel(const HashTableGPU hash_table,
 
       /// No zero crossing || not good
       prev_sample.sdf = sdf;
+      prev_sample.entropy = entropy;
       prev_sample.t = t;
       prev_sample.weight = 1;
     }
@@ -124,9 +148,11 @@ RayCaster::RayCaster(const RayCasterParams& params) {
   checkCudaErrors(cudaMalloc(&gpu_data_.vertex_image, sizeof(float4) * image_size));
   checkCudaErrors(cudaMalloc(&gpu_data_.normal_image, sizeof(float4) * image_size));
   checkCudaErrors(cudaMalloc(&gpu_data_.color_image, sizeof(float4) * image_size));
+  checkCudaErrors(cudaMalloc(&gpu_data_.surface_image, sizeof(float4) * image_size));
 
   normal_image_ = cv::Mat(params.height, params.width, CV_32FC4);
   color_image_  = cv::Mat(params.height, params.width, CV_32FC4);
+  surface_image_ = cv::Mat(params.height, params.width, CV_32FC4);
 }
 
 RayCaster::~RayCaster() {
@@ -134,6 +160,7 @@ RayCaster::~RayCaster() {
   checkCudaErrors(cudaFree(gpu_data_.vertex_image));
   checkCudaErrors(cudaFree(gpu_data_.normal_image));
   checkCudaErrors(cudaFree(gpu_data_.color_image));
+  checkCudaErrors(cudaFree(gpu_data_.surface_image));
 }
 
 //////////
@@ -163,4 +190,8 @@ void RayCaster::Cast(Map& map, const float4x4& c_T_w) {
   checkCudaErrors(cudaMemcpy(color_image_.data, gpu_data_.color_image,
                              sizeof(float) * 4 * image_size,
                              cudaMemcpyDeviceToHost));
+  checkCudaErrors(cudaMemcpy(surface_image_.data, gpu_data_.surface_image,
+                             sizeof(float) * 4 * image_size,
+                             cudaMemcpyDeviceToHost));
+
 }

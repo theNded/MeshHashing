@@ -12,6 +12,7 @@
 #include "sensor.h"
 
 struct RayCasterSample {
+  float  entropy;
   float  sdf;
   float  t;
   uint   weight;
@@ -22,6 +23,7 @@ struct RayCasterDataGPU {
   float4 *vertex_image;
   float4 *normal_image;
   float4 *color_image;
+  float4 *surface_image;
 };
 
 class RayCaster {
@@ -31,6 +33,7 @@ private:
 
   cv::Mat          normal_image_;
   cv::Mat          color_image_;
+  cv::Mat          surface_image_;
 
 public:
   RayCaster(const RayCasterParams& params);
@@ -43,6 +46,9 @@ public:
   }
   const cv::Mat& color_image() {
     return color_image_;
+  }
+  const cv::Mat& surface_image() {
+    return surface_image_;
   }
   const RayCasterDataGPU& gpu_data() {
     return gpu_data_;

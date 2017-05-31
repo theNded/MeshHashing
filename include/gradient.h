@@ -16,7 +16,7 @@ inline float3 frac(const float3& val)  {
 // TODO(wei): refine it
 __device__
 inline Voxel GetVoxel(const HashTableGPU& hash_table,
-                       VoxelBlock *blocks, float3 world_pos) {
+                      VoxelBlocksGPU& blocks, float3 world_pos) {
   HashEntry hash_entry = hash_table.GetEntry(WorldToBlock(world_pos));
   Voxel v;
   if (hash_entry.ptr == FREE_ENTRY) {
@@ -31,9 +31,101 @@ inline Voxel GetVoxel(const HashTableGPU& hash_table,
 
 __device__
 inline bool TrilinearInterpolation(const HashTableGPU& hash_table,
-                            VoxelBlock *blocks,
-                            const float3& pos,
-                            float& sdf, uchar3& color) {
+                                   VoxelBlocksGPU blocks,
+                                   const float3& pos,
+                                   float& sdf, float& entropy, uchar3& color) {
+  const float offset = kSDFParams.voxel_size;
+  const float3 pos_corner = pos - 0.5f * offset;
+  float3 ratio = frac(WorldToVoxelf(pos));
+
+  float w;
+  Voxel v;
+
+  sdf = 0.0f;
+  float3 colorf = make_float3(0.0f, 0.0f, 0.0f);
+  float3 v_color;
+
+  /// 000
+  v = GetVoxel(hash_table, blocks, pos_corner+make_float3(0.0f, 0.0f, 0.0f));
+  if(v.weight() == 0) return false;
+  v_color = make_float3(v.color.x, v.color.y, v.color.z);
+  w = (1.0f-ratio.x)*(1.0f-ratio.y)*(1.0f-ratio.z);
+  sdf    += w * v.sdf();
+  entropy += w * v.entropy();
+  colorf += w * v_color;
+
+  /// 001
+  v = GetVoxel(hash_table, blocks, pos_corner+make_float3(0.0f, 0.0f, offset));
+  if(v.weight() == 0) return false;
+  v_color = make_float3(v.color.x, v.color.y, v.color.z);
+  w = (1.0f-ratio.x)*(1.0f-ratio.y)*ratio.z;
+  sdf    += w * v.sdf();
+  entropy += w * v.entropy();
+  colorf += w * v_color;
+
+  /// 010
+  v = GetVoxel(hash_table, blocks, pos_corner+make_float3(0.0f, offset, 0.0f));
+  if(v.weight() == 0) return false;
+  v_color = make_float3(v.color.x, v.color.y, v.color.z);
+  w = (1.0f-ratio.x)*ratio.y *(1.0f-ratio.z);
+  sdf    += w * v.sdf();
+  entropy += w * v.entropy();
+  colorf += w * v_color;
+
+  /// 011
+  v = GetVoxel(hash_table, blocks, pos_corner+make_float3(0.0f, offset, offset));
+  if(v.weight() == 0) return false;
+  v_color = make_float3(v.color.x, v.color.y, v.color.z);
+  w = (1.0f-ratio.x)*ratio.y*ratio.z;
+  sdf    += w * v.sdf();
+  entropy += w * v.entropy();
+  colorf += w * v_color;
+
+  /// 100
+  v = GetVoxel(hash_table, blocks, pos_corner+make_float3(offset, 0.0f, 0.0f));
+  if(v.weight() == 0) return false;
+  v_color = make_float3(v.color.x, v.color.y, v.color.z);
+  w = ratio.x*(1.0f-ratio.y)*(1.0f-ratio.z);
+  sdf    +=	w * v.sdf();
+  entropy += w * v.entropy();
+  colorf += w * v_color;
+
+  /// 101
+  v = GetVoxel(hash_table, blocks, pos_corner+make_float3(offset, 0.0f, offset));
+  if(v.weight() == 0) return false;
+  v_color = make_float3(v.color.x, v.color.y, v.color.z);
+  w = ratio.x*(1.0f-ratio.y)*ratio.z;
+  sdf    +=	w * v.sdf();
+  entropy += w * v.entropy();
+  colorf += w	* v_color;
+
+  /// 110
+  v = GetVoxel(hash_table, blocks, pos_corner+make_float3(offset, offset, 0.0f));
+  if(v.weight() == 0) return false;
+  v_color = make_float3(v.color.x, v.color.y, v.color.z);
+  w = ratio.x*ratio.y*(1.0f-ratio.z);
+  sdf    +=	w * v.sdf();
+  entropy += w * v.entropy();
+  colorf += w * v_color;
+
+  /// 111
+  v = GetVoxel(hash_table, blocks, pos_corner+make_float3(offset, offset, offset));
+  if(v.weight() == 0) return false;
+  v_color = make_float3(v.color.x, v.color.y, v.color.z);
+  w = ratio.x*ratio.y*ratio.z;
+  sdf    += w * v.sdf();
+  entropy += w * v.entropy();
+  colorf += w * v_color;
+
+  color = make_uchar3(colorf.x, colorf.y, colorf.z);
+  return true;
+}
+
+__device__
+inline bool TrilinearInterpolation(const HashTableGPU& hash_table,
+                                   VoxelBlocksGPU blocks,
+                                   const float3& pos,
+                                   float& sdf, uchar3& color) {
   const float offset = kSDFParams.voxel_size;
   const float3 pos_corner = pos - 0.5f * offset;
   float3 ratio = frac(WorldToVoxelf(pos));
@@ -115,7 +207,8 @@ inline bool TrilinearInterpolation(const HashTableGPU& hash_table,
 
 __device__
 /// sdf_near: -, sdf_far: +
-inline float LinearIntersection(float t_near, float t_far, float sdf_near, float sdf_far) {
+inline float LinearIntersection(float t_near, float t_far,
+                                float sdf_near, float sdf_far) {
   return t_near + (sdf_near / (sdf_near - sdf_far)) * (t_far - t_near);
 }
 
@@ -123,12 +216,12 @@ inline float LinearIntersection(float t_near, float t_far, float sdf_near, float
 __device__
 /// Iteratively
 inline bool BisectionIntersection(const HashTableGPU& hash_table,
-                           VoxelBlock* blocks,
-                           const float3& world_pos_camera_origin,
-                           const float3& world_dir,
-                           float sdf_near, float t_near,
-                           float sdf_far,  float t_far,
-                           float& t, uchar3& color) {
+                                  VoxelBlocksGPU blocks,
+                                  const float3& world_pos_camera_origin,
+                                  const float3& world_dir,
+                                  float sdf_near, float t_near,
+                                  float sdf_far,  float t_far,
+                                  float& t, uchar3& color) {
   float l = t_near, r = t_far, m = (l + r) * 0.5f;
   float l_sdf = sdf_near, r_sdf = sdf_far, m_sdf;
 

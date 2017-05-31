@@ -16,7 +16,6 @@ out vec3 light_dir_c;
 void main() {
   gl_PointSize = 10.0;
 
-
   gl_Position = mvp * vec4(position, 1.0);
   position_w = (model_mat * vec4(position, 1.0f)).xyz;
 
