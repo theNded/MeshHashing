@@ -30,7 +30,7 @@ void RendererBase::InitCUDA() {
   checkCudaErrors(cudaGLGetDevices(&gl_device_count, gl_device,
                                    gl_device_count,
                                    cudaGLDeviceListAll));
-  for (int i = 0; i < gl_device_count; ++i) {
+  for (uint i = 0; i < gl_device_count; ++i) {
     checkCudaErrors(cudaGetDeviceProperties(&device_prop, gl_device[i]));
     LOG(INFO) << "Device id: " << gl_device[i]
               << ", name: " << device_prop.name

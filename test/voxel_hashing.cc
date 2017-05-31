@@ -19,102 +19,92 @@
 #include "renderer.h"
 
 #include "dataset_manager.h"
+#include "datasets.h"
 
-const Dataset datasets[] = {
-        {ICL,            "/home/wei/data/ICL/lv1/"},
-        {TUM1,           "/home/wei/data/TUM/rgbd_dataset_freiburg1_xyz/"},
-        {TUM2,           "/home/wei/data/TUM/rgbd_dataset_freiburg2_xyz/"},
-        {TUM3,           "/home/wei/data/TUM/rgbd_dataset_freiburg3_long_office_household/"},
-        {SUN3D,          "/home/wei/data/SUN3D/copyroom/"},
-        {SUN3D_ORIGINAL, "/home/wei/data/SUN3D-Princeton/hotel_umd/maryland_hotel3/"},
-        {PKU,            "/home/wei/data/3DVCR/hall2/"}
-};
 
 /// Refer to constant.cu
 extern void SetConstantSDFParams(const SDFParams& params);
 
 int main(int argc, char** argv) {
+  /// Use this to substitute tedious argv parsing
+  RuntimeParams args;
+  LoadRuntimeParams("../config/args.yml", args);
+
   ConfigManager config;
   DataManager   rgbd_data;
 
-  DatasetType dataset_type = TUM2;
-
-  /// Probably the path will change
+  DatasetType dataset_type = DatasetType(args.dataset_type);
   config.LoadConfig(dataset_type);
   rgbd_data.LoadDataset(datasets[dataset_type]);
 
-  std::vector<std::string> uniform_names;
-  MeshRenderer mesh_renderer("Mesh",
-                             config.sensor_params.width,
-                             config.sensor_params.height,
-                             config.mesh_params.max_vertex_count,
-                             config.mesh_params.max_triangle_count);
-  mesh_renderer.free_walk() = true;
-  mesh_renderer.line_only() = true;
-  mesh_renderer.new_mesh_only() = false;
+  MapMeshRenderer mesh_renderer("Mesh",
+                                config.sensor_params.width,
+                                config.sensor_params.height,
+                                config.mesh_params.max_vertex_count,
+                                config.mesh_params.max_triangle_count);
 
-  /// Support only one GL instance yet
-  uniform_names.clear();
-  uniform_names.push_back("mvp");
-  mesh_renderer.CompileShader("../shader/mesh_vertex.glsl",
-                              "../shader/mesh_fragment.glsl",
-                              uniform_names);
   SetConstantSDFParams(config.sdf_params);
-
-  Map voxel_map(config.hash_params, config.mesh_params);
-  LOG(INFO) << "Map allocated";
-
-  Sensor sensor(config.sensor_params);
-
+  Map       map(config.hash_params, config.mesh_params);
+  Sensor    sensor(config.sensor_params);
   RayCaster ray_caster(config.ray_caster_params);
 
-//  cv::VideoWriter writer("icl-vh.avi", CV_FOURCC('X','V','I','D'),
-//                         30, cv::Size(640, 480));
+  mesh_renderer.free_walk()     = args.free_walk;
+  mesh_renderer.line_only()     = args.line_only;
+  map.use_fine_gradient()       = args.fine_gradient;
 
-  std::chrono::time_point<std::chrono::system_clock> start, end;
-  start = std::chrono::system_clock::now();
-  int frames = rgbd_data.depth_image_list.size() - 1;
-
-  //cv::Mat capture = cv::Mat(480, 640, CV_8UC3);
-
-  cv::Mat color, depth;
-  float4x4 cTw;
-  for (int i = 0; i < frames; ++i) {
-    LOG(INFO) << i;
-    rgbd_data.ProvideData(depth, color, cTw);
-    sensor.Process(depth, color);
-    sensor.set_transform(cTw);
-
-    voxel_map.Integrate(sensor, NULL);
-    voxel_map.MarchingCubes();
-
-    ray_caster.Cast(voxel_map, cTw.getInverse());
-    cv::imshow("display", ray_caster.normal_image());
-    cv::waitKey(1);
-
-    if (! mesh_renderer.new_mesh_only()) {
-      voxel_map.CollectAllBlocks();
-    }
-    voxel_map.CompressMesh();
-    mesh_renderer.Render(voxel_map.compact_mesh().vertices(),
-                         (size_t)voxel_map.compact_mesh().vertex_count(),
-                         voxel_map.compact_mesh().normals(),
-                         (size_t)voxel_map.compact_mesh().vertex_count(),
-                         voxel_map.compact_mesh().triangles(),
-                         (size_t)voxel_map.compact_mesh().triangle_count(),
-                         cTw.getInverse());
-
-    end = std::chrono::system_clock::now();
-    std::chrono::duration<double> seconds = end - start;
-    LOG(INFO) << "Fps: " << (i + 1) / seconds.count();
+  cv::VideoWriter writer;
+  cv::Mat screen;
+  if (args.record_video) {
+    writer = cv::VideoWriter(args.filename_prefix + ".avi",
+                             CV_FOURCC('X','V','I','D'),
+                             30, cv::Size(config.sensor_params.width,
+                                          config.sensor_params.height));
+    screen = cv::Mat(config.sensor_params.height,
+                     config.sensor_params.width,
+                     CV_8UC3);
   }
 
-  end = std::chrono::system_clock::now();
-  std::chrono::duration<double> seconds = end - start;
-  LOG(INFO) << "Total time: " << seconds.count();
-  LOG(INFO) << "Fps: " << frames / seconds.count();
+  cv::Mat color, depth;
+  float4x4 wTc, cTw;
+  int frame_count = 0;
+  while (rgbd_data.ProvideData(depth, color, wTc)) {
+    if (args.run_frames > 0
+        && frame_count ++ > args.run_frames)
+      break;
+    sensor.Process(depth, color);
+    sensor.set_transform(wTc);
+    cTw = wTc.getInverse();
 
-  voxel_map.SaveMesh("kkk.obj");
+    map.Integrate(sensor);
+    map.MarchingCubes();
 
+    if (args.ray_casting) {
+      ray_caster.Cast(map, cTw);
+      cv::imshow("RayCasting", ray_caster.normal_image());
+      cv::waitKey(1);
+    }
+
+    if (! args.new_mesh_only) {
+      map.CollectAllBlocks();
+    }
+    map.CompressMesh();
+    mesh_renderer.Render(map.compact_mesh().vertices(),
+                         (size_t)map.compact_mesh().vertex_count(),
+                         map.compact_mesh().normals(),
+                         (size_t)map.compact_mesh().vertex_count(),
+                         map.compact_mesh().triangles(),
+                         (size_t)map.compact_mesh().triangle_count(),
+                         cTw);
+
+    if (args.record_video) {
+      mesh_renderer.ScreenCapture(screen.data, screen.cols, screen.rows);
+      cv::flip(screen, screen, 0);
+      writer << screen;
+    }
+  }
+
+  if (args.save_mesh) {
+    map.SaveMesh(args.filename_prefix + ".obj");
+  }
   return 0;
 }

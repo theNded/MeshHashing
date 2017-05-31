@@ -1,0 +1,24 @@
+%YAML:1.0
+# 0   - ICL
+# 1~3 - TUM1~3
+# 4   - SUN3D
+# 5   - SUN3D_ORIGINAL
+# 6   - PKU
+dataset_type:    3
+
+# Render
+free_walk:       1
+line_only:       1
+new_mesh_only:   0
+fine_gradient:   0
+
+# Additional support
+ray_casting:     0
+
+# Result saving
+record_video:    0
+save_mesh:       1
+filename_prefix: "tum3"
+
+# Others
+run_frames:      -1

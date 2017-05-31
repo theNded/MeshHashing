@@ -80,6 +80,7 @@ void CollectGarbageBlocksKernel(CompactHashTableGPU compact_hash_table,
 }
 
 __global__
+/// Their mesh not recycled
 void RecycleGarbageBlocksKernel(HashTableGPU        hash_table,
                                 CompactHashTableGPU compact_hash_table,
                                 VoxelBlocksGPU      blocks) {
@@ -171,7 +172,6 @@ Map::Map(const HashParams &hash_params, const MeshParams &mesh_params) {
   blocks_.Resize(hash_params.value_capacity);
 
   mesh_.Resize(mesh_params);
-  use_fine_gradient_ = mesh_params.use_fine_gradient;
   compact_mesh_.Resize(mesh_params);
 }
 

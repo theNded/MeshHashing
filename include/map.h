@@ -56,7 +56,7 @@ private:
   void AllocBlocks(Sensor& sensor);
 
 public:
-  void Integrate(Sensor &sensor, unsigned int* is_streamed_mask);
+  void Integrate(Sensor &sensor);
 
 ////////////////////
 /// Meshing
@@ -71,6 +71,9 @@ public:
   /// The other part of the hash_table should be hidden
   const uint& frame_count() {
     return integrated_frame_count_;
+  }
+  bool& use_fine_gradient() {
+    return use_fine_gradient_;
   }
 
   /// Access for RayCaster

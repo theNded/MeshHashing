@@ -122,8 +122,7 @@ TARGET_LINK_LIBRARIES(voxel-hashing-cuda
 ### 3. VoxelHashing C++
 ADD_LIBRARY(voxel-hashing SHARED
         ${VH}/src/dataset_manager.cc
-        ${VH}/src/renderer.cc
-        ${VH}/src/system.cc)
+        ${VH}/src/renderer.cc)
 TARGET_LINK_LIBRARIES(voxel-hashing
         voxel-hashing-cuda
         gl-utils)
@@ -139,7 +138,8 @@ TARGET_LINK_LIBRARIES(cuda_gl_interp
 
 ### Loop over
 MESSAGE(STATUS ${GLOG_LIBRARIES})
-ADD_EXECUTABLE(voxel_hashing test/voxel_hashing.cc)
+ADD_EXECUTABLE(voxel_hashing
+        test/voxel_hashing.cc)
 TARGET_LINK_LIBRARIES(voxel_hashing
         voxel-hashing
         ${OpenCV_LIBRARIES}
@@ -152,8 +152,8 @@ INCLUDE_DIRECTORIES(
         ../orb_slam2/include
         ${EIGEN3_INCLUDE_DIR})
 LINK_DIRECTORIES(../orb_slam2/lib)
-ADD_EXECUTABLE(rgbd-orb test/rgbd_orb.cc)
-TARGET_LINK_LIBRARIES(rgbd-orb
+ADD_EXECUTABLE(rgbd_orb test/rgbd_orb.cc)
+TARGET_LINK_LIBRARIES(rgbd_orb
         voxel-hashing
         ORB_SLAM2
         ${Pangolin_LIBRARIES}

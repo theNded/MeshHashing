@@ -27,6 +27,7 @@ struct Dataset {
   std::string path;
 };
 
+void LoadRuntimeParams(std::string path, RuntimeParams &params);
 void LoadHashParams(std::string path, HashParams& params);
 void LoadMeshParams(std::string path, MeshParams &params);
 void LoadSDFParams(std::string path, SDFParams& params);
@@ -38,7 +39,7 @@ void LoadICL(
         std::string dataset_path,
         std::vector<std::string> &depth_image_list,
         std::vector<std::string> &color_image_list,
-        std::vector<float4x4>& wTcs);
+        std::vector<float4x4>&   wTcs);
 void LoadSUN3D(
         std::string dataset_path,
         std::vector<std::string> &depth_img_list,
@@ -74,7 +75,7 @@ struct ConfigManager {
 
 struct DataManager {
   /// Read from Disk
-  int frame_id = 0;
+  size_t frame_id = 0;
   std::vector<std::string> depth_image_list;
   std::vector<std::string> color_image_list;
   std::vector<float4x4>    wTcs;

@@ -60,8 +60,7 @@ public:
 };
 
 class MeshRenderer : public RendererBase {
-private:
-  bool new_mesh_only_ = false;
+protected:
   bool free_walk_     = false;
   bool line_only_     = false;
 
@@ -74,9 +73,6 @@ private:
   int max_triangle_count_;
 
 public:
-  bool &new_mesh_only() {
-    return new_mesh_only_;
-  }
   bool &free_walk() {
     return free_walk_;
   }
@@ -92,5 +88,21 @@ public:
               float3* normals,  size_t normal_count,
               int3* triangles,  size_t triangle_count,
               float4x4 mvp);
+};
+
+/// An instance of MeshRenderer for easier use
+class MapMeshRenderer : public MeshRenderer {
+public:
+  MapMeshRenderer(std::string name, uint width, uint height,
+                  int max_vertex_count, int triangle_count)
+          : MeshRenderer(name, width, height,
+                         max_vertex_count, triangle_count) {
+    std::vector<std::string> uniform_names;
+    uniform_names.clear();
+    uniform_names.push_back("mvp");
+    CompileShader("../shader/mesh_vertex.glsl",
+                  "../shader/mesh_fragment.glsl",
+                  uniform_names);
+  }
 };
 #endif //VH_RENDERER_H

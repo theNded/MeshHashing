@@ -32,8 +32,6 @@ struct __ALIGN__(4) Triangle {
   }
 };
 
-static const int kMaxVertexCount = 10000000;
-
 struct MeshGPU {
   // Dynamic memory management for vertices
   // We need compact operation,
@@ -50,6 +48,7 @@ struct MeshGPU {
   __device__
   uint AllocVertex() {
     uint addr = atomicSub(&vertex_heap_counter[0], 1);
+    //printf("%d -> %d\n", addr, vertex_heap[addr]);
     return vertex_heap[addr];
   }
   __device__
@@ -88,6 +87,9 @@ public:
 
   MeshGPU& gpu_data() {
     return gpu_data_;
+  }
+  const MeshParams& params() {
+    return mesh_params_;
   }
 };
 

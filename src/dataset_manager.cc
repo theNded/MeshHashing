@@ -11,6 +11,23 @@
 #include <opencv2/opencv.hpp>
 #include <glog/logging.h>
 
+void LoadRuntimeParams(std::string path, RuntimeParams& params) {
+  cv::FileStorage fs(path, cv::FileStorage::READ);
+  params.dataset_type  = (int)fs["dataset_type"];
+
+  params.free_walk     = (int)fs["free_walk"];
+  params.line_only     = (int)fs["line_only"];
+  params.new_mesh_only = (int)fs["new_mesh_only"];
+  params.fine_gradient = (int)fs["fine_gradient"];
+
+  params.ray_casting   = (int)fs["ray_casting"];
+
+  params.record_video  = (int)fs["record_video"];
+  params.save_mesh     = (int)fs["save_mesh"];
+  params.filename_prefix = (std::string)fs["filename_prefix"];
+
+  params.run_frames    = (int)fs["run_frames"];
+}
 
 void LoadHashParams(std::string path, HashParams& params) {
   cv::FileStorage fs(path, cv::FileStorage::READ);
@@ -25,7 +42,6 @@ void LoadMeshParams(std::string path, MeshParams &params) {
   cv::FileStorage fs(path, cv::FileStorage::READ);
   params.max_vertex_count   = (int)fs["max_vertex_count"];
   params.max_triangle_count = (int)fs["max_triangle_count"];
-  params.use_fine_gradient  = (int)fs["use_fine_gradient"];
 }
 
 void LoadSDFParams(std::string path, SDFParams& params) {
@@ -356,15 +372,17 @@ bool DataManager::ProvideData(cv::Mat &depth,
 bool DataManager::ProvideData(cv::Mat &depth,
                               cv::Mat &color,
                               float4x4 &wTc) {
-  if (frame_id > depth_image_list.size()) {
+  if (frame_id >= depth_image_list.size()) {
     LOG(ERROR) << "All images provided!";
     return false;
   }
+  LOG(INFO) << frame_id << "/" << depth_image_list.size();
   depth = cv::imread(depth_image_list[frame_id], CV_LOAD_IMAGE_UNCHANGED);
   color = cv::imread(color_image_list[frame_id]);
   if (color.channels() == 3) {
     cv::cvtColor(color, color, CV_BGR2BGRA);
   }
+
   wTc   = wTcs[0].getInverse() * wTcs[frame_id];
   ++frame_id;
 

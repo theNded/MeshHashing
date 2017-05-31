@@ -3,6 +3,7 @@
 #include <helper_cuda.h>
 #include <device_launch_parameters.h>
 #include <params.h>
+#include <glog/logging.h>
 
 ////////////////////
 /// class Mesh
@@ -68,17 +69,22 @@ void Mesh::Resize(const MeshParams &mesh_params) {
 }
 
 void Mesh::Reset() {
+  uint val;
+
+  val = mesh_params_.max_vertex_count - 1;
   checkCudaErrors(cudaMemcpy(gpu_data_.vertex_heap_counter,
-                             &mesh_params_.max_vertex_count,
-                             sizeof(uint),
+                             &val, sizeof(uint),
                              cudaMemcpyHostToDevice));
+
+  val = mesh_params_.max_triangle_count - 1;
   checkCudaErrors(cudaMemcpy(gpu_data_.triangle_heap_counter,
-                             &mesh_params_.max_triangle_count,
-                             sizeof(uint),
+                             &val, sizeof(uint),
                              cudaMemcpyHostToDevice));
 
   const int threads_per_block = 64;
-  const dim3 grid_size((kMaxVertexCount + threads_per_block - 1)
+  const dim3 grid_size((std::max(mesh_params_.max_vertex_count,
+                                 mesh_params_.max_triangle_count)
+                        + threads_per_block - 1)
                        / threads_per_block, 1);
   const dim3 block_size(threads_per_block, 1);
 

@@ -480,9 +480,10 @@ void CollectVerticesAndTrianglesKernel(CompactHashTableGPU compact_hash_table,
 
 __global__
 void AssignVertexRemapperKernel(MeshGPU        mesh,
-                                CompactMeshGPU compact_mesh) {
+                                CompactMeshGPU compact_mesh,
+                                uint max_vertex_count) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
-  if (idx < kMaxVertexCount && compact_mesh.vertices_ref_count[idx] > 0) {
+  if (idx < max_vertex_count && compact_mesh.vertices_ref_count[idx] > 0) {
     int addr = atomicAdd(compact_mesh.vertex_counter, 1);
     compact_mesh.vertex_index_remapper[idx] = addr;
     compact_mesh.vertices[addr] = mesh.vertices[idx].pos;
@@ -492,9 +493,10 @@ void AssignVertexRemapperKernel(MeshGPU        mesh,
 
 __global__
 void AssignTrianglesKernel(MeshGPU        mesh,
-                           CompactMeshGPU compact_mesh) {
+                           CompactMeshGPU compact_mesh,
+                           uint max_triangle_count) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
-  if (idx < kMaxVertexCount && compact_mesh.triangles_ref_count[idx] > 0) {
+  if (idx < max_triangle_count && compact_mesh.triangles_ref_count[idx] > 0) {
     int addr = atomicAdd(compact_mesh.triangle_counter, 1);
     compact_mesh.triangles[addr].x
             = compact_mesh.vertex_index_remapper[
@@ -590,26 +592,30 @@ void Map::CompressMesh() {
 
   {
     const uint threads_per_block = 256;
-    const dim3 grid_size((kMaxVertexCount + threads_per_block - 1)
+    const dim3 grid_size((mesh_.params().max_vertex_count
+                          + threads_per_block - 1)
                          / threads_per_block, 1);
     const dim3 block_size(threads_per_block, 1);
 
     AssignVertexRemapperKernel <<< grid_size, block_size >>> (
             mesh_.gpu_data(),
-            compact_mesh_.gpu_data());
+            compact_mesh_.gpu_data(),
+            mesh_.params().max_vertex_count);
     checkCudaErrors(cudaDeviceSynchronize());
     checkCudaErrors(cudaGetLastError());
   }
 
   {
     const uint threads_per_block = 256;
-    const dim3 grid_size((kMaxVertexCount + threads_per_block - 1)
+    const dim3 grid_size((mesh_.params().max_triangle_count
+                          + threads_per_block - 1)
                          / threads_per_block, 1);
     const dim3 block_size(threads_per_block, 1);
 
     AssignTrianglesKernel <<< grid_size, block_size >>> (
             mesh_.gpu_data(),
-            compact_mesh_.gpu_data());
+            compact_mesh_.gpu_data(),
+            mesh_.params().max_triangle_count);
     checkCudaErrors(cudaDeviceSynchronize());
     checkCudaErrors(cudaGetLastError());
   }
@@ -653,29 +659,28 @@ void Map::SaveMesh(std::string path) {
     out << ss.str();
   }
 
-#ifdef FINE_GRADIENT
-  LOG(INFO) << "Writing normals";
-  for (uint i = 0; i < compact_vertex_count; ++i) {
-    ss.str("");
-    ss <<  "vn " << normals[i].x << " "
-       << normals[i].y << " "
-       << normals[i].z << "\n";
-    out << ss.str();
+  if (use_fine_gradient_) {
+    LOG(INFO) << "Writing normals";
+    for (uint i = 0; i < compact_vertex_count; ++i) {
+      ss.str("");
+      ss << "vn " << normals[i].x << " "
+         << normals[i].y << " "
+         << normals[i].z << "\n";
+      out << ss.str();
+    }
   }
-#endif
 
   LOG(INFO) << "Writing faces";
   for (uint i = 0; i < compact_triangle_count; ++i) {
     ss.str("");
     int3 idx = triangles[i] + make_int3(1);
-    ss << "f "
-#ifdef FINE_GRADIENT
-       << idx.x << "//" << idx.x << " "
-       << idx.y << "//" << idx.y << " "
-       << idx.z << "//" << idx.z << "\n";
-#else
-       << idx.x << " " << idx.y << " " << idx.z << "\n";
-#endif
+    if (use_fine_gradient_) {
+      ss << "f " << idx.x << "//" << idx.x << " "
+         << idx.y << "//" << idx.y << " "
+         << idx.z << "//" << idx.z << "\n";
+    } else {
+      ss << "f " << idx.x << " " << idx.y << " " << idx.z << "\n";
+    }
     out << ss.str();
   }
 

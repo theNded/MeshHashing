@@ -35,4 +35,3 @@ enable_gradient:      1
 
 max_vertex_count:     10000000
 max_triangle_count:   10000000
-use_fine_gradient:    1
