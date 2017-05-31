@@ -48,9 +48,9 @@ int main(int argc, char** argv) {
   Sensor    sensor(config.sensor_params);
   RayCaster ray_caster(config.ray_caster_params);
 
-  mesh_renderer.free_walk()     = args.free_walk;
-  mesh_renderer.line_only()     = args.line_only;
-  map.use_fine_gradient()       = args.fine_gradient;
+  mesh_renderer.free_walk() = args.free_walk;
+  mesh_renderer.line_only() = args.line_only;
+  map.use_fine_gradient()   = args.fine_gradient;
 
   cv::VideoWriter writer;
   cv::Mat screen;

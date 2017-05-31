@@ -49,7 +49,8 @@ void RendererBase::CompileShader(std::string vert_glsl_path,
   gl_utils::LoadShaders(vert_glsl_path, frag_glsl_path, program_);
   for (auto &uniform_name : uniform_names) {
     int uniform = glGetUniformLocation(program_, uniform_name.c_str());
-    CHECK(uniform >= 0) << "Invalid uniform!";
+    LOG(INFO) << uniform << " : " << uniform_name.c_str();
+    CHECK(uniform >= 0) << "Invalid uniform! ";
     uniforms_.push_back((uint)uniform);
   }
 }
@@ -253,9 +254,9 @@ void MeshRenderer::Render(float3 *vertices, size_t vertex_count,
 
   glUseProgram(program_);
 
-  glm::mat4 transform = glm::mat4(1);
-  transform[1][1] = -1;
-  transform[2][2] = -1;
+  glm::mat4 model_mat = glm::mat4(1);
+  model_mat[1][1] = -1;
+  model_mat[2][2] = -1;
 
   glm::mat4 view_mat;
   cTw = cTw.getTranspose();
@@ -266,16 +267,16 @@ void MeshRenderer::Render(float3 *vertices, size_t vertex_count,
   glm::mat4 mvp;
   if (free_walk_) {
     control_->UpdateCameraPose();
-    mvp = gl_context_.projection_mat() *
-            control_->view_mat() *
-            transform;
+    view_mat = control_->view_mat();
   } else {
-    mvp = gl_context_.projection_mat() *
-            transform *
-            view_mat;// * transform * transform;
+    view_mat = model_mat * view_mat * glm::inverse(model_mat);
   }
+  mvp = gl_context_.projection_mat() * view_mat * model_mat;
 
+  // TODO: make it more general
   glUniformMatrix4fv(uniforms_[0], 1, GL_FALSE, &mvp[0][0]);
+  glUniformMatrix4fv(uniforms_[1], 1, GL_FALSE, &view_mat[0][0]);
+  glUniformMatrix4fv(uniforms_[2], 1, GL_FALSE, &model_mat[0][0]);
   glBindVertexArray(vao_);
 
   // If render mesh only:

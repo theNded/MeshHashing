@@ -100,6 +100,9 @@ public:
     std::vector<std::string> uniform_names;
     uniform_names.clear();
     uniform_names.push_back("mvp");
+    uniform_names.push_back("view_mat");
+    uniform_names.push_back("model_mat");
+
     CompileShader("../shader/mesh_vertex.glsl",
                   "../shader/mesh_fragment.glsl",
                   uniform_names);

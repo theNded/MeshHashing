@@ -14,7 +14,7 @@ static const Dataset datasets[] = {
         {TUM3,           "/home/wei/data/TUM/rgbd_dataset_freiburg3_long_office_household/"},
         {SUN3D,          "/home/wei/data/SUN3D/copyroom/"},
         {SUN3D_ORIGINAL, "/home/wei/data/SUN3D-Princeton/hotel_umd/maryland_hotel3/"},
-        {PKU,            "/home/wei/data/3DVCR/hall2/"}
+        {PKU,            "/home/wei/data/3DVCR/lab3/"}
 };
 
 static const std::string orb_configs[] = {

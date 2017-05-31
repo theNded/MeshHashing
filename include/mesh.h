@@ -48,7 +48,9 @@ struct MeshGPU {
   __device__
   uint AllocVertex() {
     uint addr = atomicSub(&vertex_heap_counter[0], 1);
-    //printf("%d -> %d\n", addr, vertex_heap[addr]);
+    if (addr < 100) {
+      printf("v: %d -> %d\n", addr, vertex_heap[addr]);
+    }
     return vertex_heap[addr];
   }
   __device__
@@ -60,6 +62,9 @@ struct MeshGPU {
   __device__
   uint AllocTriangle() {
     uint addr = atomicSub(&triangle_heap_counter[0], 1);
+    if (addr < 100) {
+      printf("t: %d -> %d\n", addr, vertex_heap[addr]);
+    }
     return triangle_heap[addr];
   }
   __device__

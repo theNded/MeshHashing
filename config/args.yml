@@ -7,10 +7,10 @@
 dataset_type:    3
 
 # Render
-free_walk:       1
+free_walk:       0
 line_only:       1
 new_mesh_only:   0
-fine_gradient:   0
+fine_gradient:   1
 
 # Additional support
 ray_casting:     0

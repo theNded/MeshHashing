@@ -83,7 +83,8 @@ __global__
 /// Their mesh not recycled
 void RecycleGarbageBlocksKernel(HashTableGPU        hash_table,
                                 CompactHashTableGPU compact_hash_table,
-                                VoxelBlocksGPU      blocks) {
+                                VoxelBlocksGPU      blocks,
+                                MeshGPU             mesh) {
   const uint idx = blockIdx.x*blockDim.x + threadIdx.x;
 
   if (idx < (*compact_hash_table.compacted_entry_counter)
@@ -240,6 +241,8 @@ void Map::CollectGarbageBlocks() {
   checkCudaErrors(cudaGetLastError());
 }
 
+// TODO(wei): Check vertex / triangles in detail
+// including garbage collection
 void Map::RecycleGarbageBlocks() {
   const uint threads_per_block = 64;
 
@@ -254,7 +257,8 @@ void Map::RecycleGarbageBlocks() {
   RecycleGarbageBlocksKernel <<<grid_size, block_size >>>(
           hash_table_.gpu_data(),
           compact_hash_table_.gpu_data(),
-          blocks_.gpu_data());
+          blocks_.gpu_data(),
+          mesh_.gpu_data());
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }

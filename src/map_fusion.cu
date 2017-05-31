@@ -175,7 +175,7 @@ void Map::Integrate(Sensor& sensor) {
   CollectInFrustumBlocks(sensor);
   UpdateBlocks(sensor);
 
-  Recycle();
+  //Recycle();
 
   integrated_frame_count_ ++;
 }
