@@ -13,27 +13,20 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 namespace gl_utils {
-Control::Control(gl_utils::Context* context) {
-  window_ = context->window();
-  width_  = context->width();
-  height_ = context->height();
+Control::Control(const Context& context) {
+  window_ = context.window();
+  width_  = context.width();
+  height_ = context.height();
   InitParameters();
 }
 
-Control::Control(GLFWwindow *window, int width, int height) {
+Control::Control(GLFWwindow *window, size_t width, size_t height) {
   window_ = window;
   width_  = width;
   height_ = height;
   InitParameters();
 }
 
-glm::mat4 Control::view_mat() {
-  return view_mat_;
-}
-
-glm::mat4 Control::projection_mat() {
-  return projection_mat_;
-}
 
 void Control::UpdateCameraPose() {
   // glfwGetTime is called only once, the first time this function is called
@@ -54,16 +47,16 @@ void Control::UpdateCameraPose() {
   vertical_angle_   += rotate_speed_ * float(height_ / 2 - ypos);
 #elif defined ROTATION_FROM_KBD
   if (glfwGetKey(window_, GLFW_KEY_I) == GLFW_PRESS) {
-    vertical_angle_ += 0.1f;
+    vertical_angle_ += rotate_speed_ * delta_time;
   }
   if (glfwGetKey(window_, GLFW_KEY_K) == GLFW_PRESS) {
-    vertical_angle_ -= 0.1f;
+    vertical_angle_ -= rotate_speed_ * delta_time;
   }
   if (glfwGetKey(window_, GLFW_KEY_J) == GLFW_PRESS) {
-    horizontal_angle_ += 0.1f;
+    horizontal_angle_ += rotate_speed_ * delta_time;
   }
   if (glfwGetKey(window_, GLFW_KEY_L) == GLFW_PRESS) {
-    horizontal_angle_ -= 0.1f;
+    horizontal_angle_ -= rotate_speed_ * delta_time;
   }
 #endif
 
@@ -114,13 +107,9 @@ void Control::UpdateCameraPose() {
 
 void Control::InitParameters() {
   position_         = glm::vec3(0, 0, 0);
-  horizontal_angle_ = M_PI;
+  horizontal_angle_ = (float)M_PI;
   vertical_angle_   = 0.0f;
-  // In later glm versions, fov_ = glm::radians(45.0f)
-  fov_              = 45.0f;
-  move_speed_       = 1.0f;
-  rotate_speed_     = 0.005f;
-  projection_mat_ = glm::perspective(fov_, (float)width_ / (float)height_,
-                                     0.1f, 100.0f);
+  move_speed_       = 0.5f;
+  rotate_speed_     = 0.2f;
 }
 }

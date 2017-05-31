@@ -7,8 +7,15 @@
 #include <iostream>
 
 #include <glog/logging.h>
+#include <glm/gtc/matrix_transform.hpp>
 
 namespace gl_utils {
+
+/// !!! In later glm versions, fov_ = glm::radians(45.0f)
+const float Context::kDefaultFov   = 45.0f;
+const float Context::kDefaultZnear = 0.1f;
+const float Context::kDefaultZfar  = 100.0f;
+
 Context::Context() {
   width_ = height_ = 0;
   window_ = NULL;
@@ -19,7 +26,8 @@ Context::~Context() {
   glfwTerminate();
 }
 
-int Context::Init(size_t width, size_t height, std::string window_name) {
+int Context::Init(size_t width, size_t height, std::string window_name,
+                  float z_near, float z_far) {
   width_ = width;
   height_ = height;
   // Initialise GLFW
@@ -56,18 +64,10 @@ int Context::Init(size_t width, size_t height, std::string window_name) {
     return -1;
   }
 
+  projection_mat_ = glm::perspective(kDefaultFov,
+                                     (float)width_ / (float)height_,
+                                     z_near, z_far);
+
   return 0;
-}
-
-GLFWwindow *Context::window() const {
-  return window_;
-}
-
-size_t Context::width() {
-  return width_;
-}
-
-size_t Context::height() {
-  return height_;
 }
 }

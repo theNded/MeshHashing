@@ -30,7 +30,7 @@
 #include <glog/logging.h>
 
 #include "params.h"
-#include "config_reader.h"
+#include "dataset_manager.h"
 #include "map.h"
 #include "sensor.h"
 #include "ray_caster.h"
@@ -57,7 +57,7 @@ const std::string kDefaultDatasetPath =
 #endif
 
 std::string path_to_vocabulary = "../../orb_slam2/Vocabulary/ORBvoc.bin";
-std::string path_to_orb_config = "../config/orb/TUM3.yaml";
+std::string path_to_orb_config = "../config/ORB/TUM3.yaml";
 
 extern void SetConstantSDFParams(const SDFParams& params);
 
@@ -76,7 +76,7 @@ int main(int argc, char **argv) {
   std::vector<std::string> color_img_list;
   std::vector<float4x4>    wTcs;
 
-  ConfigReader config;
+  ConfigManager config;
 #if defined(ICL)
   LoadICL(kDefaultDatasetPath, depth_img_list, color_img_list, wTcs);
   config.LoadConfig("../config/icl.yml");
@@ -123,7 +123,7 @@ int main(int argc, char **argv) {
   // Main loop
   int frames = depth_img_list.size() - 1;
 
-  for (int i = 0; i < frames; ++i) {
+  for (int i = 0; i < 10; ++i) {
     LOG(INFO) << i;
     cv::Mat depth = cv::imread(depth_img_list[i], -1);
     cv::Mat color = cv::imread(color_img_list[i]);

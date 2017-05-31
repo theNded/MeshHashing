@@ -151,6 +151,7 @@ Sensor::Sensor(SensorParams &sensor_params) {
   checkCudaErrors(cudaMallocArray(&gpu_data_.color_array,
                                   &gpu_data_.color_channel_desc,
                                   sensor_params_.width, sensor_params_.height));
+  BindGPUTexture();
 }
 
 Sensor::~Sensor() {

@@ -9,6 +9,8 @@
 #include <helper_cuda.h>
 #include <helper_math.h>
 
+#include "params.h"
+
 struct __ALIGN__(4) Vertex {
   float3 pos;
   float3 normal;
@@ -72,15 +74,16 @@ struct MeshGPU {
 class Mesh {
 private:
   MeshGPU gpu_data_;
+  MeshParams mesh_params_;
 
-  void Alloc(uint vertex_count, uint triangle_count);
+  void Alloc(const MeshParams &mesh_params);
   void Free();
 
 public:
   Mesh();
   ~Mesh();
 
-  void Resize(uint vertex_count, uint triangle_count);
+  void Resize(const MeshParams &mesh_params);
   void Reset();
 
   MeshGPU& gpu_data() {
@@ -105,8 +108,9 @@ struct CompactMeshGPU {
 class CompactMesh {
 private:
   CompactMeshGPU gpu_data_;
+  MeshParams     mesh_params_;
 
-  void Alloc(uint vertex_count, uint triangle_count);
+  void Alloc(const MeshParams& mesh_params);
   void Free();
 
 public:
@@ -126,7 +130,7 @@ public:
     return gpu_data_.triangles;
   }
 
-  void Resize(uint vertex_count, uint triangle_count);
+  void Resize(const MeshParams &mesh_params);
   void Reset();
 
   CompactMeshGPU& gpu_data() {

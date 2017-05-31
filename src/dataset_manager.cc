@@ -1,30 +1,16 @@
 //
-// Created by wei on 17-4-30.
+// Created by wei on 17-5-31.
 //
 
-#ifndef VH_CONFIG_READER
-#define VH_CONFIG_READER
+#include "dataset_manager.h"
 
-#include <string>
-#include <vector>
+#include <fstream>
 #include <unordered_map>
 #include <unordered_set>
 
 #include <opencv2/opencv.hpp>
 #include <glog/logging.h>
 
-#include "matrix.h"
-#include "params.h"
-
-enum DatasetType {
-  TUM1,
-  TUM2,
-  TUM3,
-  ICL,
-  SUN3D,
-  SUN3D_ORIGINAL,
-  PKU
-};
 
 void LoadHashParams(std::string path, HashParams& params) {
   cv::FileStorage fs(path, cv::FileStorage::READ);
@@ -33,6 +19,13 @@ void LoadHashParams(std::string path, HashParams& params) {
   params.entry_count      = (int)fs["entry_count"];
   params.linked_list_size = (int)fs["linked_list_size"];
   params.value_capacity   = (int)fs["value_capacity"];
+}
+
+void LoadMeshParams(std::string path, MeshParams &params) {
+  cv::FileStorage fs(path, cv::FileStorage::READ);
+  params.max_vertex_count   = (int)fs["max_vertex_count"];
+  params.max_triangle_count = (int)fs["max_triangle_count"];
+  params.use_fine_gradient  = (int)fs["use_fine_gradient"];
 }
 
 void LoadSDFParams(std::string path, SDFParams& params) {
@@ -276,69 +269,105 @@ void Load3DVCR(std::string dataset_path,
   }
 }
 
+////////////////////
+/// class ConfigManager
+////////////////////
+void ConfigManager::LoadConfig(std::string config_path) {
+  LoadHashParams(config_path, hash_params);
+  LoadMeshParams(config_path, mesh_params);
+  LoadSDFParams(config_path, sdf_params);
+  LoadSensorParams(config_path, sensor_params);
+  LoadRayCasterParams(config_path, ray_caster_params);
 
-struct ConfigReader {
-  HashParams      hash_params;
-  SDFParams       sdf_params;
-  SensorParams    sensor_params;
-  RayCasterParams ray_caster_params;
+  ray_caster_params.width = sensor_params.width;
+  ray_caster_params.height = sensor_params.height;
+  ray_caster_params.fx = sensor_params.fx;
+  ray_caster_params.fy = sensor_params.fy;
+  ray_caster_params.cx = sensor_params.cx;
+  ray_caster_params.cy = sensor_params.cy;
+}
 
-  void LoadConfig(std::string config_path) {
-    LoadHashParams(config_path, hash_params);
-    LoadSDFParams(config_path, sdf_params);
-    LoadSensorParams(config_path, sensor_params);
-    LoadRayCasterParams(config_path, ray_caster_params);
+void ConfigManager::LoadConfig(DatasetType dataset_type) {
+  const std::string kConfigPaths[] = {
+          "../config/ICL.yml",
+          "../config/TUM1.yml",
+          "../config/TUM2.yml",
+          "../config/TUM3.yml",
+          "../config/SUN3D.yml",
+          "../config/SUN3D_ORIGINAL.yml",
+          "../config/PKU.yml"
+  };
 
-    ray_caster_params.width  = sensor_params.width;
-    ray_caster_params.height = sensor_params.height;
-    ray_caster_params.fx = sensor_params.fx;
-    ray_caster_params.fy = sensor_params.fy;
-    ray_caster_params.cx = sensor_params.cx;
-    ray_caster_params.cy = sensor_params.cy;
+  std::string config_path = kConfigPaths[dataset_type];
+  LoadConfig(config_path);
+}
 
-    LOG(INFO) << sensor_params.fx;
-    LOG(INFO) << sensor_params.fy;
-    LOG(INFO) << sensor_params.cx;
-    LOG(INFO) << sensor_params.cy;
+////////////////////
+/// class DataManager
+////////////////////
+void DataManager::LoadDataset(Dataset dataset) {
+  LoadDataset(dataset.path, dataset.type);
+}
+
+void DataManager::LoadDataset(std::string dataset_path,
+                             DatasetType dataset_type) {
+  switch (dataset_type) {
+    case ICL:
+      LoadICL(dataset_path, depth_image_list, color_image_list, wTcs);
+      break;
+    case SUN3D:
+      LoadSUN3D(dataset_path, depth_image_list, color_image_list, wTcs);
+      break;
+    case SUN3D_ORIGINAL:
+      LoadSUN3DOriginal(dataset_path, depth_image_list, color_image_list, wTcs);
+      break;
+    case TUM1:
+      LoadTUM(dataset_path, depth_image_list, color_image_list, wTcs);
+      break;
+    case TUM2:
+      LoadTUM(dataset_path, depth_image_list, color_image_list, wTcs);
+      break;
+    case TUM3:
+      LoadTUM(dataset_path, depth_image_list, color_image_list, wTcs);
+      break;
+    case PKU:
+      Load3DVCR(dataset_path, depth_image_list, color_image_list, wTcs);
+      break;
   }
+}
 
-  void Load(std::string dataset_path,
-            std::vector<std::string> &depth_image_list,
-            std::vector<std::string> &color_image_list,
-            std::vector<float4x4>& wTcs,
-            DatasetType dataset_type) {
-    switch (dataset_type) {
-      case ICL:
-        LoadICL(dataset_path, depth_image_list, color_image_list, wTcs);
-        LoadConfig("../config/ICL.yml");
-        break;
-      case SUN3D:
-        LoadSUN3D(dataset_path, depth_image_list, color_image_list, wTcs);
-        LoadConfig("../config/SUN3D.yml");
-        break;
-      case SUN3D_ORIGINAL:
-        LoadSUN3DOriginal(dataset_path, depth_image_list, color_image_list, wTcs);
-        LoadConfig("../config/SUN3D_ORIGINAL.yml");
-        break;
-      case TUM1:
-        LoadTUM(dataset_path, depth_image_list, color_image_list, wTcs);
-        LoadConfig("../config/TUM1.yml");
-        break;
-      case TUM2:
-        LoadTUM(dataset_path, depth_image_list, color_image_list, wTcs);
-        LoadConfig("../config/TUM2.yml");
-        break;
-      case TUM3:
-        LoadTUM(dataset_path, depth_image_list, color_image_list, wTcs);
-        LoadConfig("../config/TUM3.yml");
-        break;
-      case PKU:
-        Load3DVCR(dataset_path, depth_image_list, color_image_list, wTcs);
-        LoadConfig("../config/PKU.yml");
-        break;
-    }
+bool DataManager::ProvideData(cv::Mat &depth,
+                              cv::Mat &color) {
+  if (frame_id > depth_image_list.size()) {
+    LOG(ERROR) << "All images provided!";
+    return false;
   }
-};
+  depth = cv::imread(depth_image_list[frame_id], CV_LOAD_IMAGE_UNCHANGED);
+  color = cv::imread(color_image_list[frame_id]);
+  if (color.channels() == 3) {
+    cv::cvtColor(color, color, CV_BGR2BGRA);
+  }
+  ++frame_id;
 
+  return true;
+  // TODO: Network situation
+}
 
-#endif //VH_CONFIG_READER
+bool DataManager::ProvideData(cv::Mat &depth,
+                              cv::Mat &color,
+                              float4x4 &wTc) {
+  if (frame_id > depth_image_list.size()) {
+    LOG(ERROR) << "All images provided!";
+    return false;
+  }
+  depth = cv::imread(depth_image_list[frame_id], CV_LOAD_IMAGE_UNCHANGED);
+  color = cv::imread(color_image_list[frame_id]);
+  if (color.channels() == 3) {
+    cv::cvtColor(color, color, CV_BGR2BGRA);
+  }
+  wTc   = wTcs[0].getInverse() * wTcs[frame_id];
+  ++frame_id;
+
+  return true;
+  // TODO: Network situation
+}

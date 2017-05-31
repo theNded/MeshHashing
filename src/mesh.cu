@@ -2,6 +2,7 @@
 
 #include <helper_cuda.h>
 #include <device_launch_parameters.h>
+#include <params.h>
 
 ////////////////////
 /// class Mesh
@@ -11,15 +12,20 @@
 /// Device code
 ////////////////////
 __global__
-void ResetHeapKernel(MeshGPU mesh) {
+void ResetHeapKernel(MeshGPU mesh,
+                     int max_vertex_count,
+                     int max_triangle_count) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
 
-  if (idx < kMaxVertexCount) {
-    mesh.vertex_heap[idx] = kMaxVertexCount - idx - 1;
-    mesh.triangle_heap[idx] = kMaxVertexCount - idx - 1;
+  if (idx < max_vertex_count) {
+    mesh.vertex_heap[idx] = max_vertex_count - idx - 1;
     mesh.vertices[idx].Clear();
+  }
+  if (idx < max_triangle_count) {
+    mesh.triangle_heap[idx] = max_triangle_count - idx - 1;
     mesh.triangles[idx].Clear();
   }
+
 }
 
 ////////////////////
@@ -31,18 +37,18 @@ Mesh::~Mesh() {
   Free();
 }
 
-void Mesh::Alloc(uint vertex_count, uint triangle_count) {
+void Mesh::Alloc(const MeshParams &mesh_params) {
   checkCudaErrors(cudaMalloc(&gpu_data_.vertex_heap,
-                             sizeof(uint) * kMaxVertexCount));
+                             sizeof(uint) * mesh_params.max_vertex_count));
   checkCudaErrors(cudaMalloc(&gpu_data_.vertex_heap_counter, sizeof(uint)));
   checkCudaErrors(cudaMalloc(&gpu_data_.vertices,
-                             sizeof(Vertex) * kMaxVertexCount));
+                             sizeof(Vertex) * mesh_params.max_vertex_count));
 
   checkCudaErrors(cudaMalloc(&gpu_data_.triangle_heap,
-                             sizeof(uint) * kMaxVertexCount));
+                             sizeof(uint) * mesh_params.max_triangle_count));
   checkCudaErrors(cudaMalloc(&gpu_data_.triangle_heap_counter, sizeof(uint)));
   checkCudaErrors(cudaMalloc(&gpu_data_.triangles,
-                             sizeof(Triangle) * kMaxVertexCount));
+                             sizeof(Triangle) * mesh_params.max_triangle_count));
 }
 
 void Mesh::Free() {
@@ -55,17 +61,19 @@ void Mesh::Free() {
   checkCudaErrors(cudaFree(gpu_data_.triangles));
 }
 
-void Mesh::Resize(uint vertex_count, uint triangle_count) {
-  Alloc(vertex_count, triangle_count);
+void Mesh::Resize(const MeshParams &mesh_params) {
+  mesh_params_ = mesh_params;
+  Alloc(mesh_params);
   Reset();
 }
 
 void Mesh::Reset() {
-  uint val = kMaxVertexCount - 1;
-  checkCudaErrors(cudaMemcpy(gpu_data_.vertex_heap_counter, &val,
+  checkCudaErrors(cudaMemcpy(gpu_data_.vertex_heap_counter,
+                             &mesh_params_.max_vertex_count,
                              sizeof(uint),
                              cudaMemcpyHostToDevice));
-  checkCudaErrors(cudaMemcpy(gpu_data_.triangle_heap_counter, &val,
+  checkCudaErrors(cudaMemcpy(gpu_data_.triangle_heap_counter,
+                             &mesh_params_.max_triangle_count,
                              sizeof(uint),
                              cudaMemcpyHostToDevice));
 
@@ -74,7 +82,9 @@ void Mesh::Reset() {
                        / threads_per_block, 1);
   const dim3 block_size(threads_per_block, 1);
 
-  ResetHeapKernel<<<grid_size, block_size>>>(gpu_data_);
+  ResetHeapKernel<<<grid_size, block_size>>>(gpu_data_,
+          mesh_params_.max_vertex_count,
+          mesh_params_.max_triangle_count);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }
@@ -90,25 +100,25 @@ CompactMesh::~CompactMesh() {
   Free();
 }
 
-void CompactMesh::Alloc(uint vertex_count, uint triangle_count) {
+void CompactMesh::Alloc(const MeshParams &mesh_params) {
   checkCudaErrors(cudaMalloc(&gpu_data_.vertex_index_remapper,
-                             sizeof(int) * kMaxVertexCount));
+                             sizeof(int) * mesh_params.max_vertex_count));
 
   checkCudaErrors(cudaMalloc(&gpu_data_.vertex_counter,
                              sizeof(uint)));
   checkCudaErrors(cudaMalloc(&gpu_data_.vertices_ref_count,
-                             sizeof(int) * kMaxVertexCount));
+                             sizeof(int) * mesh_params.max_vertex_count));
   checkCudaErrors(cudaMalloc(&gpu_data_.vertices,
-                             sizeof(float3) * kMaxVertexCount));
+                             sizeof(float3) * mesh_params.max_vertex_count));
   checkCudaErrors(cudaMalloc(&gpu_data_.normals,
-                             sizeof(float3) * kMaxVertexCount));
+                             sizeof(float3) * mesh_params.max_vertex_count));
 
   checkCudaErrors(cudaMalloc(&gpu_data_.triangle_counter,
                              sizeof(uint)));
   checkCudaErrors(cudaMalloc(&gpu_data_.triangles_ref_count,
-                             sizeof(int) * kMaxVertexCount));
+                             sizeof(int) * mesh_params.max_triangle_count));
   checkCudaErrors(cudaMalloc(&gpu_data_.triangles,
-                             sizeof(int3) * kMaxVertexCount));
+                             sizeof(int3) * mesh_params.max_triangle_count));
 }
 
 void CompactMesh::Free() {
@@ -124,21 +134,22 @@ void CompactMesh::Free() {
   checkCudaErrors(cudaFree(gpu_data_.triangles));
 }
 
-void CompactMesh::Resize(uint vertex_count, uint triangle_count) {
-  Alloc(vertex_count, triangle_count);
+void CompactMesh::Resize(const MeshParams &mesh_params) {
+  mesh_params_ = mesh_params;
+  Alloc(mesh_params);
   Reset();
 }
 
 /// Reset
 void CompactMesh::Reset() {
   checkCudaErrors(cudaMemset(gpu_data_.vertex_index_remapper, 0xff,
-                             sizeof(int) * kMaxVertexCount));
+                             sizeof(int) * mesh_params_.max_vertex_count));
   checkCudaErrors(cudaMemset(gpu_data_.vertices_ref_count, 0,
-                             sizeof(int) * kMaxVertexCount));
+                             sizeof(int) * mesh_params_.max_vertex_count));
   checkCudaErrors(cudaMemset(gpu_data_.vertex_counter,
                              0, sizeof(uint)));
   checkCudaErrors(cudaMemset(gpu_data_.triangles_ref_count, 0,
-                             sizeof(int) * kMaxVertexCount));
+                             sizeof(int) * mesh_params_.max_triangle_count));
   checkCudaErrors(cudaMemset(gpu_data_.triangle_counter,
                              0, sizeof(uint)));
 }

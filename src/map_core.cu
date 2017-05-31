@@ -165,13 +165,14 @@ void CollectAllBlocksKernel(HashTableGPU        hash_table,
 ///////////////////
 
 /// Life cycle
-Map::Map(const HashParams &hash_params) {
+Map::Map(const HashParams &hash_params, const MeshParams &mesh_params) {
   hash_table_.Resize(hash_params);
   compact_hash_table_.Resize(hash_params.entry_count);
   blocks_.Resize(hash_params.value_capacity);
 
-  mesh_.Resize(kMaxVertexCount, kMaxVertexCount);
-  compact_mesh_.Resize(kMaxVertexCount, kMaxVertexCount);
+  mesh_.Resize(mesh_params);
+  use_fine_gradient_ = mesh_params.use_fine_gradient;
+  compact_mesh_.Resize(mesh_params);
 }
 
 Map::~Map() {}

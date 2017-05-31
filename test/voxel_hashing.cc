@@ -18,70 +18,40 @@
 
 #include "renderer.h"
 
-#include "config_reader.h"
-#include "control.h"
+#include "dataset_manager.h"
 
-const DatasetType dataset_type = PKU;
-
-const std::string kICLPath   =
-        "/home/wei/data/ICL/lv1/";
-const std::string kTUM1Path  =
-        "/home/wei/data/TUM/rgbd_dataset_freiburg1_xyz/";
-const std::string kTUM2Path  =
-        "/home/wei/data/TUM/rgbd_dataset_freiburg2_xyz/";
-const std::string kTUM3Path  =
-        "/home/wei/data/TUM/rgbd_dataset_freiburg3_long_office_household/";
-const std::string kSUN3DPath =
-        "/home/wei/data/SUN3D/copyroom/";
-const std::string kSUN3DOriginalPath =
-        "/home/wei/data/SUN3D-Princeton/hotel_umd/maryland_hotel3/";
-const std::string kPKUPath   =
-        "/home/wei/data/3DVCR/hall2/";
+const Dataset datasets[] = {
+        {ICL,            "/home/wei/data/ICL/lv1/"},
+        {TUM1,           "/home/wei/data/TUM/rgbd_dataset_freiburg1_xyz/"},
+        {TUM2,           "/home/wei/data/TUM/rgbd_dataset_freiburg2_xyz/"},
+        {TUM3,           "/home/wei/data/TUM/rgbd_dataset_freiburg3_long_office_household/"},
+        {SUN3D,          "/home/wei/data/SUN3D/copyroom/"},
+        {SUN3D_ORIGINAL, "/home/wei/data/SUN3D-Princeton/hotel_umd/maryland_hotel3/"},
+        {PKU,            "/home/wei/data/3DVCR/hall2/"}
+};
 
 /// Refer to constant.cu
 extern void SetConstantSDFParams(const SDFParams& params);
 
 int main(int argc, char** argv) {
-  /// Load images
-  std::vector<std::string> depth_img_list;
-  std::vector<std::string> color_img_list;
-  std::vector<float4x4>    wTc;
+  ConfigManager config;
+  DataManager   rgbd_data;
 
-  ConfigReader config;
-  std::string dataset_path = "";
+  DatasetType dataset_type = TUM2;
 
   /// Probably the path will change
-  switch (dataset_type) {
-    case TUM1:
-      config.Load(kTUM1Path, depth_img_list, color_img_list, wTc, TUM1);
-      break;
-    case TUM2:
-      config.Load(kTUM2Path, depth_img_list, color_img_list, wTc, TUM2);
-      break;
-    case TUM3:
-      config.Load(kTUM3Path, depth_img_list, color_img_list, wTc, TUM3);
-      break;
-    case ICL:
-      config.Load(kICLPath, depth_img_list, color_img_list, wTc, ICL);
-      break;
-    case SUN3D:
-      config.Load(kSUN3DPath, depth_img_list, color_img_list, wTc, SUN3D);
-      break;
-    case SUN3D_ORIGINAL:
-      config.Load(kSUN3DOriginalPath, depth_img_list, color_img_list, wTc, SUN3D_ORIGINAL);
-      break;
-    case PKU:
-      config.Load(kPKUPath, depth_img_list, color_img_list, wTc, PKU);
-      break;
-    default:
-      break;
-  }
+  config.LoadConfig(dataset_type);
+  rgbd_data.LoadDataset(datasets[dataset_type]);
 
   std::vector<std::string> uniform_names;
   MeshRenderer mesh_renderer("Mesh",
-                             config.ray_caster_params.width,
-                             config.ray_caster_params.height);
+                             config.sensor_params.width,
+                             config.sensor_params.height,
+                             config.mesh_params.max_vertex_count,
+                             config.mesh_params.max_triangle_count);
   mesh_renderer.free_walk() = true;
+  mesh_renderer.line_only() = true;
+  mesh_renderer.new_mesh_only() = false;
 
   /// Support only one GL instance yet
   uniform_names.clear();
@@ -91,11 +61,10 @@ int main(int argc, char** argv) {
                               uniform_names);
   SetConstantSDFParams(config.sdf_params);
 
-  Map voxel_map(config.hash_params);
+  Map voxel_map(config.hash_params, config.mesh_params);
   LOG(INFO) << "Map allocated";
 
   Sensor sensor(config.sensor_params);
-  sensor.BindGPUTexture();
 
   RayCaster ray_caster(config.ray_caster_params);
 
@@ -104,27 +73,28 @@ int main(int argc, char** argv) {
 
   std::chrono::time_point<std::chrono::system_clock> start, end;
   start = std::chrono::system_clock::now();
-  int frames = depth_img_list.size() - 1;
+  int frames = rgbd_data.depth_image_list.size() - 1;
 
-  for (int i = 0; i < 10; ++i) {
+  //cv::Mat capture = cv::Mat(480, 640, CV_8UC3);
+
+  cv::Mat color, depth;
+  float4x4 cTw;
+  for (int i = 0; i < frames; ++i) {
     LOG(INFO) << i;
-    cv::Mat depth = cv::imread(depth_img_list[i], -1);
-    cv::Mat color = cv::imread(color_img_list[i]);
-
-    cv::cvtColor(color, color, CV_BGR2BGRA);
-
+    rgbd_data.ProvideData(depth, color, cTw);
     sensor.Process(depth, color);
-    float4x4 c0Tc = wTc[0].getInverse() * wTc[i];
-    sensor.set_transform(c0Tc);
+    sensor.set_transform(cTw);
 
     voxel_map.Integrate(sensor, NULL);
     voxel_map.MarchingCubes();
 
-//    ray_caster.Cast(voxel_map, c0Tc.getInverse());
-//    cv::imshow("display", ray_caster.normal_image());
-//    cv::waitKey(1);
+    ray_caster.Cast(voxel_map, cTw.getInverse());
+    cv::imshow("display", ray_caster.normal_image());
+    cv::waitKey(1);
 
-    voxel_map.CollectAllBlocks();
+    if (! mesh_renderer.new_mesh_only()) {
+      voxel_map.CollectAllBlocks();
+    }
     voxel_map.CompressMesh();
     mesh_renderer.Render(voxel_map.compact_mesh().vertices(),
                          (size_t)voxel_map.compact_mesh().vertex_count(),
@@ -132,7 +102,7 @@ int main(int argc, char** argv) {
                          (size_t)voxel_map.compact_mesh().vertex_count(),
                          voxel_map.compact_mesh().triangles(),
                          (size_t)voxel_map.compact_mesh().triangle_count(),
-                         c0Tc.getInverse());
+                         cTw.getInverse());
 
     end = std::chrono::system_clock::now();
     std::chrono::duration<double> seconds = end - start;

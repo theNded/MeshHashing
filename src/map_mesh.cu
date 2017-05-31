@@ -96,13 +96,14 @@ inline int AllocateVertex(HashTableGPU &hash_table,
                           VoxelBlocksGPU &blocks,
                           MeshGPU& mesh,
                           int& vertex_ptr,
-                          const float3& vertex_pos) {
+                          const float3& vertex_pos,
+                          bool use_fine_gradient) {
   int ptr = vertex_ptr;
   if (ptr == -1) ptr = mesh.AllocVertex();
   mesh.vertices[ptr].pos    = vertex_pos;
-#ifdef FINE_GRADIENT
-  mesh.vertices[ptr].normal = GradientAtPoint(hash_table, blocks, vertex_pos);
-#endif
+  if (use_fine_gradient) {
+    mesh.vertices[ptr].normal = GradientAtPoint(hash_table, blocks, vertex_pos);
+  }
   vertex_ptr = ptr;
   return ptr;
 }
@@ -119,8 +120,10 @@ __global__
 void MarchingCubesKernel(HashTableGPU        hash_table,
                          CompactHashTableGPU compact_hash_table,
                          VoxelBlocksGPU      blocks,
-                         uchar3 mask1, uchar3 mask2,// use this to avoid conflict
-                         MeshGPU mesh_data) {
+                         MeshGPU             mesh_data,
+                         uchar3              mask1,
+                         uchar3              mask2,// use this to avoid conflict
+                         bool                use_fine_gradient) {
   const float isolevel = 0;
 
   const HashEntry &map_entry = compact_hash_table.compacted_entries[blockIdx.x];
@@ -266,28 +269,28 @@ void MarchingCubesKernel(HashTableGPU        hash_table,
 
     MeshCube &cube = GetMeshCube(hash_table, blocks, map_entry,
                                  voxel_local_pos, make_uint3(0, 1, 1));
-    vertex_ptr[0] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.x, vertex_pos);
+    vertex_ptr[0] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.x, vertex_pos, use_fine_gradient);
   }
   if (kEdgeTable[cube_index] & 2) {
     vertex_pos = VertexIntersection(p[1], p[2], d[1], d[2], isolevel);
 
     MeshCube &cube = GetMeshCube(hash_table, blocks, map_entry,
                                  voxel_local_pos, make_uint3(1, 1, 0));
-    vertex_ptr[1] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.z, vertex_pos);
+    vertex_ptr[1] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.z, vertex_pos, use_fine_gradient);
   }
   if (kEdgeTable[cube_index] & 4) {
     vertex_pos = VertexIntersection(p[2], p[3], d[2], d[3], isolevel);
 
     MeshCube &cube = GetMeshCube(hash_table, blocks, map_entry,
                                  voxel_local_pos, make_uint3(0, 1, 0));
-    vertex_ptr[2] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.x, vertex_pos);
+    vertex_ptr[2] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.x, vertex_pos, use_fine_gradient);
   }
   if (kEdgeTable[cube_index] & 8) {
     vertex_pos = VertexIntersection(p[3], p[0], d[3], d[0], isolevel);
 
     MeshCube &cube = GetMeshCube(hash_table, blocks, map_entry,
                                  voxel_local_pos, make_uint3(0, 1, 0));
-    vertex_ptr[3] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.z, vertex_pos);
+    vertex_ptr[3] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.z, vertex_pos, use_fine_gradient);
   }
 
   /// plane y = 0
@@ -296,28 +299,28 @@ void MarchingCubesKernel(HashTableGPU        hash_table,
 
     MeshCube &cube = GetMeshCube(hash_table, blocks, map_entry,
                                  voxel_local_pos, make_uint3(0, 0, 1));
-    vertex_ptr[4] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.x, vertex_pos);
+    vertex_ptr[4] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.x, vertex_pos, use_fine_gradient);
   }
   if (kEdgeTable[cube_index] & 32) {
     vertex_pos = VertexIntersection(p[5], p[6], d[5], d[6], isolevel);
 
     MeshCube &cube = GetMeshCube(hash_table, blocks, map_entry,
                                  voxel_local_pos, make_uint3(1, 0, 0));
-    vertex_ptr[5] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.z, vertex_pos);
+    vertex_ptr[5] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.z, vertex_pos, use_fine_gradient);
   }
   if (kEdgeTable[cube_index] & 64) {
     vertex_pos = VertexIntersection(p[6], p[7], d[6], d[7], isolevel);
 
     MeshCube &cube = GetMeshCube(hash_table, blocks, map_entry,
                                  voxel_local_pos, make_uint3(0, 0, 0));
-    vertex_ptr[6] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.x, vertex_pos);
+    vertex_ptr[6] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.x, vertex_pos, use_fine_gradient);
   }
   if (kEdgeTable[cube_index] & 128) {
     vertex_pos = VertexIntersection(p[7], p[4], d[7], d[4], isolevel);
 
     MeshCube &cube = GetMeshCube(hash_table, blocks, map_entry,
                                  voxel_local_pos, make_uint3(0, 0, 0));
-    vertex_ptr[7] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.z, vertex_pos);
+    vertex_ptr[7] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.z, vertex_pos, use_fine_gradient);
   }
 
   /// vertical
@@ -326,14 +329,14 @@ void MarchingCubesKernel(HashTableGPU        hash_table,
 
     MeshCube &cube = GetMeshCube(hash_table, blocks, map_entry,
                                  voxel_local_pos, make_uint3(0, 0, 1));
-    vertex_ptr[8] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.y, vertex_pos);
+    vertex_ptr[8] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.y, vertex_pos, use_fine_gradient);
   }
   if (kEdgeTable[cube_index] & 512) {
     vertex_pos = VertexIntersection(p[5], p[1], d[5], d[1], isolevel);
 
     MeshCube &cube = GetMeshCube(hash_table, blocks, map_entry,
                                  voxel_local_pos, make_uint3(1, 0, 1));
-    vertex_ptr[9] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.y, vertex_pos);
+    vertex_ptr[9] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.y, vertex_pos, use_fine_gradient);
   }
   if (kEdgeTable[cube_index] & 1024) {
     vertex_pos = VertexIntersection(p[6], p[2], d[6], d[2], isolevel);
@@ -341,7 +344,7 @@ void MarchingCubesKernel(HashTableGPU        hash_table,
     MeshCube &cube = GetMeshCube(hash_table, blocks, map_entry,
                                  voxel_local_pos, make_uint3(1, 0, 0));
     vertex_ptr[10] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.y,
-                                    vertex_pos);
+                                    vertex_pos, use_fine_gradient);
   }
   if (kEdgeTable[cube_index] & 2048) {
     vertex_pos = VertexIntersection(p[7], p[3], d[7], d[3], isolevel);
@@ -349,7 +352,7 @@ void MarchingCubesKernel(HashTableGPU        hash_table,
     MeshCube &cube = GetMeshCube(hash_table, blocks, map_entry,
                                  voxel_local_pos, make_uint3(0, 0, 0));
     vertex_ptr[11] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.y,
-                                    vertex_pos);
+                                    vertex_pos, use_fine_gradient);
   }
 
   int i = 0;
@@ -378,15 +381,15 @@ void MarchingCubesKernel(HashTableGPU        hash_table,
     triangle.vertex_ptrs.y = vertex_ptr[kTriangleTable[cube_index][t + 1]];
     triangle.vertex_ptrs.z = vertex_ptr[kTriangleTable[cube_index][t + 2]];
 
-#ifndef FINE_GRADIENT
-    float3 p0 = mesh_data.vertices[triangle.vertex_ptrs.x].pos;
-    float3 p1 = mesh_data.vertices[triangle.vertex_ptrs.y].pos;
-    float3 p2 = mesh_data.vertices[triangle.vertex_ptrs.z].pos;
-    float3 n = normalize(cross(p2 - p0, p1 - p0));
-    mesh_data.vertices[triangle.vertex_ptrs.x].normal = n;
-    mesh_data.vertices[triangle.vertex_ptrs.y].normal = n;
-    mesh_data.vertices[triangle.vertex_ptrs.z].normal = n;
-#endif
+    if (! use_fine_gradient) {
+      float3 p0 = mesh_data.vertices[triangle.vertex_ptrs.x].pos;
+      float3 p1 = mesh_data.vertices[triangle.vertex_ptrs.y].pos;
+      float3 p2 = mesh_data.vertices[triangle.vertex_ptrs.z].pos;
+      float3 n = normalize(cross(p2 - p0, p1 - p0));
+      mesh_data.vertices[triangle.vertex_ptrs.x].normal = n;
+      mesh_data.vertices[triangle.vertex_ptrs.y].normal = n;
+      mesh_data.vertices[triangle.vertex_ptrs.z].normal = n;
+    }
 
     atomicAdd(&mesh_data.vertices[triangle.vertex_ptrs.y].ref_count, 1);
     atomicAdd(&mesh_data.vertices[triangle.vertex_ptrs.x].ref_count, 1);
@@ -523,8 +526,9 @@ void Map::MarchingCubes() {
           hash_table_.gpu_data(),
           compact_hash_table_.gpu_data(),
           blocks_.gpu_data(),
+          mesh_.gpu_data(),
           make_uchar3(0, 0, 0), make_uchar3(1, 1, 1),
-          mesh_.gpu_data());
+          use_fine_gradient_);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 

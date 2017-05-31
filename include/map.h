@@ -22,6 +22,7 @@ private:
   CompactMesh      compact_mesh_;
 
   uint integrated_frame_count_;
+  bool use_fine_gradient_;
 
 ////////////////////
 /// Core
@@ -40,7 +41,7 @@ public:
   void CollectAllBlocks();
 
   /// Life cycle
-  Map(const HashParams& hash_params);
+  Map(const HashParams& hash_params, const MeshParams& mesh_params);
   ~Map();
 
   /// Reset and recycle
