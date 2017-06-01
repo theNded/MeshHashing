@@ -94,6 +94,10 @@ void LoadICL(std::string dataset_path,
   std::ifstream traj_stream(dataset_path + "traj0.gt.freiburg");
   std::string ts_img, img_path, ts_gt;
   float tx, ty, tz, qx, qy, qz, qw;
+  float4x4 rTl;
+  rTl.setIdentity();
+  rTl.entries2[1][1] = -1;
+
   while (traj_stream >> ts_img
                      >> tx >> ty >> tz
                      >> qx >> qy >> qz >> qw) {
@@ -113,6 +117,8 @@ void LoadICL(std::string dataset_path,
     wTc.m33 = 1 - 2 * qx * qx - 2 * qy * qy;
     wTc.m34 = tz;
     wTc.m44 = 1;
+
+    wTc = rTl * wTc * rTl.getInverse();
     wTcs.push_back(wTc);
   }
 }
