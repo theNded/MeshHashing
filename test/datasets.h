@@ -18,7 +18,7 @@ static const Dataset datasets[] = {
 };
 
 static const std::string orb_configs[] = {
-        "", // ICL nill
+        "../config/ORB/ICL.yaml", // ICL nill
         "../config/ORB/TUM1.yaml",
         "../config/ORB/TUM2.yaml",
         "../config/ORB/TUM3.yaml",

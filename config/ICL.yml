@@ -16,7 +16,7 @@ weight_upper_bound:        255
 
 # Sensor params
 fx:              481.2
-fy:              -480
+fy:              480
 cx:              319.5
 cy:              239.5
 min_depth_range: 0.5
