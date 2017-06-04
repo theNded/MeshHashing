@@ -81,7 +81,7 @@ int main(int argc, char** argv) {
 
     if (args.ray_casting) {
       ray_caster.Cast(map, cTw);
-      cv::imshow("RayCasting", ray_caster.normal_image());
+      cv::imshow("RayCasting", ray_caster.surface_image());
       cv::waitKey(1);
     }
 

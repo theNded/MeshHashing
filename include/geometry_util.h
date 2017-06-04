@@ -188,4 +188,38 @@ bool IsBlockInCameraFrustum(float4x4 c_T_w, const int3& block_pos,
   return IsPointInCameraFrustum(c_T_w, world_pos, sensor_params);
 }
 
+/// Util: Depth to RGB
+__device__
+inline float3 HSVToRGB(const float3& hsv) {
+  float H = hsv.x;
+  float S = hsv.y;
+  float V = hsv.z;
+
+  float hd = H/60.0f;
+  uint h = (uint)hd;
+  float f = hd-h;
+
+  float p = V*(1.0f-S);
+  float q = V*(1.0f-S*f);
+  float t = V*(1.0f-S*(1.0f-f));
+
+  if(h == 0 || h == 6) {
+    return make_float3(V, t, p);
+  }
+  else if(h == 1) {
+    return make_float3(q, V, p);
+  }
+  else if(h == 2) {
+    return make_float3(p, V, t);
+  }
+  else if(h == 3) {
+    return make_float3(p, q, V);
+  }
+  else if(h == 4) {
+    return make_float3(t, p, V);
+  } else {
+    return make_float3(V, p, q);
+  }
+}
+
 #endif //VH_GEOMETRY_UTIL_H
