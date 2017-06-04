@@ -1,7 +1,7 @@
 //
 // Created by wei on 17-4-5.
 //
-// Map: managing HashTable<VoxelBlock> and might be other structs later
+// Map: managing HashTable<Block> and might be other structs later
 
 #ifndef VH_MAP_H
 #define VH_MAP_H
@@ -15,7 +15,7 @@
 class Map {
 private:
   HashTable   hash_table_;
-  VoxelBlocks blocks_;
+  Blocks blocks_;
   Mesh        mesh_;
 
   CompactHashTable compact_hash_table_;
@@ -80,7 +80,7 @@ public:
   HashTable& hash_table() {
     return hash_table_;
   }
-  VoxelBlocks& blocks() {
+  Blocks& blocks() {
     return blocks_;
   }
   CompactMesh& compact_mesh() {

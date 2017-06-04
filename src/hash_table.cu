@@ -91,25 +91,21 @@ void HashTable::Alloc(const HashParams &params) {
   /// Mutexes
   checkCudaErrors(cudaMalloc(&gpu_data_.bucket_mutexes,
                              sizeof(int) * params.bucket_count));
-  gpu_data_.is_on_gpu = true;
 }
 
 void HashTable::Free() {
-  if (gpu_data_.is_on_gpu) {
-    checkCudaErrors(cudaFree(gpu_data_.bucket_count));
-    checkCudaErrors(cudaFree(gpu_data_.bucket_size));
-    checkCudaErrors(cudaFree(gpu_data_.entry_count));
-    checkCudaErrors(cudaFree(gpu_data_.value_capacity));
-    checkCudaErrors(cudaFree(gpu_data_.linked_list_size));
+  checkCudaErrors(cudaFree(gpu_data_.bucket_count));
+  checkCudaErrors(cudaFree(gpu_data_.bucket_size));
+  checkCudaErrors(cudaFree(gpu_data_.entry_count));
+  checkCudaErrors(cudaFree(gpu_data_.value_capacity));
+  checkCudaErrors(cudaFree(gpu_data_.linked_list_size));
 
-    checkCudaErrors(cudaFree(gpu_data_.heap));
-    checkCudaErrors(cudaFree(gpu_data_.heap_counter));
+  checkCudaErrors(cudaFree(gpu_data_.heap));
+  checkCudaErrors(cudaFree(gpu_data_.heap_counter));
 
-    checkCudaErrors(cudaFree(gpu_data_.entries));
+  checkCudaErrors(cudaFree(gpu_data_.entries));
 
-    checkCudaErrors(cudaFree(gpu_data_.bucket_mutexes));
-    gpu_data_.is_on_gpu = false;
-  }
+  checkCudaErrors(cudaFree(gpu_data_.bucket_mutexes));
 }
 
 void HashTable::Resize(const HashParams &params) {

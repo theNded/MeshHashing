@@ -79,7 +79,7 @@ void LoadRayCasterParams(std::string path, RayCasterParams& params) {
 
 
 /// 1-1-1 correspondences
-void LoadICL(std::string dataset_path,
+void LoadICL(std::string               dataset_path,
              std::vector<std::string> &depth_image_list,
              std::vector<std::string> &color_image_list,
              std::vector<float4x4>& wTcs) {

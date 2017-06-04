@@ -4,12 +4,12 @@
 # 4   - SUN3D
 # 5   - SUN3D_ORIGINAL
 # 6   - PKU
-dataset_type:    4
+dataset_type:    1
 
 # Render
 free_walk:       0
 line_only:       1
-new_mesh_only:   1
+new_mesh_only:   0
 fine_gradient:   1
 
 # Additional support

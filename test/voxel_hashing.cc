@@ -67,9 +67,14 @@ int main(int argc, char** argv) {
   cv::Mat color, depth;
   float4x4 wTc, cTw;
   int frame_count = 0;
+
+  std::chrono::time_point<std::chrono::system_clock> start, end;
+  start = std::chrono::system_clock::now();
+
   while (rgbd_data.ProvideData(depth, color, wTc)) {
+    frame_count ++;
     if (args.run_frames > 0
-        && frame_count ++ > args.run_frames)
+        &&  frame_count > args.run_frames)
       break;
 
     sensor.Process(depth, color);
@@ -78,6 +83,11 @@ int main(int argc, char** argv) {
 
     map.Integrate(sensor);
     map.MarchingCubes();
+
+    end = std::chrono::system_clock::now();
+    std::chrono::duration<double> seconds = end - start;
+    LOG(INFO) << "Total time: " << seconds.count();
+    LOG(INFO) << "Fps: " << frame_count / seconds.count();
 
     if (args.ray_casting) {
       ray_caster.Cast(map, cTw);

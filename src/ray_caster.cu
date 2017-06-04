@@ -12,7 +12,7 @@
 /// Kernel function
 __global__
 void CastKernel(const HashTableGPU hash_table,
-                VoxelBlock *blocks,
+                Block *blocks,
                 RayCasterDataGPU gpu_data,
                 RayCasterParams ray_caster_params,
                 const float4x4 c_T_w,

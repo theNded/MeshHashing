@@ -24,7 +24,7 @@
 ////////////////////
 __global__
 void StarveOccupiedBlocksKernel(CompactHashTableGPU compact_hash_table,
-                                VoxelBlocksGPU      blocks) {
+                                BlocksGPU      blocks) {
 
   const uint idx = blockIdx.x;
   const HashEntry& entry = compact_hash_table.compacted_entries[idx];
@@ -37,7 +37,7 @@ void StarveOccupiedBlocksKernel(CompactHashTableGPU compact_hash_table,
 /// Collect dead voxels
 __global__
 void CollectGarbageBlocksKernel(CompactHashTableGPU compact_hash_table,
-                                VoxelBlocksGPU      blocks) {
+                                BlocksGPU      blocks) {
 
   const uint idx = blockIdx.x;
   const HashEntry& entry = compact_hash_table.compacted_entries[idx];
@@ -83,14 +83,14 @@ __global__
 /// Their mesh not recycled
 void RecycleGarbageBlocksKernel(HashTableGPU        hash_table,
                                 CompactHashTableGPU compact_hash_table,
-                                VoxelBlocksGPU      blocks,
+                                BlocksGPU      blocks,
                                 MeshGPU             mesh) {
   const uint idx = blockIdx.x*blockDim.x + threadIdx.x;
 
   if (idx < (*compact_hash_table.compacted_entry_counter)
       && compact_hash_table.entry_recycle_flags[idx] != 0) {
     const HashEntry& entry = compact_hash_table.compacted_entries[idx];
-    if (hash_table.DeleteEntry(entry.pos)) {
+    if (hash_table.FreeEntry(entry.pos)) {
       blocks[entry.ptr].Clear();
     }
   }
