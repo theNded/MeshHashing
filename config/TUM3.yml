@@ -33,5 +33,5 @@ sample_sdf_threshold: 0.808
 sdf_threshold:        0.800
 enable_gradient:      1
 
-max_vertex_count:     2000000
-max_triangle_count:   3000000
+max_vertex_count:     1000000
+max_triangle_count:   2000000

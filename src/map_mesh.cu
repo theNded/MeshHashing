@@ -147,7 +147,7 @@ void MarchingCubesKernel(HashTableGPU        hash_table,
 
   //////////
   /// 1. Read the scalar values
-  /// Refer to paulbourke.net/geometry/polygonise
+  /// Refer to http://paulbourke.net/geometry/polygonise
   /// Our coordinate system:
   ///       ^
   ///      /
@@ -167,49 +167,20 @@ void MarchingCubesKernel(HashTableGPU        hash_table,
   // 6 -> 100
   // 7 -> 000
   Voxel v;
+  float voxel_size = kSDFParams.voxel_size;
   float d[8];
   float3 p[8];
 
-  float voxel_size = kSDFParams.voxel_size;
-  v = GetVoxel(hash_table, blocks, map_entry, voxel_local_pos, make_uint3(0, 1, 1));
-  if (v.weight == 0) return;
-  p[0] = world_pos + voxel_size * make_float3(0, 1, 1);
-  d[0] = v.sdf;
-
-  v = GetVoxel(hash_table, blocks, map_entry, voxel_local_pos, make_uint3(1, 1, 1));
-  if (v.weight == 0) return;
-  p[1] = world_pos + voxel_size * make_float3(1, 1, 1);
-  d[1] = v.sdf;
-
-  v = GetVoxel(hash_table, blocks, map_entry, voxel_local_pos, make_uint3(1, 1, 0));
-  if (v.weight == 0) return;
-  p[2] = world_pos + voxel_size * make_float3(1, 1, 0);
-  d[2] = v.sdf;
-
-  v = GetVoxel(hash_table, blocks, map_entry, voxel_local_pos, make_uint3(0, 1, 0));
-  if (v.weight == 0) return;
-  p[3] = world_pos + voxel_size * make_float3(0, 1, 0);
-  d[3] = v.sdf;
-
-  v = GetVoxel(hash_table, blocks, map_entry, voxel_local_pos, make_uint3(0, 0, 1));
-  if (v.weight == 0) return;
-  p[4] = world_pos + voxel_size * make_float3(0, 0, 1);
-  d[4] = v.sdf;
-
-  v = GetVoxel(hash_table, blocks, map_entry, voxel_local_pos, make_uint3(1, 0, 1));
-  if (v.weight == 0) return;
-  p[5] = world_pos + voxel_size * make_float3(1, 0, 1);
-  d[5] = v.sdf;
-
-  v = GetVoxel(hash_table, blocks, map_entry, voxel_local_pos, make_uint3(1, 0, 0));
-  if (v.weight == 0) return;
-  p[6] = world_pos + voxel_size * make_float3(1, 0, 0);
-  d[6] = v.sdf;
-
-  v = GetVoxel(hash_table, blocks, map_entry, voxel_local_pos, make_uint3(0, 0, 0));
-  if (v.weight == 0) return;
-  p[7] = world_pos + voxel_size * make_float3(0, 0, 0);
-  d[7] = v.sdf;
+#pragma unroll 1
+  for (int i = 0; i < 8; ++i) {
+    uint3 offset = make_uint3(kVertexOffsetTable[i][0],
+                              kVertexOffsetTable[i][1],
+                              kVertexOffsetTable[i][2]);
+    v = GetVoxel(hash_table, blocks, map_entry, voxel_local_pos, offset);
+    if (v.weight == 0) return;
+    p[i] = world_pos + voxel_size * make_float3(offset);
+    d[i] = v.sdf;
+  }
 
   //////////
   /// 2. Determine cube type

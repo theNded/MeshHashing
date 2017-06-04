@@ -308,4 +308,18 @@ const static int kTriangleTable[256][16] = {
         {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
 };
 
+// Vertex mapping
+// {0 ... 7} -> ({0,1}, {0,1}, {0,1})
+__device__
+const static int kVertexOffsetTable[8][3] = {
+        {0, 1, 1},
+        {1, 1, 1},
+        {1, 1, 0},
+        {0, 1, 0},
+        {0, 0, 1},
+        {1, 0, 1},
+        {1, 0, 0},
+        {0, 0, 0}
+};
+
 #endif //VH_MC_TABLES_H
