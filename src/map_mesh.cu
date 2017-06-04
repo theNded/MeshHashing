@@ -146,26 +146,7 @@ void MarchingCubesKernel(HashTableGPU        hash_table,
   float3 world_pos = VoxelToWorld(voxel_pos);
 
   //////////
-  /// 1. Read the scalar values
-  /// Refer to http://paulbourke.net/geometry/polygonise
-  /// Our coordinate system:
-  ///       ^
-  ///      /
-  ///    z
-  ///   /
-  /// o -- x -->
-  /// |
-  /// y
-  /// |
-  /// v
-  // 0 -> 011
-  // 1 -> 111
-  // 2 -> 110
-  // 3 -> 010
-  // 4 -> 001
-  // 5 -> 101
-  // 6 -> 100
-  // 7 -> 000
+  /// 1. Read the scalar values, see mc_tables.h
   Voxel v;
   float voxel_size = kSDFParams.voxel_size;
   float d[8];
@@ -173,9 +154,9 @@ void MarchingCubesKernel(HashTableGPU        hash_table,
 
 #pragma unroll 1
   for (int i = 0; i < 8; ++i) {
-    uint3 offset = make_uint3(kVertexOffsetTable[i][0],
-                              kVertexOffsetTable[i][1],
-                              kVertexOffsetTable[i][2]);
+    uint3 offset = make_uint3(kVertexCubeTable[i][0],
+                              kVertexCubeTable[i][1],
+                              kVertexCubeTable[i][2]);
     v = GetVoxel(hash_table, blocks, map_entry, voxel_local_pos, offset);
     if (v.weight == 0) return;
     p[i] = world_pos + voxel_size * make_float3(offset);
@@ -184,34 +165,24 @@ void MarchingCubesKernel(HashTableGPU        hash_table,
 
   //////////
   /// 2. Determine cube type
-  int cube_index = 0;
-  if (d[0] < isolevel) cube_index |= 1;
-  if (d[1] < isolevel) cube_index |= 2;
-  if (d[2] < isolevel) cube_index |= 4;
-  if (d[3] < isolevel) cube_index |= 8;
-  if (d[4] < isolevel) cube_index |= 16;
-  if (d[5] < isolevel) cube_index |= 32;
-  if (d[6] < isolevel) cube_index |= 64;
-  if (d[7] < isolevel) cube_index |= 128;
-
   const float kThreshold = 0.2f;
-  if (fabs(d[0]) > kThreshold) return;
-  if (fabs(d[1]) > kThreshold) return;
-  if (fabs(d[2]) > kThreshold) return;
-  if (fabs(d[3]) > kThreshold) return;
-  if (fabs(d[4]) > kThreshold) return;
-  if (fabs(d[5]) > kThreshold) return;
-  if (fabs(d[6]) > kThreshold) return;
-  if (fabs(d[7]) > kThreshold) return;
-  for (uint k = 0; k < 8; k++) {
-    for (uint l = 0; l < 8; l++) {
-      if (d[k] * d[l] < 0.0f) {
-        if (fabs(d[k]) + fabs(d[l]) > kThreshold) return;
-      } else {
-        if (fabs(d[k] - d[l]) > kThreshold) return;
-      }
-    }
+  int cube_index = 0;
+#pragma unroll 1
+  for (int i = 0; i < 8; ++i) {
+    int mask = (1 << i);
+    if (fabs(d[i]) > kThreshold) return;
+    if (d[i] < isolevel) cube_index |= mask;
   }
+
+//  for (uint k = 0; k < 8; k++) {
+//    for (uint l = 0; l < 8; l++) {
+//      if (d[k] * d[l] < 0.0f) {
+//        if (fabs(d[k]) + fabs(d[l]) > kThreshold) return;
+//      } else {
+//        if (fabs(d[k] - d[l]) > kThreshold) return;
+//      }
+//    }
+//  }
 
   if (kEdgeTable[cube_index] == 0 || kEdgeTable[cube_index] == 255)
     return;
@@ -219,111 +190,30 @@ void MarchingCubesKernel(HashTableGPU        hash_table,
   //////////
   /// 3. Determine vertices (ptr allocated via (shared) edges
   /// If the program reach here, the voxels holding edges must exist
-  // 0 -> 011.x, (0, 1)
-  // 1 -> 110.z, (1, 2)
-  // 2 -> 010.x, (2, 3)
-  // 3 -> 010.z, (3, 0)
-  // 4 -> 001.x, (4, 5)
-  // 5 -> 100.z, (5, 6)
-  // 6 -> 000.x, (6, 7)
-  // 7 -> 000.z, (7, 4)
-  // 8 -> 001.y, (4, 0)
-  // 9 -> 101.y, (5, 1)
-  //10 -> 100.y, (6, 2)
-  //11 -> 000.y, (7, 3)
   int vertex_ptr[12];
   float3 vertex_pos;
 
   /// plane y = 1
-  if (kEdgeTable[cube_index] & 1) {
-    vertex_pos = VertexIntersection(p[0], p[1], d[0], d[1], isolevel);
+#pragma unroll 1
+  for (int i = 0; i < 12; ++i) {
+    int mask = (1 << i);
+    if (kEdgeTable[cube_index] & mask) {
+      int2 v_idx = make_int2(kEdgeVertexTable[i][0],
+                             kEdgeVertexTable[i][1]);
+      uint4 c_idx = make_uint4(kEdgeCubeTable[i][0],
+                               kEdgeCubeTable[i][1],
+                               kEdgeCubeTable[i][2],
+                               kEdgeCubeTable[i][3]);
 
-    MeshCube &cube = GetMeshCube(hash_table, blocks, map_entry,
-                                 voxel_local_pos, make_uint3(0, 1, 1));
-    vertex_ptr[0] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.x, vertex_pos, use_fine_gradient);
-  }
-  if (kEdgeTable[cube_index] & 2) {
-    vertex_pos = VertexIntersection(p[1], p[2], d[1], d[2], isolevel);
-
-    MeshCube &cube = GetMeshCube(hash_table, blocks, map_entry,
-                                 voxel_local_pos, make_uint3(1, 1, 0));
-    vertex_ptr[1] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.z, vertex_pos, use_fine_gradient);
-  }
-  if (kEdgeTable[cube_index] & 4) {
-    vertex_pos = VertexIntersection(p[2], p[3], d[2], d[3], isolevel);
-
-    MeshCube &cube = GetMeshCube(hash_table, blocks, map_entry,
-                                 voxel_local_pos, make_uint3(0, 1, 0));
-    vertex_ptr[2] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.x, vertex_pos, use_fine_gradient);
-  }
-  if (kEdgeTable[cube_index] & 8) {
-    vertex_pos = VertexIntersection(p[3], p[0], d[3], d[0], isolevel);
-
-    MeshCube &cube = GetMeshCube(hash_table, blocks, map_entry,
-                                 voxel_local_pos, make_uint3(0, 1, 0));
-    vertex_ptr[3] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.z, vertex_pos, use_fine_gradient);
-  }
-
-  /// plane y = 0
-  if (kEdgeTable[cube_index] & 16) {
-    vertex_pos = VertexIntersection(p[4], p[5], d[4], d[5], isolevel);
-
-    MeshCube &cube = GetMeshCube(hash_table, blocks, map_entry,
-                                 voxel_local_pos, make_uint3(0, 0, 1));
-    vertex_ptr[4] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.x, vertex_pos, use_fine_gradient);
-  }
-  if (kEdgeTable[cube_index] & 32) {
-    vertex_pos = VertexIntersection(p[5], p[6], d[5], d[6], isolevel);
-
-    MeshCube &cube = GetMeshCube(hash_table, blocks, map_entry,
-                                 voxel_local_pos, make_uint3(1, 0, 0));
-    vertex_ptr[5] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.z, vertex_pos, use_fine_gradient);
-  }
-  if (kEdgeTable[cube_index] & 64) {
-    vertex_pos = VertexIntersection(p[6], p[7], d[6], d[7], isolevel);
-
-    MeshCube &cube = GetMeshCube(hash_table, blocks, map_entry,
-                                 voxel_local_pos, make_uint3(0, 0, 0));
-    vertex_ptr[6] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.x, vertex_pos, use_fine_gradient);
-  }
-  if (kEdgeTable[cube_index] & 128) {
-    vertex_pos = VertexIntersection(p[7], p[4], d[7], d[4], isolevel);
-
-    MeshCube &cube = GetMeshCube(hash_table, blocks, map_entry,
-                                 voxel_local_pos, make_uint3(0, 0, 0));
-    vertex_ptr[7] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.z, vertex_pos, use_fine_gradient);
-  }
-
-  /// vertical
-  if (kEdgeTable[cube_index] & 256) {
-    vertex_pos = VertexIntersection(p[4], p[0], d[4], d[0], isolevel);
-
-    MeshCube &cube = GetMeshCube(hash_table, blocks, map_entry,
-                                 voxel_local_pos, make_uint3(0, 0, 1));
-    vertex_ptr[8] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.y, vertex_pos, use_fine_gradient);
-  }
-  if (kEdgeTable[cube_index] & 512) {
-    vertex_pos = VertexIntersection(p[5], p[1], d[5], d[1], isolevel);
-
-    MeshCube &cube = GetMeshCube(hash_table, blocks, map_entry,
-                                 voxel_local_pos, make_uint3(1, 0, 1));
-    vertex_ptr[9] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.y, vertex_pos, use_fine_gradient);
-  }
-  if (kEdgeTable[cube_index] & 1024) {
-    vertex_pos = VertexIntersection(p[6], p[2], d[6], d[2], isolevel);
-
-    MeshCube &cube = GetMeshCube(hash_table, blocks, map_entry,
-                                 voxel_local_pos, make_uint3(1, 0, 0));
-    vertex_ptr[10] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.y,
-                                    vertex_pos, use_fine_gradient);
-  }
-  if (kEdgeTable[cube_index] & 2048) {
-    vertex_pos = VertexIntersection(p[7], p[3], d[7], d[3], isolevel);
-
-    MeshCube &cube = GetMeshCube(hash_table, blocks, map_entry,
-                                 voxel_local_pos, make_uint3(0, 0, 0));
-    vertex_ptr[11] = AllocateVertex(hash_table, blocks, mesh_data, cube.vertex_ptrs.y,
-                                    vertex_pos, use_fine_gradient);
+      vertex_pos = VertexIntersection(p[v_idx.x], p[v_idx.y],
+                                      d[v_idx.x], d[v_idx.y], isolevel);
+      MeshCube &cube = GetMeshCube(hash_table, blocks, map_entry,
+                                   voxel_local_pos,
+                                   make_uint3(c_idx.x, c_idx.y, c_idx.z));
+      vertex_ptr[i] = AllocateVertex(hash_table, blocks, mesh_data,
+                                     cube.vertex_ptrs[c_idx.w], vertex_pos,
+                                     use_fine_gradient);
+    }
   }
 
   int i = 0;
@@ -408,23 +298,23 @@ void RecycleVerticesKernel(CompactHashTableGPU compact_hash_table,
 
   MeshCube &cube = blocks[entry.ptr].cubes[local_idx];
 
-  if (cube.vertex_ptrs.x != -1 &&
-      mesh_data.vertices[cube.vertex_ptrs.x].ref_count <= 0) {
-    mesh_data.vertices[cube.vertex_ptrs.x].Clear();
-    mesh_data.FreeVertex(cube.vertex_ptrs.x);
-    cube.vertex_ptrs.x = -1;
+  if (cube.vertex_ptrs[0] != -1 &&
+      mesh_data.vertices[cube.vertex_ptrs[0]].ref_count <= 0) {
+    mesh_data.vertices[cube.vertex_ptrs[0]].Clear();
+    mesh_data.FreeVertex(cube.vertex_ptrs[0]);
+    cube.vertex_ptrs[0] = -1;
   }
-  if (cube.vertex_ptrs.y != -1 &&
-      mesh_data.vertices[cube.vertex_ptrs.y].ref_count <= 0) {
-    mesh_data.vertices[cube.vertex_ptrs.y].Clear();
-    mesh_data.FreeVertex(cube.vertex_ptrs.y);
-    cube.vertex_ptrs.y = -1;
+  if (cube.vertex_ptrs[1] != -1 &&
+      mesh_data.vertices[cube.vertex_ptrs[1]].ref_count <= 0) {
+    mesh_data.vertices[cube.vertex_ptrs[1]].Clear();
+    mesh_data.FreeVertex(cube.vertex_ptrs[1]);
+    cube.vertex_ptrs[1] = -1;
   }
-  if (cube.vertex_ptrs.z != -1 &&
-      mesh_data.vertices[cube.vertex_ptrs.z].ref_count <= 0) {
-    mesh_data.vertices[cube.vertex_ptrs.z].Clear();
-    mesh_data.FreeVertex(cube.vertex_ptrs.z);
-    cube.vertex_ptrs.z = -1;
+  if (cube.vertex_ptrs[2] != -1 &&
+      mesh_data.vertices[cube.vertex_ptrs[2]].ref_count <= 0) {
+    mesh_data.vertices[cube.vertex_ptrs[2]].Clear();
+    mesh_data.FreeVertex(cube.vertex_ptrs[2]);
+    cube.vertex_ptrs[2] = -1;
   }
 }
 

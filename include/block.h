@@ -33,13 +33,15 @@ struct __ALIGN__(4) MeshCube {
   // 1. vertex_ptr point to int3 on shared memory
   // 2. triangle_ptr point to linked list on shared memory
   /// Point to 3 valid vertex indices
-  int3 vertex_ptrs;
+  int  vertex_ptrs[3];
   int  triangle_ptr[kTrianglePerCube];
   int  cube_index;
 
   __device__
   void Clear() {
-    vertex_ptrs = make_int3(-1, -1, -1);
+    vertex_ptrs[0] = -1;
+    vertex_ptrs[1] = -1;
+    vertex_ptrs[2] = -1;
     for (int i = 0; i < kTrianglePerCube; ++i)
       triangle_ptr[i] = -1;
     cube_index = 0;

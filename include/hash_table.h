@@ -323,8 +323,6 @@ public:
   void Reset();
   void ResetMutexes();
 
-  void CollectAllEntries();
-
   void Debug();
 
   HashTableGPU& gpu_data() {
