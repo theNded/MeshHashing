@@ -85,6 +85,9 @@ void LoadICL(std::string               dataset_path,
              std::vector<float4x4>& wTcs) {
   std::ifstream img_stream(dataset_path + "associations.txt");
   std::string time_stamp, depth_image_name, color_image_name;
+  /// !!! ICL problem: pose of the 1st frame is not provided
+  img_stream >> time_stamp >> depth_image_name
+             >> time_stamp >> color_image_name;
   while (img_stream >> time_stamp >> depth_image_name
                     >> time_stamp >> color_image_name) {
     depth_image_list.push_back(dataset_path + "/" + depth_image_name);

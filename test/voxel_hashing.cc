@@ -69,9 +69,10 @@ int main(int argc, char** argv) {
   int frame_count = 0;
 
   std::chrono::time_point<std::chrono::system_clock> start, end;
-  start = std::chrono::system_clock::now();
 
   while (rgbd_data.ProvideData(depth, color, wTc)) {
+    start = std::chrono::system_clock::now();
+
     frame_count ++;
     if (args.run_frames > 0
         &&  frame_count > args.run_frames)
@@ -84,16 +85,15 @@ int main(int argc, char** argv) {
     map.Integrate(sensor);
     map.MarchingCubes();
 
-    end = std::chrono::system_clock::now();
-    std::chrono::duration<double> seconds = end - start;
-    LOG(INFO) << "Total time: " << seconds.count();
-    LOG(INFO) << "Fps: " << frame_count / seconds.count();
-
     if (args.ray_casting) {
       ray_caster.Cast(map, cTw);
       cv::imshow("RayCasting", ray_caster.surface_image());
       cv::waitKey(1);
     }
+    end = std::chrono::system_clock::now();
+    std::chrono::duration<double> seconds = end - start;
+    LOG(INFO) << "Total time: " << seconds.count();
+    LOG(INFO) << "Fps: " << 1.0f / seconds.count();
 
     if (! args.new_mesh_only) {
       map.CollectAllBlocks();
@@ -113,6 +113,12 @@ int main(int argc, char** argv) {
       writer << screen;
     }
   }
+
+
+  end = std::chrono::system_clock::now();
+  std::chrono::duration<double> seconds = end - start;
+  LOG(INFO) << "Total time: " << seconds.count();
+  LOG(INFO) << "Fps: " << frame_count / seconds.count();
 
   if (args.save_mesh) {
     map.SaveMesh(args.filename_prefix + ".obj");
