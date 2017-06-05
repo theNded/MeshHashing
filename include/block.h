@@ -52,10 +52,20 @@ struct __ALIGN__(4) Cube {
   // 1. vertex_ptr:    a @int point to @int3 on shared memory
   // 2. triangle_ptrs: a @int point to linked list on shared memory
   /// Point to 3 valid vertex indices
-  int  vertex_ptrs  [kVerticesPerCube];
-  int  triangle_ptrs[kMaxTrianglesPerCube];
+  int  vertex_ptrs   [kVerticesPerCube];
+  int  vertex_mutexes[kVerticesPerCube];
+  int  triangle_ptrs [kMaxTrianglesPerCube];
   int  cube_index;
 
+  __device__
+  void ResetMutexes() {
+#ifdef __CUDACC__
+#pragma unroll 1
+#endif
+    for (int i = 0; i < kVerticesPerCube; ++i) {
+      vertex_mutexes[i] = FREE_PTR;
+    }
+  }
   __device__
   void Clear() {
 #ifdef __CUDACC__
@@ -63,6 +73,7 @@ struct __ALIGN__(4) Cube {
 #endif
     for (int i = 0; i < kVerticesPerCube; ++i) {
       vertex_ptrs[i] = FREE_PTR;
+      vertex_mutexes[i] = FREE_PTR;
     }
 
 #ifdef __CUDACC__

@@ -79,8 +79,8 @@ void CollectGarbageBlocksKernel(CompactHashTableGPU compact_hash_table,
   }
 }
 
+/// !!! Their mesh not recycled
 __global__
-/// Their mesh not recycled
 void RecycleGarbageBlocksKernel(HashTableGPU        hash_table,
                                 CompactHashTableGPU compact_hash_table,
                                 BlocksGPU      blocks,

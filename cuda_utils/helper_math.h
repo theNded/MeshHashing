@@ -1473,4 +1473,8 @@ inline __host__ __device__ int2 sign(float2 s) {
 inline __host__ __device__ uint3 operator%(uint3 a, int b) {
   return make_uint3(a.x%b, a.y%b, a.z%b);
 }
+
+inline __host__ __device__ bool operator==(int3 a, int3 b) {
+  return a.x == b.x && a.y == b.y && a.z == b.z;
+}
 #endif
