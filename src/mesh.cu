@@ -26,7 +26,6 @@ void ResetHeapKernel(MeshGPU mesh,
     mesh.triangle_heap[idx] = max_triangle_count - idx - 1;
     mesh.triangles[idx].Clear();
   }
-
 }
 
 ////////////////////
@@ -93,6 +92,22 @@ void Mesh::Reset() {
           mesh_params_.max_triangle_count);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
+}
+
+uint Mesh::vertex_heap_count() {
+  uint vertex_heap_count;
+  checkCudaErrors(cudaMemcpy(&vertex_heap_count,
+                             gpu_data_.vertex_heap_counter,
+                             sizeof(uint), cudaMemcpyDeviceToHost));
+  return vertex_heap_count;
+}
+
+uint Mesh::triangle_heap_count() {
+  uint triangle_heap_count;
+  checkCudaErrors(cudaMemcpy(&triangle_heap_count,
+                             gpu_data_.triangle_heap_counter,
+                             sizeof(uint), cudaMemcpyDeviceToHost));
+  return triangle_heap_count;
 }
 
 ////////////////////

@@ -1470,4 +1470,7 @@ inline __host__ __device__ int2 sign(float2 s) {
   return make_int2(sign(s.x), sign(s.y));
 }
 
+inline __host__ __device__ uint3 operator%(uint3 a, int b) {
+  return make_uint3(a.x%b, a.y%b, a.z%b);
+}
 #endif

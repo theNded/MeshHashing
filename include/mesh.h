@@ -48,7 +48,7 @@ struct MeshGPU {
   __device__
   uint AllocVertex() {
     uint addr = atomicSub(&vertex_heap_counter[0], 1);
-    if (addr < 100) {
+    if (addr < MEMORY_LIMIT) {
       printf("v: %d -> %d\n", addr, vertex_heap[addr]);
     }
     return vertex_heap[addr];
@@ -62,7 +62,7 @@ struct MeshGPU {
   __device__
   uint AllocTriangle() {
     uint addr = atomicSub(&triangle_heap_counter[0], 1);
-    if (addr < 100) {
+    if (addr < MEMORY_LIMIT) {
       printf("t: %d -> %d\n", addr, vertex_heap[addr]);
     }
     return triangle_heap[addr];
@@ -96,6 +96,10 @@ public:
   const MeshParams& params() {
     return mesh_params_;
   }
+
+  uint vertex_heap_count();
+  uint triangle_heap_count();
+
 };
 
 struct CompactMeshGPU {

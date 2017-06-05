@@ -38,9 +38,7 @@ inline Voxel GetVoxel(HashTableGPU&    hash_table,
   Voxel v; v.Clear();
 
   uint3 voxel_local_pos_offset = voxel_local_pos + local_offset;
-  int3 block_offset = make_int3(voxel_local_pos_offset.x / BLOCK_SIDE_LENGTH,
-                                voxel_local_pos_offset.y / BLOCK_SIDE_LENGTH,
-                                voxel_local_pos_offset.z / BLOCK_SIDE_LENGTH);
+  int3 block_offset = make_int3(voxel_local_pos_offset) / BLOCK_SIDE_LENGTH;
 
   /// Inside the block -- no need to look up in the table
   if (block_offset.x == 0 && block_offset.y == 0 && block_offset.z == 0) {
@@ -49,10 +47,8 @@ inline Voxel GetVoxel(HashTableGPU&    hash_table,
   } else { // Outside the block -- look for it
     HashEntry entry = hash_table.GetEntry(curr_entry.pos + block_offset);
     if (entry.ptr == FREE_ENTRY) return v;
-    uint i = VoxelLocalPosToIdx(make_uint3(
-            voxel_local_pos_offset.x % BLOCK_SIDE_LENGTH,
-            voxel_local_pos_offset.y % BLOCK_SIDE_LENGTH,
-            voxel_local_pos_offset.z % BLOCK_SIDE_LENGTH));
+    uint i = VoxelLocalPosToIdx(voxel_local_pos_offset % BLOCK_SIDE_LENGTH);
+
     v = blocks[entry.ptr].voxels[i];
   }
 
@@ -67,9 +63,7 @@ inline Cube& GetCube(HashTableGPU&  hash_table,
                              const uint3 local_offset) {
 
   uint3 voxel_local_pos_offset = voxel_local_pos + local_offset;
-  int3 block_offset = make_int3(voxel_local_pos_offset.x / BLOCK_SIDE_LENGTH,
-                                voxel_local_pos_offset.y / BLOCK_SIDE_LENGTH,
-                                voxel_local_pos_offset.z / BLOCK_SIDE_LENGTH);
+  int3 block_offset = make_int3(voxel_local_pos_offset) / BLOCK_SIDE_LENGTH;
 
   if (block_offset.x == 0 && block_offset.y == 0 && block_offset.z == 0) {
     uint i = VoxelLocalPosToIdx(voxel_local_pos_offset);
@@ -77,15 +71,9 @@ inline Cube& GetCube(HashTableGPU&  hash_table,
   } else {
     HashEntry entry = hash_table.GetEntry(curr_entry.pos + block_offset);
     if (entry.ptr == FREE_ENTRY) {
-      printf("GetCube: should never reach here! %d %d %d\n",
-             voxel_local_pos.x,
-             voxel_local_pos.y,
-             voxel_local_pos.z);
+      printf("GetCube: should never reach here!\n");
     }
-    uint i = VoxelLocalPosToIdx(make_uint3(
-            voxel_local_pos_offset.x % BLOCK_SIDE_LENGTH,
-            voxel_local_pos_offset.y % BLOCK_SIDE_LENGTH,
-            voxel_local_pos_offset.z % BLOCK_SIDE_LENGTH));
+    uint i = VoxelLocalPosToIdx(voxel_local_pos_offset % BLOCK_SIDE_LENGTH);
     return blocks[entry.ptr].cubes[i];
   }
 }
@@ -100,12 +88,18 @@ inline int AllocateVertex(HashTableGPU &hash_table,
                           bool use_fine_gradient) {
   int ptr = vertex_ptr;
   /// Fallible with multiple threads
-  if (ptr == -1) ptr = mesh.AllocVertex();
-  mesh.vertices[ptr].pos    = vertex_pos;
-  if (use_fine_gradient) {
-    mesh.vertices[ptr].normal = GradientAtPoint(hash_table, blocks, vertex_pos);
+  if (ptr == FREE_PTR) {
+    ptr = mesh.AllocVertex();
   }
-  vertex_ptr = ptr;
+
+  if (ptr >= 0) {
+    mesh.vertices[ptr].pos = vertex_pos;
+    if (use_fine_gradient) {
+      mesh.vertices[ptr].normal = GradientAtPoint(hash_table, blocks,
+                                                  vertex_pos);
+    }
+    vertex_ptr = ptr;
+  }
   return ptr;
 }
 
@@ -182,7 +176,8 @@ void MarchingCubesPerCube(HashTableGPU&        hash_table,
   int vertex_ptr[12];
   float3 vertex_pos;
 
-  /// plane y = 1
+  /// This operation is in 2-pass
+  /// pass1: Allocate
 #pragma unroll 1
   for (int i = 0; i < 12; ++i) {
     int mask = (1 << i);
@@ -213,7 +208,7 @@ void MarchingCubesPerCube(HashTableGPU&        hash_table,
     /// as they are what they are
     if (kTriangleTable[cube_index][t]
         != kTriangleTable[this_cube.cube_index][t]) {
-      if (triangle_ptrs == -1) {
+      if (triangle_ptrs == FREE_PTR) {
         triangle_ptrs = mesh_data.AllocTriangle();
       } else { // recycle the rubbish (TODO: more sophisticated operations)
         int3 vertex_ptrs = mesh_data.triangles[triangle_ptrs].vertex_ptrs;
@@ -300,14 +295,14 @@ void RecycleTrianglesKernel(CompactHashTableGPU compact_hash_table,
 
   for (; i < Cube::kMaxTrianglesPerCube; ++i) {
     int triangle_ptrs = cube.triangle_ptrs[i];
-    if (triangle_ptrs == -1) continue;
+    if (triangle_ptrs == FREE_PTR) continue;
 
     int3 vertex_ptrs = mesh_data.triangles[triangle_ptrs].vertex_ptrs;
     atomicSub(&mesh_data.vertices[vertex_ptrs.x].ref_count, 1);
     atomicSub(&mesh_data.vertices[vertex_ptrs.y].ref_count, 1);
     atomicSub(&mesh_data.vertices[vertex_ptrs.z].ref_count, 1);
 
-    cube.triangle_ptrs[i] = -1;
+    cube.triangle_ptrs[i] = FREE_PTR;
     mesh_data.triangles[triangle_ptrs].Clear();
     mesh_data.FreeTriangle(triangle_ptrs);
   }
@@ -324,11 +319,11 @@ void RecycleVerticesKernel(CompactHashTableGPU compact_hash_table,
 
 #pragma unroll 1
   for (int i = 0; i < 3; ++i) {
-    if (cube.vertex_ptrs[i] != -1 &&
+    if (cube.vertex_ptrs[i] != FREE_PTR &&
         mesh_data.vertices[cube.vertex_ptrs[i]].ref_count <= 0) {
       mesh_data.vertices[cube.vertex_ptrs[i]].Clear();
       mesh_data.FreeVertex(cube.vertex_ptrs[i]);
-      cube.vertex_ptrs[i] = -1;
+      cube.vertex_ptrs[i] = FREE_PTR;
     }
   }
 }
@@ -344,7 +339,7 @@ void CollectVerticesAndTrianglesKernel(CompactHashTableGPU compact_hash_table,
 
   for (int i = 0; i < Cube::kMaxTrianglesPerCube; ++i) {
     int triangle_ptrs = cube.triangle_ptrs[i];
-    if (triangle_ptrs != -1) {
+    if (triangle_ptrs != FREE_PTR) {
       int3& triangle = mesh.triangles[triangle_ptrs].vertex_ptrs;
       atomicAdd(&compact_mesh.triangles_ref_count[triangle_ptrs], 1);
       atomicAdd(&compact_mesh.vertices_ref_count[triangle.x], 1);
@@ -516,8 +511,10 @@ void Map::CompressMesh() {
     checkCudaErrors(cudaGetLastError());
   }
 
-  LOG(INFO) << "Vertices: " << compact_mesh_.vertex_count();
-  LOG(INFO) << "Triangles: " << compact_mesh_.triangle_count();
+  LOG(INFO) << "Vertices: " << compact_mesh_.vertex_count()
+            << "/" << (mesh_.params().max_vertex_count - mesh_.vertex_heap_count());
+  LOG(INFO) << "Triangles: " << compact_mesh_.triangle_count()
+            << "/" << (mesh_.params().max_triangle_count - mesh_.triangle_heap_count());
 }
 
 void Map::SaveMesh(std::string path) {

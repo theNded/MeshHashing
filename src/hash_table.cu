@@ -113,7 +113,6 @@ void HashTable::Resize(const HashParams &params) {
   Alloc(params);
   Reset();
 }
-
 /// Reset
 void HashTable::Reset() {
   /// Reset mutexes

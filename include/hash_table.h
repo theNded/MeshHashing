@@ -119,7 +119,7 @@ struct HashTableGPU {
   }
 
   __device__
-  uint Malloc() {
+  uint Alloc() {
     uint addr = atomicSub(&heap_counter[0], 1);
     if (addr < MEMORY_LIMIT) {
       printf("Memory nearly exhausted! %d -> %d\n", addr, heap[addr]);
@@ -175,7 +175,7 @@ struct HashTableGPU {
       if (lock != LOCK_ENTRY) {
         HashEntry& entry = entries[empty_entry_idx];
         entry.pos    = pos;
-        entry.ptr    = Malloc();
+        entry.ptr    = Alloc();
         entry.offset = NO_OFFSET;
       }
       return;
@@ -205,7 +205,7 @@ struct HashTableGPU {
             HashEntry& entry = entries[i];
             entry.pos    = pos;
             entry.offset = bucket_last_entry.offset; // pointer assignment in linked list
-            entry.ptr    = Malloc();	//memory alloc
+            entry.ptr    = Alloc();	//memory alloc
 
             // Not sure if it is ok to directly assign to reference
             bucket_last_entry.offset = offset;

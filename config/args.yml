@@ -4,7 +4,7 @@
 # 4   - SUN3D
 # 5   - SUN3D_ORIGINAL
 # 6   - PKU
-dataset_type:    1
+dataset_type:    4
 
 # Render
 free_walk:       0
@@ -12,13 +12,14 @@ line_only:       1
 new_mesh_only:   0
 fine_gradient:   1
 
+
 # Additional support
 ray_casting:     0
 
 # Result saving
 record_video:    0
 save_mesh:       1
-filename_prefix: "tum3"
+filename_prefix: "copyroom"
 
 # Others
 run_frames:      -1

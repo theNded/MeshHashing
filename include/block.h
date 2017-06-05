@@ -62,14 +62,14 @@ struct __ALIGN__(4) Cube {
 #pragma unroll 1
 #endif
     for (int i = 0; i < kVerticesPerCube; ++i) {
-      vertex_ptrs[i] = -1;
+      vertex_ptrs[i] = FREE_PTR;
     }
 
 #ifdef __CUDACC__
 #pragma unroll 1
 #endif
     for (int i = 0; i < kMaxTrianglesPerCube; ++i) {
-      triangle_ptrs[i] = -1;
+      triangle_ptrs[i] = FREE_PTR;
     }
 
     cube_index = 0;

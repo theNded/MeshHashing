@@ -12,9 +12,9 @@
 /// Kernel function
 __global__
 void CastKernel(const HashTableGPU hash_table,
-                Block *blocks,
+                const BlocksGPU    blocks,
                 RayCasterDataGPU gpu_data,
-                RayCasterParams ray_caster_params,
+                const RayCasterParams ray_caster_params,
                 const float4x4 c_T_w,
                 const float4x4 w_T_c) {
   const uint x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -31,21 +31,19 @@ void CastKernel(const HashTableGPU hash_table,
   gpu_data.surface_image[pixel_idx] = make_float4(0, 0, 0, 0);
 
   /// 1. Determine ray direction
-  float3 camera_dir = normalize(ImageReprojectToCamera(x, y, 1.0f,
-                                                       ray_caster_params.fx,
-                                                       ray_caster_params.fy,
-                                                       ray_caster_params.cx,
-                                                       ray_caster_params.cy));
+  float3 camera_ray_dir = normalize(
+          ImageReprojectToCamera(x, y, 1.0f,
+                                 ray_caster_params.fx, ray_caster_params.fy,
+                                 ray_caster_params.cx, ray_caster_params.cy));
 
-  float ray_length_per_depth_unit = 1.0f / camera_dir.z;
-  float t_min = ray_caster_params.min_raycast_depth / camera_dir.z;
-  float t_max = ray_caster_params.max_raycast_depth / camera_dir.z;
+  float t_min = ray_caster_params.min_raycast_depth / camera_ray_dir.z;
+  float t_max = ray_caster_params.max_raycast_depth / camera_ray_dir.z;
 
-  float3 world_pos_camera_origin = w_T_c * make_float3(0.0f, 0.0f, 0.0f);
-  float4 world_dir_homo = w_T_c * make_float4(camera_dir, 0.0f);
-  float3 world_dir = normalize(make_float3(world_dir_homo.x,
-                                           world_dir_homo.y,
-                                           world_dir_homo.z));
+  float3 world_cam_pos = w_T_c * make_float3(0.0f);
+  float4 world_ray_dir_homo = w_T_c * make_float4(camera_ray_dir, 0.0f);
+  float3 world_ray_dir = normalize(make_float3(world_ray_dir_homo.x,
+                                               world_ray_dir_homo.y,
+                                               world_ray_dir_homo.z));
 
   RayCasterSample prev_sample;
   prev_sample.sdf = 0.0f;
@@ -55,42 +53,44 @@ void CastKernel(const HashTableGPU hash_table,
   /// NOT zig-zag; just evenly sampling along the ray
 #pragma unroll 1
   for (float t = t_min; t < t_max; t += ray_caster_params.raycast_step) {
-    float3 world_pos_sample = world_pos_camera_origin + t * world_dir;
-    float sdf;
+    float3 world_sample_pos = world_cam_pos + t * world_ray_dir;
+    float  sdf;
     uchar3 color;
 
-    if (TrilinearInterpolation(hash_table, blocks, world_pos_sample,
+    /// a voxel surrounded by valid voxels
+    if (TrilinearInterpolation(hash_table, blocks, world_sample_pos,
                                sdf, color)) {
-      /// Zero crossing
-      if (prev_sample.weight > 0 && prev_sample.sdf > 0.0f && sdf < 0.0f) {
+      /// Zero crossing exist
+      if (prev_sample.weight > 0 // valid previous sample
+          && prev_sample.sdf > 0.0f && sdf < 0.0f) { // zero-crossing
 
         float interpolated_t;
         uchar3 interpolated_color;
-        /// Find isosurface
+        /// Find exact zero crossing
         bool is_isosurface_found = BisectionIntersection(
                 hash_table, blocks,
-                world_pos_camera_origin, world_dir,
-                prev_sample.sdf, prev_sample.t, sdf, t,
+                world_cam_pos, world_ray_dir,
+                prev_sample.sdf, prev_sample.t,
+                sdf, t,
                 interpolated_t, interpolated_color);
 
         float3 world_pos_isosurface =
-                world_pos_camera_origin + interpolated_t * world_dir;
+                world_cam_pos + interpolated_t * world_ray_dir;
 
         /// Good enough sample
         if (is_isosurface_found
             && abs(prev_sample.sdf - sdf) < ray_caster_params.sample_sdf_threshold) {
           /// Trick from the original author of voxel-hashing
           if (abs(sdf) < ray_caster_params.sdf_threshold) {
-            float depth = interpolated_t / ray_length_per_depth_unit;
+            float depth = interpolated_t * camera_ray_dir.z;
 
             gpu_data.depth_image [pixel_idx] = depth;
             gpu_data.vertex_image[pixel_idx]
-                    = make_float4(ImageReprojectToCamera(
-                    x, y, depth,
-                    ray_caster_params.fx,
-                    ray_caster_params.fy,
-                    ray_caster_params.cx,
-                    ray_caster_params.cy), 1.0f);
+                    = make_float4(ImageReprojectToCamera(x, y, depth,
+                                                         ray_caster_params.fx,
+                                                         ray_caster_params.fy,
+                                                         ray_caster_params.cx,
+                                                         ray_caster_params.cy), 1.0f);
 
             gpu_data.color_image [pixel_idx]
                     = make_float4(interpolated_color.x / 255.f,
