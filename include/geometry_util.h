@@ -12,6 +12,11 @@
 
 extern __constant__ SDFParams kSDFParams;
 
+/// There are 3 kinds of positions (pos)
+/// 1. world pos, unit: meter
+/// 2. voxel pos, unit: voxel (typically 0.004m)
+/// 3. block pos, unit: block (typically 8 voxels)
+
 //////////
 /// Transforms between world, voxel, and block coordinate systems
 /// Semantic: A pos To B pos; A, B in {world, voxel, block}

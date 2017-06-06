@@ -9,6 +9,7 @@ Camera.fx: 481.2
 Camera.fy: 480
 Camera.cx: 319.5
 Camera.cy: 239.5
+
 Camera.k1: 0
 Camera.k2: 0
 Camera.p1: 0

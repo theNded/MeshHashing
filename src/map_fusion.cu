@@ -18,7 +18,7 @@ extern texture<float4, cudaTextureType2D, cudaReadModeElementType> color_texture
 ////////////////////
 __global__
 void UpdateBlocksKernel(CompactHashTableGPU compact_hash_table,
-                        VoxelBlocksGPU      blocks,
+                        BlocksGPU      blocks,
                         SensorDataGPU       sensor_data,
                         SensorParams        sensor_params,
                         float4x4            c_T_w) {
@@ -79,7 +79,7 @@ void UpdateBlocksKernel(CompactHashTableGPU compact_hash_table,
     delta.color = make_uchar3(0, 255, 0);
   }
 
-  blocks[entry.ptr].Update(local_idx, delta);
+  blocks[entry.ptr].voxels[local_idx].Update(delta);
 }
 
 __global__

@@ -1,8 +1,6 @@
 //
 // Created by wei on 17-4-28.
 //
-// Host (CPU) wrapper for the hash table data allocated on the GPU
-// Host operations: alloc, free, and reset
 
 #ifndef VH_HASH_TABLE_H
 #define VH_HASH_TABLE_H
@@ -16,9 +14,9 @@
 #include "params.h"
 
 struct __ALIGN__(8) HashEntry {
-  int3	pos;		   // hash position (lower left corner of SDFBlock))
+  int3	pos;		   // block position (lower left corner of SDFBlock))
   int		ptr;	     // pointer into heap to SDFBlock
-  uint	offset;		 // offset for collisions
+  uint	offset;		 // offset for linked lists
 
   __device__
   void operator=(const struct HashEntry& e) {
@@ -30,21 +28,21 @@ struct __ALIGN__(8) HashEntry {
   __device__
   void Clear() {
     pos    = make_int3(0);
-    offset = 0;
     ptr    = FREE_ENTRY;
+    offset = 0;
   }
 };
 
 struct HashTableGPU {
   /// Hash VALUE part
-  uint      *heap;                    /// index to free values
-  uint      *heap_counter;            /// single element; used as an atomic counter (points to the next free block)
+  uint      *heap;             /// index to free values
+  uint      *heap_counter;     /// single element; used as an atomic counter (points to the next free block)
 
   /// Hash KEY part
-  HashEntry *entries;                 /// hash entries that stores pointers to sdf values
+  HashEntry *entries;          /// hash entries that stores pointers to sdf values
   /// == occupied_block_count
   /// Misc
-  int       *bucket_mutexes;     /// binary flag per hash bucket; used for allocation to atomically lock a bucket
+  int       *bucket_mutexes;   /// binary flag per hash bucket; used for allocation to atomically lock a bucket
 
   /// Parameters
   uint      *bucket_count;
@@ -53,17 +51,10 @@ struct HashTableGPU {
   uint      *value_capacity;
   uint      *linked_list_size;
 
-  bool       is_on_gpu;          /// the class be be used on both cpu and gpu
-
   /////////////////
   // Device part //
   /////////////////
 #ifdef __CUDACC__
-  /// There are 3 kinds of positions (pos)
-  /// 1. world pos, unit: meter
-  /// 2. voxel pos, unit: voxel (typically 0.004m)
-  /// 3. block pos, unit: block (typically 8 voxels)
-
   //! see Teschner et al. (but with correct prime values)
   __device__
   uint HashBucketForBlockPos(const int3& block_pos) const {
@@ -106,48 +97,48 @@ struct HashTableGPU {
       }
     }
 
-    /// The last entry is visted twice, but its OK
+    /// The last entry is visted twice, but it's OK
 #ifdef HANDLE_COLLISIONS
     const uint bucket_last_entry_idx = bucket_first_entry_idx + (*bucket_size) - 1;
     int i = bucket_last_entry_idx;
-    HashEntry curr_entry;
 
     #pragma unroll 1
     for (uint iter = 0; iter < *linked_list_size; ++iter) {
-      curr_entry = entries[i];
+      HashEntry curr_entry = entries[i];
 
       if (IsBlockAllocated(block_pos, curr_entry)) {
         return curr_entry;
       }
-      if (curr_entry.offset == 0) { // should never reach here
+      if (curr_entry.offset == 0) {
         break;
       }
-      i = bucket_last_entry_idx + curr_entry.offset;
-      i %= (*entry_count); // avoid overflow
+      i = (bucket_last_entry_idx + curr_entry.offset) % (*entry_count);
     }
 #endif
     return entry;
   }
 
   __device__
-  uint AllocHeap() {
+  uint Alloc() {
     uint addr = atomicSub(&heap_counter[0], 1);
-    //TODO MATTHIAS check some error handling?
+    if (addr < MEMORY_LIMIT) {
+      printf("Memory nearly exhausted! %d -> %d\n", addr, heap[addr]);
+    }
     return heap[addr];
   }
   __device__
-  void FreeHeap(uint ptr) {
+  void Free(uint ptr) {
     uint addr = atomicAdd(&heap_counter[0], 1);
-    //TODO MATTHIAS check some error handling?
     heap[addr + 1] = ptr;
   }
 
   //pos in SDF block coordinates
   __device__
   void AllocEntry(const int3& pos) {
-    uint bucket_idx             = HashBucketForBlockPos(pos);				//hash bucket
+    uint bucket_idx             = HashBucketForBlockPos(pos);		//hash bucket
     uint bucket_first_entry_idx = bucket_idx * (*bucket_size);	//hash position
 
+    /// 1. Try GetEntry, meanwhile collect an empty entry potentially suitable
     int empty_entry_idx = -1;
     for (uint j = 0; j < (*bucket_size); j++) {
       uint i = j + bucket_first_entry_idx;
@@ -156,7 +147,7 @@ struct HashTableGPU {
         return;
       }
 
-      /// wei: should not break and alloc before a thorough searching is over
+      /// wei: should not break and alloc before a thorough searching is over:
       if (empty_entry_idx == -1 && curr_entry.ptr == FREE_ENTRY) {
         empty_entry_idx = i;
       }
@@ -165,9 +156,9 @@ struct HashTableGPU {
 #ifdef HANDLE_COLLISIONS
     const uint bucket_last_entry_idx = bucket_first_entry_idx + (*bucket_size) - 1;
     uint i = bucket_last_entry_idx;
-    int offset = 0;
     for (uint iter = 0; iter < *linked_list_size; ++iter) {
-      HashEntry& curr_entry = entries[i];
+      HashEntry curr_entry = entries[i];
+
       if (IsBlockAllocated(pos, curr_entry)) {
         return;
       }
@@ -178,20 +169,21 @@ struct HashTableGPU {
     }
 #endif
 
+    /// 2. NOT FOUND, Allocate
     if (empty_entry_idx != -1) {
       int lock = atomicExch(&bucket_mutexes[bucket_idx], LOCK_ENTRY);
       if (lock != LOCK_ENTRY) {
         HashEntry& entry = entries[empty_entry_idx];
         entry.pos    = pos;
+        entry.ptr    = Alloc();
         entry.offset = NO_OFFSET;
-        entry.ptr    = AllocHeap();	//memory alloc
       }
       return;
     }
 
 #ifdef HANDLE_COLLISIONS
     i = bucket_last_entry_idx;
-    offset = 0;
+    int offset = 0;
 
     #pragma  unroll 1
     for (uint iter = 0; iter < *linked_list_size; ++iter) {
@@ -202,10 +194,9 @@ struct HashTableGPU {
 
       HashEntry& curr_entry = entries[i];
 
-      if (curr_entry.ptr == FREE_ENTRY) {	//this is the first free entry
+      if (curr_entry.ptr == FREE_ENTRY) {
         int lock = atomicExch(&bucket_mutexes[bucket_idx], LOCK_ENTRY);
         if (lock != LOCK_ENTRY) {
-          // Not use reference in order to avoid lock ?
           HashEntry& bucket_last_entry = entries[bucket_last_entry_idx];
           uint alloc_bucket_idx = i / (*bucket_size);
 
@@ -214,7 +205,7 @@ struct HashTableGPU {
             HashEntry& entry = entries[i];
             entry.pos    = pos;
             entry.offset = bucket_last_entry.offset; // pointer assignment in linked list
-            entry.ptr    = AllocHeap();	//memory alloc
+            entry.ptr    = Alloc();	//memory alloc
 
             // Not sure if it is ok to directly assign to reference
             bucket_last_entry.offset = offset;
@@ -228,9 +219,10 @@ struct HashTableGPU {
   }
 
 
-  //! deletes a hash entry position for a given block_pos index (returns true uppon successful deletion; otherwise returns false)
+  //! deletes a hash entry position for a given block_pos index
+  // returns true uppon successful deletion; otherwise returns false
   __device__
-  bool DeleteEntry(const int3& block_pos) {
+  bool FreeEntry(const int3& block_pos) {
     uint bucket_idx = HashBucketForBlockPos(block_pos);	//hash bucket
     uint bucket_first_entry_idx = bucket_idx * (*bucket_size);		//hash position
 
@@ -240,7 +232,7 @@ struct HashTableGPU {
       if (IsBlockAllocated(block_pos, curr)) {
 
 #ifndef HANDLE_COLLISIONS
-        FreeHeap(curr.ptr);
+        Free(curr.ptr);
         entries[i].Clear();
         return true;
 #else
@@ -248,7 +240,7 @@ struct HashTableGPU {
         if (curr.offset != 0) {
           int lock = atomicExch(&bucket_mutexes[bucket_idx], LOCK_ENTRY);
           if (lock != LOCK_ENTRY) {
-            FreeHeap(curr.ptr);
+            Free(curr.ptr);
             int next_idx = (i + curr.offset) % (*entry_count);
             entries[i] = entries[next_idx];
             entries[next_idx].Clear();
@@ -257,7 +249,7 @@ struct HashTableGPU {
             return false;
           }
         } else {
-          FreeHeap(curr.ptr);
+          Free(curr.ptr);
           entries[i].Clear();
           return true;
         }
@@ -281,7 +273,7 @@ struct HashTableGPU {
       if (IsBlockAllocated(block_pos, curr)) {
         int lock = atomicExch(&bucket_mutexes[bucket_idx], LOCK_ENTRY);
         if (lock != LOCK_ENTRY) {
-          FreeHeap(curr.ptr);
+          Free(curr.ptr);
           entries[i].Clear();
           HashEntry prev = entries[prev_idx];
           prev.offset = curr.offset;
@@ -323,8 +315,6 @@ public:
   void Reset();
   void ResetMutexes();
 
-  void CollectAllEntries();
-
   void Debug();
 
   HashTableGPU& gpu_data() {
@@ -333,7 +323,7 @@ public:
 };
 
 struct CompactHashTableGPU {
-  int       *entry_recycle_flags; /// used in garbage collection
+  int       *entry_recycle_flags;     /// used in garbage collection
   HashEntry *compacted_entries;       /// allocated for parallel computation
   int       *compacted_entry_counter; /// atomic counter to add compacted entries atomically
 };

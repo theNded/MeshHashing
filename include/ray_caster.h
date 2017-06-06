@@ -67,8 +67,8 @@ public:
           mat3b.at<cv::Vec3b>(i, j) = cv::Vec3b(0, 0, 0);
         } else {
           mat3b.at<cv::Vec3b>(i, j) = cv::Vec3b(255 * fabs(cf[0]),
-                                               255 * fabs(cf[1]),
-                                               255 * fabs(cf[2]));
+                                                255 * fabs(cf[1]),
+                                                255 * fabs(cf[2]));
         }
       }
     }

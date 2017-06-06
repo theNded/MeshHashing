@@ -74,9 +74,9 @@ int main(int argc, char **argv) {
   Sensor    sensor(config.sensor_params);
   RayCaster ray_caster(config.ray_caster_params);
 
-  mesh_renderer.free_walk() = args.free_walk;
-  mesh_renderer.line_only() = args.line_only;
-  map.use_fine_gradient()   = args.fine_gradient;
+  mesh_renderer.free_walk()     = args.free_walk;
+  mesh_renderer.line_only()     = args.line_only;
+  map.use_fine_gradient()       = args.fine_gradient;
 
   cv::VideoWriter writer;
   cv::Mat screen;
@@ -86,7 +86,8 @@ int main(int argc, char **argv) {
                              30, cv::Size(config.sensor_params.width,
                                           config.sensor_params.height));
     screen = cv::Mat(config.sensor_params.height,
-                     config.sensor_params.width, CV_8UC3);
+                     config.sensor_params.width,
+                     CV_8UC3);
   }
 
   ORB_SLAM2::System SLAM(path_to_vocabulary,
@@ -95,7 +96,7 @@ int main(int argc, char **argv) {
                          true);
 
   cv::Mat color, depth;
-  float4x4 cTw, wTc;
+  float4x4 wTc, cTw;
   double tframe;
 
   int frame_count = 0;

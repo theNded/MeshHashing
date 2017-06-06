@@ -8,6 +8,12 @@
 #include "common.h"
 #include <helper_math.h>
 
+
+/// c------  c: center of a cube, it is placed at the corner for easier
+/// |     |     vertex value accessing
+/// |  v  |  v: center of a voxel, it is naturally at the center of a grid
+/// |     |
+/// -------
 struct __ALIGN__(8) Voxel {
   float2  ssdf;		// signed distance function
   uchar2  sweight;	// accumulated sdf weight
@@ -18,6 +24,7 @@ struct __ALIGN__(8) Voxel {
 //    ((long long*)this)[0] = ((const long long*)&v)[0];
 //  }
 
+  // TODO(wei): Notice, when the size exceeds long long, change this
   __device__
   void Clear() {
     ssdf    = make_float2(0.0f, 0.0f);
@@ -42,33 +49,76 @@ struct __ALIGN__(8) Voxel {
     float r = wp / (wp + wn);
     return - (r * log(r) + (1 - r) * log(1 - r));
   }
-};
-
-struct __ALIGN__(4) MeshCube {
-  static const int kTrianglePerCube = 5;
-
-  // TODO(wei): Possible memory optimizations:
-  // 1. vertex_ptr point to int3 on shared memory
-  // 2. triangle_ptr point to linked list on shared memory
-  /// Point to 3 valid vertex indices
-  int3 vertex_ptrs;
-  int  triangle_ptr[kTrianglePerCube];
-  int  cube_index;
 
   __device__
-  void Clear() {
-    vertex_ptrs = make_int3(-1, -1, -1);
-    for (int i = 0; i < kTrianglePerCube; ++i)
-      triangle_ptr[i] = -1;
-    cube_index = 0;
+  void Update(const Voxel& delta) {
+    float3 c_prev  = make_float3(color.x, color.y, color.z);
+    float3 c_delta = make_float3(delta.color.x, delta.color.y, delta.color.z);
+    float3 c_curr  = 0.5f * c_prev + 0.5f * c_delta;
+    color = make_uchar3(c_curr.x + 0.5f, c_curr.y + 0.5f, c_curr.z + 0.5f);
+
+    ssdf = (ssdf * make_float2(sweight)
+            + delta.ssdf * make_float2(delta.sweight))
+           / (make_float2(sweight) + make_float2(delta.sweight));
+    float2 sweightf = make_float2(sweight) + make_float2(delta.sweight);
+    float factor = 255.0f / (sweightf.x + sweightf.y);
+    factor = fminf(factor, 1.0);
+    sweight = make_uchar2((uchar)(factor * sweightf.x),
+                          (uchar)(factor * sweightf.y));
+
+    if (sweight.x == 0) ssdf.x = 0;
+    if (sweight.y == 0) ssdf.y = 0;
   }
 };
 
-/// Block
+struct __ALIGN__(4) Cube {
+  static const int kVerticesPerCube     = 3;
+  static const int kMaxTrianglesPerCube = 5;
+
+  // TODO(wei): Possible memory optimizations:
+  // 1. vertex_ptr:    a @int point to @int3 on shared memory
+  // 2. triangle_ptrs: a @int point to linked list on shared memory
+  /// Point to 3 valid vertex indices
+  int  vertex_ptrs   [kVerticesPerCube];
+  int  vertex_mutexes[kVerticesPerCube];
+  int  triangle_ptrs [kMaxTrianglesPerCube];
+  short curr_index, prev_index;
+
+  __device__
+  void ResetMutexes() {
+#ifdef __CUDACC__
+#pragma unroll 1
+#endif
+    for (int i = 0; i < kVerticesPerCube; ++i) {
+      vertex_mutexes[i] = FREE_PTR;
+    }
+  }
+  __device__
+  void Clear() {
+#ifdef __CUDACC__
+#pragma unroll 1
+#endif
+    for (int i = 0; i < kVerticesPerCube; ++i) {
+      vertex_ptrs[i] = FREE_PTR;
+      vertex_mutexes[i] = FREE_PTR;
+    }
+
+#ifdef __CUDACC__
+#pragma unroll 1
+#endif
+    for (int i = 0; i < kMaxTrianglesPerCube; ++i) {
+      triangle_ptrs[i] = FREE_PTR;
+    }
+
+    curr_index = 0;
+    prev_index = 0;
+  }
+};
+
 /// Typically Block is a 8x8x8 voxel cluster
-struct __ALIGN__(8) VoxelBlock {
-  Voxel    voxels[BLOCK_SIZE];
-  MeshCube cubes [BLOCK_SIZE];
+struct __ALIGN__(8) Block {
+  Voxel voxels[BLOCK_SIZE];
+  Cube  cubes [BLOCK_SIZE];
 
   __device__
   void Clear() {
@@ -80,49 +130,26 @@ struct __ALIGN__(8) VoxelBlock {
       cubes[i].Clear();
     }
   }
-
-  __device__
-  void Update(int i, const Voxel& update) {
-    Voxel& in = voxels[i];
-    float3 c_in     = make_float3(in.color.x, in.color.y, in.color.z);
-    float3 c_update = make_float3(update.color.x, update.color.y, update.color.z);
-    float3 c_out = 0.5f * c_in + 0.5f * c_update;
-
-    uchar3 color = make_uchar3(c_out.x + 0.5f, c_out.y + 0.5f, c_out.z + 0.5f);
-    in.color.x = color.x, in.color.y = color.y, in.color.z = color.z;
-
-    in.ssdf = (in.ssdf * make_float2(in.sweight)
-               + update.ssdf * make_float2(update.sweight))
-             / (make_float2(in.sweight) + make_float2(update.sweight));
-    float2 sweight = make_float2(in.sweight) + make_float2(update.sweight);
-    float factor = 255.0f / (sweight.x + sweight.y);
-    factor = fminf(factor, 1.0);
-    in.sweight = make_uchar2((uchar)(factor * sweight.x),
-                             (uchar)(factor * sweight.y));
-
-    if (in.sweight.x == 0) in.ssdf.x = 0;
-    if (in.sweight.y == 0) in.ssdf.y = 0;
-  }
 };
 
-typedef VoxelBlock* VoxelBlocksGPU;
+typedef Block* BlocksGPU;
 
-class VoxelBlocks {
+class Blocks {
 private:
-  VoxelBlocksGPU gpu_data_;
-  uint block_count_;
+  BlocksGPU gpu_data_;
+  uint      block_count_;
 
   void Alloc(uint block_count);
   void Free();
 
 public:
-  VoxelBlocks();
-  ~VoxelBlocks();
+  Blocks();
+  ~Blocks();
 
   void Reset();
   void Resize(uint block_count);
 
-  VoxelBlocksGPU& gpu_data() {
+  BlocksGPU& gpu_data() {
     return gpu_data_;
   }
 };

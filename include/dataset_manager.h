@@ -2,8 +2,8 @@
 // Created by wei on 17-4-30.
 //
 
-#ifndef VH_CONFIG_READER
-#define VH_CONFIG_READER
+#ifndef VH_DATA_MANAGER
+#define VH_DATA_MANAGER
 
 #include <string>
 #include <vector>
@@ -44,23 +44,24 @@ void LoadSUN3D(
         std::string dataset_path,
         std::vector<std::string> &depth_img_list,
         std::vector<std::string> &color_img_list,
-        std::vector<float4x4> &wTcs);
+        std::vector<float4x4>    &wTcs);
 void LoadSUN3DOriginal(
         std::string dataset_path,
         std::vector<std::string> &depth_img_list,
         std::vector<std::string> &color_img_list,
-        std::vector<float4x4> &wTcs);
+        std::vector<float4x4>    &wTcs);
 void Load3DVCR(
         std::string dataset_path,
         std::vector<std::string> &depth_image_list,
         std::vector<std::string> &color_image_list,
-        std::vector<float4x4>& wTcs);
+        std::vector<float4x4>    &wTcs);
 
 /// no 1-1-1 correspondences
-void LoadTUM(std::string dataset_path,
-             std::vector<std::string> &depth_image_list,
-             std::vector<std::string> &color_image_list,
-             std::vector<float4x4>& wTcs);
+void LoadTUM(
+        std::string dataset_path,
+        std::vector<std::string> &depth_image_list,
+        std::vector<std::string> &color_image_list,
+        std::vector<float4x4>    &wTcs);
 
 struct ConfigManager {
   HashParams      hash_params;
@@ -88,9 +89,8 @@ struct DataManager {
   /// If read from network/USB, then wait until a mat comes;
   ///                           a while loop might be inside
   bool ProvideData(cv::Mat &depth, cv::Mat &color);
-  bool ProvideData(cv::Mat &depth, cv::Mat &color,
-                   float4x4 &wTc);
+  bool ProvideData(cv::Mat &depth, cv::Mat &color, float4x4 &wTc);
 };
 
 
-#endif //VH_CONFIG_READER
+#endif //VH_DATA_MANAGER

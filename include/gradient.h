@@ -16,7 +16,8 @@ inline float3 frac(const float3& val)  {
 // TODO(wei): refine it
 __device__
 inline Voxel GetVoxel(const HashTableGPU& hash_table,
-                      VoxelBlocksGPU& blocks, float3 world_pos) {
+                      const BlocksGPU&    blocks,
+                      const float3        world_pos) {
   HashEntry hash_entry = hash_table.GetEntry(WorldToBlock(world_pos));
   Voxel v;
   if (hash_entry.ptr == FREE_ENTRY) {
@@ -31,9 +32,11 @@ inline Voxel GetVoxel(const HashTableGPU& hash_table,
 
 __device__
 inline bool TrilinearInterpolation(const HashTableGPU& hash_table,
-                                   VoxelBlocksGPU blocks,
+                                   const BlocksGPU& blocks,
                                    const float3& pos,
-                                   float& sdf, float& entropy, uchar3& color) {
+                                   float& sdf,
+                                   float& entropy,
+                                   uchar3& color) {
   const float offset = kSDFParams.voxel_size;
   const float3 pos_corner = pos - 0.5f * offset;
   float3 ratio = frac(WorldToVoxelf(pos));
@@ -123,9 +126,10 @@ inline bool TrilinearInterpolation(const HashTableGPU& hash_table,
 
 __device__
 inline bool TrilinearInterpolation(const HashTableGPU& hash_table,
-                                   VoxelBlocksGPU blocks,
+                                   const BlocksGPU& blocks,
                                    const float3& pos,
-                                   float& sdf, uchar3& color) {
+                                   float& sdf,
+                                   uchar3& color) {
   const float offset = kSDFParams.voxel_size;
   const float3 pos_corner = pos - 0.5f * offset;
   float3 ratio = frac(WorldToVoxelf(pos));
@@ -207,7 +211,7 @@ inline bool TrilinearInterpolation(const HashTableGPU& hash_table,
 
 __device__
 /// sdf_near: -, sdf_far: +
-inline float LinearIntersection(float t_near, float t_far,
+inline float LinearIntersection(float t_near,   float t_far,
                                 float sdf_near, float sdf_far) {
   return t_near + (sdf_near / (sdf_near - sdf_far)) * (t_far - t_near);
 }
@@ -216,9 +220,9 @@ inline float LinearIntersection(float t_near, float t_far,
 __device__
 /// Iteratively
 inline bool BisectionIntersection(const HashTableGPU& hash_table,
-                                  VoxelBlocksGPU blocks,
-                                  const float3& world_pos_camera_origin,
-                                  const float3& world_dir,
+                                  const BlocksGPU& blocks,
+                                  const float3& world_cam_pos,
+                                  const float3& world_cam_dir,
                                   float sdf_near, float t_near,
                                   float sdf_far,  float t_far,
                                   float& t, uchar3& color) {
@@ -230,7 +234,7 @@ inline bool BisectionIntersection(const HashTableGPU& hash_table,
   for(uint i = 0; i < kIterations; i++) {
     m = LinearIntersection(l, r, l_sdf, r_sdf);
     if(!TrilinearInterpolation(hash_table, blocks,
-                               world_pos_camera_origin + m * world_dir,
+                               world_cam_pos + m * world_cam_dir,
                                m_sdf, color))
       return false;
 
@@ -246,31 +250,37 @@ inline bool BisectionIntersection(const HashTableGPU& hash_table,
 
 __device__
 inline float3 GradientAtPoint(const HashTableGPU& hash_table,
-                               VoxelBlocksGPU blocks,
-                               const float3& pos) {
+                              const BlocksGPU& blocks,
+                              const float3& pos) {
   const float voxelSize = kSDFParams.voxel_size;
   float3 offset = make_float3(voxelSize, voxelSize, voxelSize);
 
   /// negative
   float distn00; uchar3 colorn00;
-  TrilinearInterpolation(hash_table, blocks, pos-make_float3(0.5f*offset.x, 0.0f, 0.0f),
+  TrilinearInterpolation(hash_table, blocks,
+                         pos-make_float3(0.5f*offset.x, 0.0f, 0.0f),
                          distn00, colorn00);
   float dist0n0; uchar3 color0n0;
-  TrilinearInterpolation(hash_table, blocks, pos-make_float3(0.0f, 0.5f*offset.y, 0.0f),
+  TrilinearInterpolation(hash_table, blocks,
+                         pos-make_float3(0.0f, 0.5f*offset.y, 0.0f),
                          dist0n0, color0n0);
   float dist00n; uchar3 color00n;
-  TrilinearInterpolation(hash_table, blocks, pos-make_float3(0.0f, 0.0f, 0.5f*offset.z),
+  TrilinearInterpolation(hash_table, blocks,
+                         pos-make_float3(0.0f, 0.0f, 0.5f*offset.z),
                          dist00n, color00n);
 
   /// positive
   float distp00; uchar3 colorp00;
-  TrilinearInterpolation(hash_table, blocks, pos+make_float3(0.5f*offset.x, 0.0f, 0.0f),
+  TrilinearInterpolation(hash_table, blocks,
+                         pos+make_float3(0.5f*offset.x, 0.0f, 0.0f),
                          distp00, colorp00);
   float dist0p0; uchar3 color0p0;
-  TrilinearInterpolation(hash_table, blocks, pos+make_float3(0.0f, 0.5f*offset.y, 0.0f),
+  TrilinearInterpolation(hash_table, blocks,
+                         pos+make_float3(0.0f, 0.5f*offset.y, 0.0f),
                          dist0p0, color0p0);
   float dist00p; uchar3 color00p;
-  TrilinearInterpolation(hash_table, blocks, pos+make_float3(0.0f, 0.0f, 0.5f*offset.z),
+  TrilinearInterpolation(hash_table, blocks,
+                         pos+make_float3(0.0f, 0.0f, 0.5f*offset.z),
                          dist00p, color00p);
 
   float3 grad = make_float3((distp00-distn00)/offset.x,
