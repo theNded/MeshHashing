@@ -1,6 +1,6 @@
 #include <matrix.h>
 #include <geometry_util.h>
-
+#include "color_util.h"
 #include "gradient.h"
 #include "ray_caster.h"
 
@@ -115,13 +115,9 @@ void CastKernel(const HashTableGPU hash_table,
               // bgr
               float3 c3 = make_float3(0.62f, 0.72f, 0.88) * dot(-n3, l3)
                           * 20.0f / (distance * distance);
-              float e = 1.0f-entropy;
-              if (e < 0.0f)	e = 0.0f;
-              if (e > 1.0f)	e = 1.0f;
 
-              e = 360.0f*e - 120.0f;
-              if (e < 0.0f) e += 359.0f;
-              float3 rgb = HSVToRGB(make_float3(e, 1.0f, 0.5f));
+              /// Uncertainty: low -> entropy high
+              float3 rgb = ValToRGB(1 - entropy, 0, 1);
               gpu_data.surface_image[pixel_idx]
                       = make_float4(rgb.x, rgb.y, rgb.z, 1.0f);
             }

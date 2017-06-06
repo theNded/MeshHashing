@@ -6,6 +6,7 @@
 #define VH_BLOCK_H
 
 #include "common.h"
+#include <iostream>
 #include <helper_math.h>
 
 
@@ -44,9 +45,10 @@ struct __ALIGN__(8) Voxel {
 
   __device__
   float entropy() {
-    float wp = sweight.x * exp(- ssdf.x);
-    float wn = sweight.y * exp(- ssdf.y);
+    float wp = sweight.x;// * exp(- ssdf.x);
+    float wn = sweight.y;// * exp(- ssdf.y);
     float r = wp / (wp + wn);
+    if (sweight.x == 0 || sweight.y == 0) return 0;
     return - (r * log(r) + (1 - r) * log(1 - r));
   }
 

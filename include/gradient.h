@@ -45,6 +45,7 @@ inline bool TrilinearInterpolation(const HashTableGPU& hash_table,
   Voxel v;
 
   sdf = 0.0f;
+  entropy = 0.0f;
   float3 colorf = make_float3(0.0f, 0.0f, 0.0f);
   float3 v_color;
 

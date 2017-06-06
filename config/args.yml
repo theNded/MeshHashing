@@ -8,18 +8,18 @@ dataset_type:    0
 
 # Render
 free_walk:       0
-line_only:       0
-new_mesh_only:   0
+line_only:       1
+new_mesh_only:   1
 fine_gradient:   1
 
 
 # Additional support
-ray_casting:     1
+ray_casting:     0
 
 # Result saving
-record_video:    0
+record_video:    1
 save_mesh:       1
-filename_prefix: "copyroom"
+filename_prefix: "livingroom-only"
 
 # Others
 run_frames:      -1
