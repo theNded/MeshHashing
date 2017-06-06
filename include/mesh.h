@@ -134,7 +134,7 @@ public:
 
 struct CompactMeshGPU {
   // Remap from the separated vertices to the compacted vertices
-  int*      vertex_index_remapper;
+  int*      vertex_remapper;
 
   float3*   vertices;
   float3*   normals;

@@ -109,13 +109,11 @@ void CollectInFrustumBlocksKernel(HashTableGPU        hash_table,
   __syncthreads();
 
   int addr_local = -1;
-  if (idx < *hash_table.entry_count) {
-    if (hash_table.entries[idx].ptr != FREE_ENTRY) {
-      if (IsBlockInCameraFrustum(c_T_w, hash_table.entries[idx].pos,
-                                 sensor_params)) {
-        addr_local = atomicAdd(&local_counter, 1);
-      }
-    }
+  if (idx < *hash_table.entry_count
+    && hash_table.entries[idx].ptr != FREE_ENTRY
+    && IsBlockInCameraFrustum(c_T_w, hash_table.entries[idx].pos,
+                              sensor_params)) {
+    addr_local = atomicAdd(&local_counter, 1);
   }
   __syncthreads();
 
@@ -142,11 +140,11 @@ void CollectAllBlocksKernel(HashTableGPU        hash_table,
   __syncthreads();
 
   int addr_local = -1;
-  if (idx < *hash_table.entry_count) {
-    if (hash_table.entries[idx].ptr != FREE_ENTRY) {
-      addr_local = atomicAdd(&local_counter, 1);
-    }
+  if (idx < *hash_table.entry_count
+      && hash_table.entries[idx].ptr != FREE_ENTRY) {
+    addr_local = atomicAdd(&local_counter, 1);
   }
+
   __syncthreads();
 
   __shared__ int addr_global;

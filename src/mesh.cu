@@ -122,7 +122,7 @@ CompactMesh::~CompactMesh() {
 }
 
 void CompactMesh::Alloc(const MeshParams &mesh_params) {
-  checkCudaErrors(cudaMalloc(&gpu_data_.vertex_index_remapper,
+  checkCudaErrors(cudaMalloc(&gpu_data_.vertex_remapper,
                              sizeof(int) * mesh_params.max_vertex_count));
 
   checkCudaErrors(cudaMalloc(&gpu_data_.vertex_counter,
@@ -143,7 +143,7 @@ void CompactMesh::Alloc(const MeshParams &mesh_params) {
 }
 
 void CompactMesh::Free() {
-  checkCudaErrors(cudaFree(gpu_data_.vertex_index_remapper));
+  checkCudaErrors(cudaFree(gpu_data_.vertex_remapper));
 
   checkCudaErrors(cudaFree(gpu_data_.vertex_counter));
   checkCudaErrors(cudaFree(gpu_data_.vertices_ref_count));
@@ -163,7 +163,7 @@ void CompactMesh::Resize(const MeshParams &mesh_params) {
 
 /// Reset
 void CompactMesh::Reset() {
-  checkCudaErrors(cudaMemset(gpu_data_.vertex_index_remapper, 0xff,
+  checkCudaErrors(cudaMemset(gpu_data_.vertex_remapper, 0xff,
                              sizeof(int) * mesh_params_.max_vertex_count));
   checkCudaErrors(cudaMemset(gpu_data_.vertices_ref_count, 0,
                              sizeof(int) * mesh_params_.max_vertex_count));

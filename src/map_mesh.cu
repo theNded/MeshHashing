@@ -528,34 +528,63 @@ void CollectVerticesAndTrianglesKernel(
 }
 
 __global__
-void AssignVertexRemapperKernel(MeshGPU        mesh,
-                                CompactMeshGPU compact_mesh,
-                                uint max_vertex_count) {
+void CompressVerticesKernel(MeshGPU        mesh,
+                            CompactMeshGPU compact_mesh,
+                            uint           max_vertex_count) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+  __shared__ int local_counter;
+  if (threadIdx.x == 0) local_counter = 0;
+  __syncthreads();
+
+  int addr_local = -1;
   if (idx < max_vertex_count && compact_mesh.vertices_ref_count[idx] > 0) {
-    int addr = atomicAdd(compact_mesh.vertex_counter, 1);
-    compact_mesh.vertex_index_remapper[idx] = addr;
+    addr_local = atomicAdd(&local_counter, 1);
+  }
+  __syncthreads();
+
+  __shared__ int addr_global;
+  if (threadIdx.x == 0 && local_counter > 0) {
+    addr_global = atomicAdd(compact_mesh.vertex_counter, local_counter);
+  }
+  __syncthreads();
+
+  if (addr_local != -1) {
+    const uint addr = addr_global + addr_local;
+    compact_mesh.vertex_remapper[idx] = addr;
     compact_mesh.vertices[addr] = mesh.vertices[idx].pos;
     compact_mesh.normals[addr]  = mesh.vertices[idx].normal;
   }
 }
 
 __global__
-void AssignTrianglesKernel(MeshGPU        mesh,
+void CompressTrianglesKernel(MeshGPU        mesh,
                            CompactMeshGPU compact_mesh,
                            uint max_triangle_count) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+  __shared__ int local_counter;
+  if (threadIdx.x == 0) local_counter = 0;
+  __syncthreads();
+
+  int addr_local = -1;
   if (idx < max_triangle_count && compact_mesh.triangles_ref_count[idx] > 0) {
-    int addr = atomicAdd(compact_mesh.triangle_counter, 1);
-    compact_mesh.triangles[addr].x
-            = compact_mesh.vertex_index_remapper[
-            mesh.triangles[idx].vertex_ptrs.x];
-    compact_mesh.triangles[addr].y
-            = compact_mesh.vertex_index_remapper[
-            mesh.triangles[idx].vertex_ptrs.y];
-    compact_mesh.triangles[addr].z
-            = compact_mesh.vertex_index_remapper[
-            mesh.triangles[idx].vertex_ptrs.z];
+    addr_local = atomicAdd(&local_counter, 1);
+  }
+  __syncthreads();
+
+  __shared__ int addr_global;
+  if (threadIdx.x == 0 && local_counter > 0) {
+    addr_global = atomicAdd(compact_mesh.triangle_counter, local_counter);
+  }
+  __syncthreads();
+
+  if (addr_local != -1) {
+    const uint addr = addr_global + addr_local;
+    int3 vertex_ptrs = mesh.triangles[idx].vertex_ptrs;
+    compact_mesh.triangles[addr].x = compact_mesh.vertex_remapper[vertex_ptrs.x];
+    compact_mesh.triangles[addr].y = compact_mesh.vertex_remapper[vertex_ptrs.y];
+    compact_mesh.triangles[addr].z = compact_mesh.vertex_remapper[vertex_ptrs.z];
   }
 }
 
@@ -589,7 +618,7 @@ void Map::CompressMesh() {
                          / threads_per_block, 1);
     const dim3 block_size(threads_per_block, 1);
 
-    AssignVertexRemapperKernel <<< grid_size, block_size >>> (
+    CompressVerticesKernel <<< grid_size, block_size >>> (
             mesh_.gpu_data(),
             compact_mesh_.gpu_data(),
             mesh_.params().max_vertex_count);
@@ -604,7 +633,7 @@ void Map::CompressMesh() {
                          / threads_per_block, 1);
     const dim3 block_size(threads_per_block, 1);
 
-    AssignTrianglesKernel <<< grid_size, block_size >>> (
+    CompressTrianglesKernel <<< grid_size, block_size >>> (
             mesh_.gpu_data(),
             compact_mesh_.gpu_data(),
             mesh_.params().max_triangle_count);
