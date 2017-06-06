@@ -5,7 +5,7 @@
 #include "map.h"
 #include "gradient.h"
 
-//#define REDUCTION
+#define REDUCTION
 
 ////////////////////
 /// class Map - meshing
@@ -268,7 +268,7 @@ void MarchingCubesPass1(HashTableGPU&        hash_table,
                           CompactHashTableGPU& compact_hash_table,
                           BlocksGPU&      blocks,
                           MeshGPU&             mesh_data,
-        /// Cube info
+                          /// Cube info
                           Cube&            this_cube,
                           const HashEntry&     map_entry,
                           int3&                voxel_base_pos,
@@ -288,8 +288,9 @@ void MarchingCubesPass1(HashTableGPU&        hash_table,
 
   float d[8];
   float3 p[8];
-  int cube_index = 0;
-
+  short cube_index = 0;
+  this_cube.prev_index = this_cube.cube_index;
+  this_cube.cube_index = 0;
 #pragma unroll 1
   for (int i = 0; i < 8; ++i) {
     uint3 offset = make_uint3(kVertexCubeTable[i][0],
@@ -305,6 +306,7 @@ void MarchingCubesPass1(HashTableGPU&        hash_table,
     int mask = (1 << i);
     if (d[i] < isolevel) cube_index |= mask;
   }
+  this_cube.cube_index = cube_index;
   if (kEdgeTable[cube_index] == 0 || kEdgeTable[cube_index] == 255)
     return;
 
@@ -350,31 +352,10 @@ void MarchingCubesPass2(HashTableGPU&        hash_table,
   int3 voxel_pos = voxel_base_pos + make_int3(voxel_local_pos);
   float3 world_pos = VoxelToWorld(voxel_pos);
 
-  //////////
-  /// 1. Read the scalar values, see mc_tables.h
-  Voxel v;
-  const float voxel_size = kSDFParams.voxel_size;
-  const float kThreshold = 0.2f;
-
-  float d[8];
-  int cube_index = 0;
-
-#pragma unroll 1
-  for (int i = 0; i < 8; ++i) {
-    uint3 offset = make_uint3(kVertexCubeTable[i][0],
-                              kVertexCubeTable[i][1],
-                              kVertexCubeTable[i][2]);
-    v = GetVoxel(hash_table, blocks, map_entry, voxel_local_pos + offset);
-    if (v.weight == 0) return;
-
-    d[i] = v.sdf;
-    if (fabs(d[i]) > kThreshold) return;
-
-    int mask = (1 << i);
-    if (d[i] < isolevel) cube_index |= mask;
-  }
-  if (kEdgeTable[cube_index] == 0 || kEdgeTable[cube_index] == 255)
+  if (kEdgeTable[this_cube.cube_index] == 0
+      || kEdgeTable[this_cube.cube_index] == 255) {
     return;
+  }
 
   //////////
   /// 2. Determine vertices (ptr allocated via (shared) edges
@@ -386,7 +367,7 @@ void MarchingCubesPass2(HashTableGPU&        hash_table,
 #pragma unroll 1
   for (int i = 0; i < 12; ++i) {
     int mask = (1 << i);
-    if (kEdgeTable[cube_index] & mask) {
+    if (kEdgeTable[this_cube.cube_index] & mask) {
       uint4 c_idx = make_uint4(kEdgeCubeTable[i][0], kEdgeCubeTable[i][1],
                                kEdgeCubeTable[i][2], kEdgeCubeTable[i][3]);
       Cube &cube = GetCube(hash_table, blocks, map_entry,
@@ -396,13 +377,14 @@ void MarchingCubesPass2(HashTableGPU&        hash_table,
   }
 
   int i = 0;
-  for (int t = 0; kTriangleTable[cube_index][t] != -1; t += 3, ++i) {
+  if (this_cube.cube_index == this_cube.prev_index) return;
+  for (int t = 0; kTriangleTable[this_cube.cube_index][t] != -1; t += 3, ++i) {
     int triangle_ptrs = this_cube.triangle_ptrs[i];
 
     /// If the cube type is not changed, do not modify triangles,
     /// as they are what they are
-    if (kTriangleTable[cube_index][t]
-        != kTriangleTable[this_cube.cube_index][t]) {
+//    if (kTriangleTable[cube_index][t]
+//        != kTriangleTable[this_cube.cube_index][t]) {
       if (triangle_ptrs == FREE_PTR) {
         triangle_ptrs = mesh_data.AllocTriangle();
       } else { // recycle the rubbish (TODO: more sophisticated operations)
@@ -411,14 +393,14 @@ void MarchingCubesPass2(HashTableGPU&        hash_table,
         atomicSub(&mesh_data.vertices[vertex_ptrs.y].ref_count, 1);
         atomicSub(&mesh_data.vertices[vertex_ptrs.z].ref_count, 1);
       }
-    }
+
 
     this_cube.triangle_ptrs[i] = triangle_ptrs;
 
     int3 vertex_ptrs;
-    vertex_ptrs.x = vertex_ptr[kTriangleTable[cube_index][t + 0]];
-    vertex_ptrs.y = vertex_ptr[kTriangleTable[cube_index][t + 1]];
-    vertex_ptrs.z = vertex_ptr[kTriangleTable[cube_index][t + 2]];
+    vertex_ptrs.x = vertex_ptr[kTriangleTable[this_cube.cube_index][t + 0]];
+    vertex_ptrs.y = vertex_ptr[kTriangleTable[this_cube.cube_index][t + 1]];
+    vertex_ptrs.z = vertex_ptr[kTriangleTable[this_cube.cube_index][t + 2]];
 
     if (! use_fine_gradient) {
       float3 p0 = mesh_data.vertices[vertex_ptrs.x].pos;
@@ -436,7 +418,6 @@ void MarchingCubesPass2(HashTableGPU&        hash_table,
 
     mesh_data.triangles[triangle_ptrs].vertex_ptrs = vertex_ptrs;
   }
-  this_cube.cube_index = cube_index;
 }
 
 
@@ -484,7 +465,6 @@ void MarchingCubesPass1Kernel(HashTableGPU        hash_table,
   int3  voxel_base_pos  = BlockToVoxel(map_entry.pos);
   uint3 voxel_local_pos = IdxToVoxelLocalPos(local_idx);
   Cube &this_cube = blocks[map_entry.ptr].cubes[local_idx];
-  this_cube.cube_index = 0;
   MarchingCubesPass1(hash_table,
                        compact_hash_table,
                        blocks,
@@ -509,7 +489,6 @@ void MarchingCubesPass2Kernel(HashTableGPU        hash_table,
   int3  voxel_base_pos  = BlockToVoxel(map_entry.pos);
   uint3 voxel_local_pos = IdxToVoxelLocalPos(local_idx);
   Cube &this_cube = blocks[map_entry.ptr].cubes[local_idx];
-  this_cube.cube_index = 0;
   MarchingCubesPass2(hash_table,
                            compact_hash_table,
                            blocks,

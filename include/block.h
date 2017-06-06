@@ -55,7 +55,7 @@ struct __ALIGN__(4) Cube {
   int  vertex_ptrs   [kVerticesPerCube];
   int  vertex_mutexes[kVerticesPerCube];
   int  triangle_ptrs [kMaxTrianglesPerCube];
-  int  cube_index;
+  short cube_index, prev_index;
 
   __device__
   void ResetMutexes() {
@@ -84,6 +84,7 @@ struct __ALIGN__(4) Cube {
     }
 
     cube_index = 0;
+    prev_index = 0;
   }
 };
 
