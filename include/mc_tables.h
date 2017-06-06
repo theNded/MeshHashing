@@ -386,4 +386,12 @@ const static int kEdgeVertexTable[12][2] = {
         {7, 3}
 };
 
+const static unsigned char kMCReductionMasks[8][3] = {
+        {0, 0, 0}, {1, 1, 1},
+        {0, 0, 1}, {1, 1, 0},
+        {0, 1, 0}, {1, 0, 1},
+        {1, 0, 0}, {0, 1, 1}
+};
+
+
 #endif //VH_MC_TABLES_H

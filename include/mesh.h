@@ -19,6 +19,7 @@ struct __ALIGN__(4) Vertex {
   __device__
   void Clear() {
     pos = make_float3(0.0);
+    normal = make_float3(0.0);
     ref_count = 0;
   }
 };
@@ -71,6 +72,35 @@ struct MeshGPU {
   void FreeTriangle(uint ptr) {
     uint addr = atomicAdd(&triangle_heap_counter[0], 1);
     triangle_heap[addr + 1] = ptr;
+  }
+
+  /// Release is NOT always a FREE operation
+  __device__
+  void ReleaseTriangle(Triangle& triangle) {
+    int3 vertex_ptrs = triangle.vertex_ptrs;
+    atomicSub(&vertices[vertex_ptrs.x].ref_count, 1);
+    atomicSub(&vertices[vertex_ptrs.y].ref_count, 1);
+    atomicSub(&vertices[vertex_ptrs.z].ref_count, 1);
+  }
+
+  __device__
+  void AssignTriangle(Triangle& triangle, int3 vertex_ptrs) {
+    triangle.vertex_ptrs = vertex_ptrs;
+    atomicAdd(&vertices[vertex_ptrs.y].ref_count, 1);
+    atomicAdd(&vertices[vertex_ptrs.x].ref_count, 1);
+    atomicAdd(&vertices[vertex_ptrs.z].ref_count, 1);
+  }
+
+  __device__
+  void ComputeTriangleNormal(Triangle& triangle) {
+    int3 vertex_ptrs = triangle.vertex_ptrs;
+    float3 p0 = vertices[vertex_ptrs.x].pos;
+    float3 p1 = vertices[vertex_ptrs.y].pos;
+    float3 p2 = vertices[vertex_ptrs.z].pos;
+    float3 n = normalize(cross(p2 - p0, p1 - p0));
+    vertices[vertex_ptrs.x].normal = n;
+    vertices[vertex_ptrs.y].normal = n;
+    vertices[vertex_ptrs.z].normal = n;
   }
 #endif // __CUDACC__
 };
