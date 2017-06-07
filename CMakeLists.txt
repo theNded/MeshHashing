@@ -122,6 +122,7 @@ TARGET_LINK_LIBRARIES(voxel-hashing-cuda
 ### 3. VoxelHashing C++
 ADD_LIBRARY(voxel-hashing SHARED
         ${VH}/src/dataset_manager.cc
+        ${VH}/src/debugger.cc
         ${VH}/src/renderer.cc)
 TARGET_LINK_LIBRARIES(voxel-hashing
         voxel-hashing-cuda

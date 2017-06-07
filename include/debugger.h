@@ -27,7 +27,13 @@ private:
   uint*     triangle_heap_counter;
   Triangle* triangles;
 
+  int entry_count_;
+  int block_count_;
+
 public:
+  Debugger(int entry_count, int block_count);
+  ~Debugger();
+
   void CoreDump(HashTableGPU& hash_table);
   void CoreDump(BlocksGPU&    blocks);
   void CoreDump(MeshGPU&      mesh);

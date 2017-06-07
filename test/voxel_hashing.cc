@@ -15,6 +15,7 @@
 #include <opencv2/opencv.hpp>
 #include <sensor.h>
 #include <ray_caster.h>
+#include <debugger.h>
 
 #include "renderer.h"
 
@@ -70,6 +71,8 @@ int main(int argc, char** argv) {
 
   std::chrono::time_point<std::chrono::system_clock> start, end;
 
+  Debugger debugger(config.hash_params.entry_count,
+                    config.hash_params.value_capacity);
   while (rgbd_data.ProvideData(depth, color, wTc)) {
     start = std::chrono::system_clock::now();
 
@@ -112,6 +115,10 @@ int main(int argc, char** argv) {
       cv::flip(screen, screen, 0);
       writer << screen;
     }
+
+//    debugger.CoreDump(map.hash_table().gpu_data());
+//    debugger.CoreDump(map.blocks().gpu_data());
+//    debugger.DebugHashToBlock();
   }
 
 

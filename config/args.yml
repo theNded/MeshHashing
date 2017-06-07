@@ -9,15 +9,15 @@ dataset_type:    0
 # Render
 free_walk:       0
 line_only:       1
-new_mesh_only:   1
+new_mesh_only:   0
 fine_gradient:   1
 
 
 # Additional support
-ray_casting:     0
+ray_casting:     1
 
 # Result saving
-record_video:    1
+record_video:    0
 save_mesh:       1
 filename_prefix: "livingroom-only"
 

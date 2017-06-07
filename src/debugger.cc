@@ -2,8 +2,58 @@
 // Created by wei on 17-6-4.
 //
 
+#include <glog/logging.h>
 #include "debugger.h"
 
-void Debugger::CoreDump(HashTableGPU &hash_table) {
+Debugger::Debugger(int entry_count, int block_count) {
+  entry_count_ = entry_count;
+  block_count_ = block_count;
 
+  entries_ = new HashEntry[entry_count];
+  heap_ = new uint[block_count];
+  heap_counter_ = new uint[1];
+
+  blocks_ = new Block[block_count];
+}
+
+Debugger::~Debugger() {
+  delete[] entries_;
+  delete[] heap_;
+  delete[] heap_counter_;
+  delete[] blocks_;
+}
+
+void Debugger::CoreDump(HashTableGPU &hash_table) {
+  checkCudaErrors(cudaMemcpy(entries_, hash_table.entries,
+                             sizeof(HashEntry) * entry_count_,
+                             cudaMemcpyDeviceToHost));
+  checkCudaErrors(cudaMemcpy(heap_, hash_table.heap,
+                             sizeof(uint) * block_count_,
+                             cudaMemcpyDeviceToHost));
+  checkCudaErrors(cudaMemcpy(heap_counter_, hash_table.heap_counter,
+                             sizeof(uint),
+                             cudaMemcpyDeviceToHost));
+}
+
+void Debugger::CoreDump(BlocksGPU &blocks) {
+  checkCudaErrors(cudaMemcpy(blocks_, blocks,
+                             sizeof(Blocks) * block_count_,
+                             cudaMemcpyDeviceToHost));
+}
+
+void Debugger::DebugHashToBlock() {
+  for (int i = 0; i < entry_count_; ++i) {
+    HashEntry& entry = entries_[i];
+    if (entry.ptr != FREE_ENTRY) {
+      Block& block = blocks_[entry.ptr];
+
+      for (int j = 0; j < BLOCK_SIZE; ++j) {
+        LOG(INFO) << i << ": " << j << " "
+                  << "(" << (int)block.voxels[j].sweight.x << " , " << block.voxels[j].ssdf.x << ") "
+                  << "(" << (int)block.voxels[j].sweight.y << " , " << block.voxels[j].ssdf.y << ")";
+      }
+    }
+  }
+
+  getchar();
 }
