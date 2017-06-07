@@ -16,7 +16,7 @@ private:
   uint      *heap_counter_;
   ///           |
   ///           v
-  Block* blocks_;
+  Block     *blocks_;
   ///           |
   ///           v
   uint*   vertex_heap;
@@ -27,10 +27,16 @@ private:
   uint*     triangle_heap_counter;
   Triangle* triangles;
 
+  int entry_count_;
+  int block_count_;
+
 public:
-  void CoreDump(HashTableGPU&   hash_table);
-  void CoreDump(BlocksGPU& blocks);
-  void CoreDump(MeshGPU&        mesh);
+  Debugger(int entry_count, int block_count);
+  ~Debugger();
+
+  void CoreDump(HashTableGPU& hash_table);
+  void CoreDump(BlocksGPU&    blocks);
+  void CoreDump(MeshGPU&      mesh);
 
   void DebugHashToBlock();
   void DebugBlockToMesh();

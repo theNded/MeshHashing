@@ -15,6 +15,7 @@
 #include <opencv2/opencv.hpp>
 #include <sensor.h>
 #include <ray_caster.h>
+#include <debugger.h>
 
 #include "renderer.h"
 
@@ -48,6 +49,10 @@ int main(int argc, char** argv) {
   Sensor    sensor(config.sensor_params);
   RayCaster ray_caster(config.ray_caster_params);
 
+#ifdef DEBUG
+  Debugger  debugger(config.hash_params.entry_count,
+                     config.hash_params.value_capacity);
+#endif
   mesh_renderer.free_walk() = args.free_walk;
   mesh_renderer.line_only() = args.line_only;
   map.use_fine_gradient()   = args.fine_gradient;
@@ -112,6 +117,11 @@ int main(int argc, char** argv) {
       cv::flip(screen, screen, 0);
       writer << screen;
     }
+#ifdef DEBUG
+    debugger.CoreDump(map.hash_table().gpu_data());
+    debugger.CoreDump(map.blocks().gpu_data());
+    debugger.DebugHashToBlock();
+#endif
   }
 
 
