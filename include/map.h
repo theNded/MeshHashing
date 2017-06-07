@@ -15,11 +15,12 @@
 class Map {
 private:
   HashTable   hash_table_;
-  Blocks blocks_;
+  Blocks      blocks_;
   Mesh        mesh_;
 
   CompactHashTable compact_hash_table_;
   CompactMesh      compact_mesh_;
+  BBox       bbox_;
 
   uint integrated_frame_count_;
   bool use_fine_gradient_;
@@ -35,7 +36,6 @@ private:
 
   /// Compress entries
   void CollectInFrustumBlocks(Sensor& sensor);
-
 
 public:
   void CollectAllBlocks();
@@ -86,6 +86,13 @@ public:
   CompactMesh& compact_mesh() {
     return compact_mesh_;
   }
+
+  BBox& bbox() {
+    return bbox_;
+  }
+
+public:
+  void GetBoundingBoxes();
 };
 
 

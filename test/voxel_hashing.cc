@@ -43,12 +43,15 @@ int main(int argc, char** argv) {
                                 config.sensor_params.height,
                                 config.mesh_params.max_vertex_count,
                                 config.mesh_params.max_triangle_count);
+  BBoxRenderer bbox_renderer(mesh_renderer.context(),
+                             config.hash_params.value_capacity * 12);
 
   SetConstantSDFParams(config.sdf_params);
   Map       map(config.hash_params, config.mesh_params);
   Sensor    sensor(config.sensor_params);
   RayCaster ray_caster(config.ray_caster_params);
 
+  bbox_renderer.free_walk() = args.free_walk;
   mesh_renderer.free_walk() = args.free_walk;
   mesh_renderer.line_only() = args.line_only;
   map.use_fine_gradient()   = args.fine_gradient;
@@ -86,6 +89,7 @@ int main(int argc, char** argv) {
     cTw = wTc.getInverse();
 
     map.Integrate(sensor);
+    map.GetBoundingBoxes();
     map.MarchingCubes();
 
     if (args.ray_casting) {
@@ -102,6 +106,10 @@ int main(int argc, char** argv) {
       map.CollectAllBlocks();
     }
     map.CompressMesh();
+
+    bbox_renderer.Render(map.bbox().vertices(),
+                         map.bbox().vertex_count(),
+                         cTw);
     mesh_renderer.Render(map.compact_mesh().vertices(),
                          (size_t)map.compact_mesh().vertex_count(),
                          map.compact_mesh().normals(),
@@ -111,7 +119,7 @@ int main(int argc, char** argv) {
                          cTw);
 
     if (args.record_video) {
-      mesh_renderer.ScreenCapture(screen.data, screen.cols, screen.rows);
+      bbox_renderer.ScreenCapture(screen.data, screen.cols, screen.rows);
       cv::flip(screen, screen, 0);
       writer << screen;
     }

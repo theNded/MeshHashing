@@ -11,6 +11,11 @@
 
 bool RendererBase::is_cuda_init_ = false;
 
+RendererBase::RendererBase(gl_utils::Context& context) {
+  gl_context_ = context;
+  is_gl_init_ = true;
+}
+
 RendererBase::RendererBase(std::string name, uint width, uint height) {
   // TODO: fix this wierd bug during destruction
   gl_context_.Init(width, height, name);
@@ -250,7 +255,7 @@ void MeshRenderer::Render(float3 *vertices, size_t vertex_count,
   checkCudaErrors(cudaGraphicsUnmapResources(1, &cuda_triangles_, 0));
 
   LOG(INFO) << "OpenGL rendering";
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  //glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   glUseProgram(program_);
 
@@ -289,6 +294,135 @@ void MeshRenderer::Render(float3 *vertices, size_t vertex_count,
 
   glfwSwapBuffers(gl_context_.window());
   glfwPollEvents();
+
+  if (glfwGetKey(gl_context_.window(), GLFW_KEY_ESCAPE) == GLFW_PRESS ) {
+    exit(0);
+  }
+}
+
+////////////////////
+/// class LineRenderer
+////////////////////
+LineRenderer::LineRenderer(gl_utils::Context &context, int max_line_count)
+         : RendererBase(context) {
+  CHECK(is_gl_init_) << "OpenGL not initialized";
+  InitCUDA();
+
+  max_line_count_ = max_line_count;
+
+  glGenVertexArrays(1, &vao_);
+  glBindVertexArray(vao_);
+
+  vbo_ = new GLuint[1];
+  glGenBuffers(1, vbo_);
+
+  /// Vertex positions
+  glEnableVertexAttribArray(0);
+  glBindBuffer(GL_ARRAY_BUFFER, vbo_[0]);
+  glBufferData(GL_ARRAY_BUFFER, 2 * max_line_count * sizeof(float3),
+               NULL, GL_STATIC_DRAW);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+  checkCudaErrors(cudaGraphicsGLRegisterBuffer(
+          &cuda_vertices_, vbo_[0], cudaGraphicsMapFlagsNone));
+
+  glEnable(GL_DEPTH_TEST);
+  glDepthFunc(GL_LESS);
+
+  control_ = new gl_utils::Control(gl_context_.window(),
+                                   gl_context_.width(),
+                                   gl_context_.height());
+}
+
+LineRenderer::LineRenderer(std::string name, uint width, uint height,
+                           int max_line_count)
+        : RendererBase(name, width, height) {
+  CHECK(is_gl_init_) << "OpenGL not initialized";
+  InitCUDA();
+
+  max_line_count_ = max_line_count;
+
+  glGenVertexArrays(1, &vao_);
+  glBindVertexArray(vao_);
+
+  vbo_ = new GLuint[1];
+  glGenBuffers(1, vbo_);
+
+  /// Vertex positions
+  glEnableVertexAttribArray(0);
+  glBindBuffer(GL_ARRAY_BUFFER, vbo_[0]);
+  glBufferData(GL_ARRAY_BUFFER, 2 * max_line_count * sizeof(float3),
+               NULL, GL_STATIC_DRAW);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+  checkCudaErrors(cudaGraphicsGLRegisterBuffer(
+          &cuda_vertices_, vbo_[0], cudaGraphicsMapFlagsNone));
+
+  glEnable(GL_DEPTH_TEST);
+  glDepthFunc(GL_LESS);
+
+  control_ = new gl_utils::Control(gl_context_.window(),
+                                   gl_context_.width(),
+                                   gl_context_.height());
+}
+
+LineRenderer::~LineRenderer(){
+  glDeleteProgram(program_);
+  glDeleteBuffers(1, vbo_);
+  glDeleteVertexArrays(1, &vao_);
+
+  checkCudaErrors(cudaGraphicsUnregisterResource(cuda_vertices_));
+
+  delete[] vbo_;
+  delete[] control_;
+}
+
+void LineRenderer::Render(float3 *vertices, size_t vertex_count,
+                          float4x4 cTw) {
+
+  LOG(INFO) << "Transfering from CUDA to OpenGL";
+  float3 *map_ptr;
+  size_t map_size;
+
+  map_ptr = NULL;
+  checkCudaErrors(cudaGraphicsMapResources(1, &cuda_vertices_));
+  checkCudaErrors(cudaGraphicsResourceGetMappedPointer(
+          (void **)&map_ptr, &map_size, cuda_vertices_));
+  checkCudaErrors(cudaMemcpy(map_ptr, vertices,
+                             vertex_count * sizeof(float3),
+                             cudaMemcpyDeviceToDevice));
+  checkCudaErrors(cudaGraphicsUnmapResources(1, &cuda_vertices_, 0));
+
+  LOG(INFO) << "OpenGL rendering";
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  glUseProgram(program_);
+
+  glm::mat4 model_mat = glm::mat4(1);
+  model_mat[1][1] = -1;
+  model_mat[2][2] = -1;
+
+  glm::mat4 view_mat;
+  cTw = cTw.getTranspose();
+  for (int i = 0; i < 4; ++i)
+    for (int j = 0; j < 4; ++j)
+      view_mat[i][j] = cTw.entries2[i][j];
+
+  glm::mat4 mvp;
+  if (free_walk_) {
+    control_->UpdateCameraPose();
+    view_mat = control_->view_mat();
+  } else {
+    view_mat = model_mat * view_mat * glm::inverse(model_mat);
+  }
+  mvp = gl_context_.projection_mat() * view_mat * model_mat;
+
+  glUniformMatrix4fv(uniforms_[0], 1, GL_FALSE, &mvp[0][0]);
+  glBindVertexArray(vao_);
+
+  glDrawArrays(GL_LINES, 0, vertex_count);
+  //glfwSwapBuffers(gl_context_.window());
+  //glfwPollEvents();
 
   if (glfwGetKey(gl_context_.window(), GLFW_KEY_ESCAPE) == GLFW_PRESS ) {
     exit(0);

@@ -35,10 +35,14 @@ protected:
 public:
   static void InitCUDA();
 
+  RendererBase(gl_utils::Context& context);
   RendererBase(std::string name, uint width, uint height);
   ~RendererBase();
   GLFWwindow* window() {
     return gl_context_.window();
+  }
+  gl_utils::Context& context() {
+    return gl_context_;
   }
 
   void CompileShader(std::string vert_glsl_path,
@@ -90,6 +94,30 @@ public:
               float4x4 mvp);
 };
 
+class LineRenderer : public RendererBase {
+protected:
+  bool free_walk_     = false;
+  bool line_only_     = false;
+
+  cudaGraphicsResource* cuda_vertices_;
+  gl_utils::Control*    control_;
+
+  int max_line_count_;
+
+public:
+  bool &free_walk() {
+    return free_walk_;
+  }
+  bool &line_only() {
+    return line_only_;
+  }
+
+  LineRenderer(gl_utils::Context& context, int max_line_count);
+  LineRenderer(std::string name, uint width, uint height, int max_line_count);
+  ~LineRenderer();
+  void Render(float3* vertices, size_t vertex_count, float4x4 mvp);
+};
+
 /// An instance of MeshRenderer for easier use
 class MapMeshRenderer : public MeshRenderer {
 public:
@@ -105,6 +133,31 @@ public:
 
     CompileShader("../shader/mesh_vertex.glsl",
                   "../shader/mesh_fragment.glsl",
+                  uniform_names);
+  }
+};
+
+class BBoxRenderer : public LineRenderer {
+public:
+  BBoxRenderer(gl_utils::Context& context, int max_line_count)
+          : LineRenderer(context, max_line_count) {
+    std::vector<std::string> uniform_names;
+    uniform_names.clear();
+    uniform_names.push_back("mvp");
+
+    CompileShader("../shader/line_vertex.glsl",
+                  "../shader/line_fragment.glsl",
+                  uniform_names);
+  }
+
+  BBoxRenderer(std::string name, uint width, uint height, int max_line_count)
+          : LineRenderer(name, width, height, max_line_count) {
+    std::vector<std::string> uniform_names;
+    uniform_names.clear();
+    uniform_names.push_back("mvp");
+
+    CompileShader("../shader/line_vertex.glsl",
+                  "../shader/line_fragment.glsl",
                   uniform_names);
   }
 };

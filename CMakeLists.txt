@@ -137,6 +137,12 @@ TARGET_LINK_LIBRARIES(cuda_gl_interp
         ${OpenCV_LIBRARIES}
         ${GLOG_LIBRARIES})
 
+ADD_EXECUTABLE(bbox_render test/line_renderer.cc)
+TARGET_LINK_LIBRARIES(bbox_render
+        voxel-hashing
+        ${OpenCV_LIBRARIES}
+        ${GLOG_LIBRARIES})
+
 ### Loop over
 MESSAGE(STATUS ${GLOG_LIBRARIES})
 ADD_EXECUTABLE(voxel_hashing

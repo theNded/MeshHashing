@@ -174,6 +174,7 @@ Map::Map(const HashParams &hash_params, const MeshParams &mesh_params) {
 
   mesh_.Resize(mesh_params);
   compact_mesh_.Resize(mesh_params);
+  bbox_.Resize(hash_params.value_capacity * 24);
 }
 
 Map::~Map() {}
@@ -188,6 +189,7 @@ void Map::Reset() {
 
   compact_hash_table_.Reset();
   compact_mesh_.Reset();
+  bbox_.Reset();
 }
 
 /// Garbage collection

@@ -24,7 +24,7 @@ void CastKernel(const HashTableGPU hash_table,
     return;
 
   int pixel_idx = y * ray_caster_params.width + x;
-  gpu_data.depth_image [pixel_idx] = MINF;
+  gpu_data.depth_image [pixel_idx] = make_float4(MINF, MINF, MINF, MINF);
   gpu_data.vertex_image[pixel_idx] = make_float4(MINF, MINF, MINF, MINF);
   gpu_data.normal_image[pixel_idx] = make_float4(MINF, MINF, MINF, MINF);
   gpu_data.color_image [pixel_idx] = make_float4(1, 1, 1, 1);
@@ -86,7 +86,10 @@ void CastKernel(const HashTableGPU hash_table,
           if (abs(sdf) < ray_caster_params.sdf_threshold) {
             float depth = interpolated_t * camera_ray_dir.z;
 
-            gpu_data.depth_image [pixel_idx] = depth;
+            float3 rgb = ValToRGB(depth, 0.3, 5.0);
+            gpu_data.depth_image [pixel_idx]
+                    = make_float4(rgb.x, rgb.y, rgb.z, 1.0f);
+
             gpu_data.vertex_image[pixel_idx]
                     = make_float4(ImageReprojectToCamera(x, y, depth,
                                                          ray_caster_params.fx,
@@ -117,9 +120,9 @@ void CastKernel(const HashTableGPU hash_table,
                           * 20.0f / (distance * distance);
 
               /// Uncertainty: low -> entropy high
-              float3 rgb = ValToRGB(1 - entropy, 0, 1);
+              c3 = ValToRGB(1 - entropy, 0.0f, 1.0f);
               gpu_data.surface_image[pixel_idx]
-                      = make_float4(rgb.x, rgb.y, rgb.z, 1.0f);
+                      = make_float4(c3.x, c3.y, c3.z, 1.0f);
             }
 
             return;
@@ -140,12 +143,13 @@ void CastKernel(const HashTableGPU hash_table,
 RayCaster::RayCaster(const RayCasterParams& params) {
   ray_caster_params_ = params;
   uint image_size = params.width * params.height;
-  checkCudaErrors(cudaMalloc(&gpu_data_.depth_image, sizeof(float) * image_size));
+  checkCudaErrors(cudaMalloc(&gpu_data_.depth_image, sizeof(float4) * image_size));
   checkCudaErrors(cudaMalloc(&gpu_data_.vertex_image, sizeof(float4) * image_size));
   checkCudaErrors(cudaMalloc(&gpu_data_.normal_image, sizeof(float4) * image_size));
   checkCudaErrors(cudaMalloc(&gpu_data_.color_image, sizeof(float4) * image_size));
   checkCudaErrors(cudaMalloc(&gpu_data_.surface_image, sizeof(float4) * image_size));
 
+  depth_image_ = cv::Mat(params.height, params.width, CV_32FC4);
   normal_image_ = cv::Mat(params.height, params.width, CV_32FC4);
   color_image_  = cv::Mat(params.height, params.width, CV_32FC4);
   surface_image_ = cv::Mat(params.height, params.width, CV_32FC4);
@@ -180,6 +184,9 @@ void RayCaster::Cast(Map& map, const float4x4& c_T_w) {
   checkCudaErrors(cudaGetLastError());
 
   uint image_size = ray_caster_params_.height * ray_caster_params_.width;
+  checkCudaErrors(cudaMemcpy(depth_image_.data, gpu_data_.depth_image,
+                             sizeof(float) * 4 * image_size,
+                             cudaMemcpyDeviceToHost));
   checkCudaErrors(cudaMemcpy(normal_image_.data, gpu_data_.normal_image,
                              sizeof(float) * 4 * image_size,
                              cudaMemcpyDeviceToHost));
@@ -189,5 +196,4 @@ void RayCaster::Cast(Map& map, const float4x4& c_T_w) {
   checkCudaErrors(cudaMemcpy(surface_image_.data, gpu_data_.surface_image,
                              sizeof(float) * 4 * image_size,
                              cudaMemcpyDeviceToHost));
-
 }

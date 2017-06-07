@@ -179,5 +179,38 @@ public:
   }
 };
 
+//////////////////////
+/// Bonuding Box, used for debugging
+/////////////////////
+struct BBoxGPU {
+  float3* vertices;
+  uint*   vertex_counter;
+};
 
+class BBox {
+private:
+  BBoxGPU gpu_data_;
+  int max_vertex_count_;
+
+  void Alloc(int max_vertex_count);
+  void Free();
+
+public:
+  BBox();
+  ~BBox();
+
+  uint vertex_count();
+
+  float3* vertices() {
+    return gpu_data_.vertices;
+  }
+
+  void Resize(int amx_vertex_count);
+  void Reset();
+
+  BBoxGPU& gpu_data() {
+    return gpu_data_;
+  }
+
+};
 #endif //VOXEL_HASHING_MESH_H
