@@ -42,7 +42,8 @@ int main(int argc, char** argv) {
                     config.sensor_params.width,
                     config.sensor_params.height);
   MeshObject mesh(config.mesh_params.max_vertex_count,
-                  config.mesh_params.max_triangle_count);
+                  config.mesh_params.max_triangle_count,
+                  kColor);
   LineObject bbox(config.hash_params.value_capacity * 24);
   renderer.free_walk() = args.free_walk;
   mesh.line_only() = args.line_only;
@@ -88,7 +89,6 @@ int main(int argc, char** argv) {
     cTw = wTc.getInverse();
 
     map.Integrate(sensor);
-    map.GetBoundingBoxes();
     map.MarchingCubes();
 
     if (args.ray_casting) {
@@ -104,13 +104,14 @@ int main(int argc, char** argv) {
     if (! args.new_mesh_only) {
       map.CollectAllBlocks();
     }
+    map.GetBoundingBoxes();
     map.CompressMesh();
 
     bbox.SetData(map.bbox().vertices(),
                  map.bbox().vertex_count());
     mesh.SetData(map.compact_mesh().vertices(),
                  (size_t)map.compact_mesh().vertex_count(),
-                 map.compact_mesh().normals(),
+                 map.compact_mesh().colors(),
                  (size_t)map.compact_mesh().vertex_count(),
                  map.compact_mesh().triangles(),
                  (size_t)map.compact_mesh().triangle_count());

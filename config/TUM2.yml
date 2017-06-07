@@ -1,10 +1,10 @@
 %YAML:1.0
 # Hash params
-bucket_count:      400000
+bucket_count:      100000
 bucket_size:       10
-entry_count:       4000000
+entry_count:       1000000
 linked_list_size:  7
-value_capacity:    100000
+value_capacity:    40000
 
 # SDF params
 voxel_size:                0.064
@@ -33,5 +33,5 @@ sample_sdf_threshold: 0.808
 sdf_threshold:        0.800
 enable_gradient:      1
 
-max_vertex_count:     10000000
-max_triangle_count:   10000000
+max_vertex_count:     1000000
+max_triangle_count:   1000000

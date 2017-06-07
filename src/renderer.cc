@@ -186,49 +186,100 @@ void FrameObject::Render(glm::mat4 m, glm::mat4 v, glm::mat4 p) {
 ////////////////////
 /// class Mesh
 ////////////////////
-MeshObject::MeshObject(int max_vertex_count, int max_triangle_count) {
+MeshObject::MeshObject(int max_vertex_count, int max_triangle_count,
+                       MeshType type) {
+  type_ = type;
   max_vertex_count_ = max_vertex_count;
   max_triangle_count_ = max_triangle_count;
 
+  /// 1. Select shader
   std::vector<std::string> uniform_names;
   uniform_names.clear();
-  uniform_names.push_back("mvp");
-  uniform_names.push_back("view_mat");
-  uniform_names.push_back("model_mat");
+  switch (type) {
+    case kNormal:
+      uniform_names.push_back("mvp");
+      uniform_names.push_back("view_mat");
+      uniform_names.push_back("model_mat");
 
-  CompileShader("../shader/mesh_vertex.glsl",
-                "../shader/mesh_fragment.glsl",
-                uniform_names);
+      CompileShader("../shader/mesh_vn_vertex.glsl",
+                    "../shader/mesh_vn_fragment.glsl",
+                    uniform_names);
+      break;
+    case kColor:
+      uniform_names.push_back("mvp");
+      CompileShader("../shader/mesh_vc_vertex.glsl",
+                    "../shader/mesh_vc_fragment.glsl",
+                    uniform_names);
+      break;
+    default:
+      break;
+  }
+
   glGenVertexArrays(1, &vao_);
   glBindVertexArray(vao_);
 
-  vbo_ = new GLuint[3];
-  glGenBuffers(3, vbo_);
+  /// 2. Generate buffers
+  vbo_count_ = 0;
+  switch (type) {
+    case kNormal:
+      vbo_count_ = 3;
+      break;
+    case kColor:
+      vbo_count_ = 3;
+      break;
+    default:
+      vbo_count_ = 0;
+      break;
+  }
 
-  /// Vertex positions
+  vbo_ = new GLuint[vbo_count_];
+  glGenBuffers(vbo_count_, vbo_);
+
+  /// 3. Bind buffers
   glEnableVertexAttribArray(0);
   glBindBuffer(GL_ARRAY_BUFFER, vbo_[0]);
   glBufferData(GL_ARRAY_BUFFER, max_vertex_count * sizeof(float3),
                NULL, GL_STATIC_DRAW);
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-
-  /// Vertex normals
-  glEnableVertexAttribArray(1);
-  glBindBuffer(GL_ARRAY_BUFFER, vbo_[1]);
-  glBufferData(GL_ARRAY_BUFFER, max_vertex_count * sizeof(float3),
-               NULL, GL_STATIC_DRAW);
-  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, 0);
-
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo_[2]);
-  glBufferData(GL_ELEMENT_ARRAY_BUFFER, max_triangle_count * sizeof(int3),
-               NULL, GL_STATIC_DRAW);
-
   checkCudaErrors(cudaGraphicsGLRegisterBuffer(
           &cuda_vertices_, vbo_[0], cudaGraphicsMapFlagsNone));
-  checkCudaErrors(cudaGraphicsGLRegisterBuffer(
-          &cuda_normals_, vbo_[1], cudaGraphicsMapFlagsNone));
-  checkCudaErrors(cudaGraphicsGLRegisterBuffer(
-          &cuda_triangles_, vbo_[2], cudaGraphicsMapFlagsNone));
+
+  switch (type) {
+    case kNormal:
+      glEnableVertexAttribArray(1);
+      glBindBuffer(GL_ARRAY_BUFFER, vbo_[1]);
+      glBufferData(GL_ARRAY_BUFFER, max_vertex_count * sizeof(float3),
+                   NULL, GL_STATIC_DRAW);
+      glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, 0);
+      checkCudaErrors(cudaGraphicsGLRegisterBuffer(
+              &cuda_normals_, vbo_[1], cudaGraphicsMapFlagsNone));
+
+      glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo_[2]);
+      glBufferData(GL_ELEMENT_ARRAY_BUFFER, max_triangle_count * sizeof(int3),
+                   NULL, GL_STATIC_DRAW);
+      checkCudaErrors(cudaGraphicsGLRegisterBuffer(
+              &cuda_triangles_, vbo_[2], cudaGraphicsMapFlagsNone));
+      break;
+
+    case kColor:
+      glEnableVertexAttribArray(1);
+      glBindBuffer(GL_ARRAY_BUFFER, vbo_[1]);
+      glBufferData(GL_ARRAY_BUFFER, max_vertex_count * sizeof(float3),
+                   NULL, GL_STATIC_DRAW);
+      glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, 0);
+      checkCudaErrors(cudaGraphicsGLRegisterBuffer(
+              &cuda_colors_, vbo_[1], cudaGraphicsMapFlagsNone));
+
+      glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, vbo_[2]);
+      glBufferData(GL_ELEMENT_ARRAY_BUFFER, max_triangle_count * sizeof(int3),
+                   NULL, GL_STATIC_DRAW);
+      checkCudaErrors(cudaGraphicsGLRegisterBuffer(
+              &cuda_triangles_, vbo_[2], cudaGraphicsMapFlagsNone));
+      break;
+
+    default:
+      break;
+  }
 
   glEnable(GL_DEPTH_TEST);
   glDepthFunc(GL_LESS);
@@ -236,19 +287,28 @@ MeshObject::MeshObject(int max_vertex_count, int max_triangle_count) {
 
 MeshObject::~MeshObject() {
   glDeleteProgram(program_);
-  glDeleteBuffers(3, vbo_);
+  glDeleteBuffers(vbo_count_, vbo_);
   glDeleteVertexArrays(1, &vao_);
 
+  switch (type_) {
+    case kNormal:
+      checkCudaErrors(cudaGraphicsUnregisterResource(cuda_normals_));
+      break;
+    case kColor:
+      checkCudaErrors(cudaGraphicsUnregisterResource(cuda_colors_));
+      break;
+    default:
+      break;
+  }
   checkCudaErrors(cudaGraphicsUnregisterResource(cuda_vertices_));
-  checkCudaErrors(cudaGraphicsUnregisterResource(cuda_normals_));
   checkCudaErrors(cudaGraphicsUnregisterResource(cuda_triangles_));
 
   delete[] vbo_;
 }
 
 void MeshObject::SetData(float3 *vertices, size_t vertex_count,
-                   float3 *normals,  size_t normal_count,
-                   int3 *triangles,  size_t triangle_count) {
+                         float3 *normals_or_colors,  size_t normal_count,
+                         int3 *triangles,  size_t triangle_count) {
   vertex_count_ = vertex_count;
   triangle_count_ = triangle_count;
 
@@ -266,13 +326,26 @@ void MeshObject::SetData(float3 *vertices, size_t vertex_count,
   checkCudaErrors(cudaGraphicsUnmapResources(1, &cuda_vertices_, 0));
 
   map_ptr = NULL;
-  checkCudaErrors(cudaGraphicsMapResources(1, &cuda_normals_));
-  checkCudaErrors(cudaGraphicsResourceGetMappedPointer(
-          (void **)&map_ptr, &map_size, cuda_normals_));
-  checkCudaErrors(cudaMemcpy(map_ptr, normals,
-                             normal_count * sizeof(float3),
-                             cudaMemcpyDeviceToDevice));
-  checkCudaErrors(cudaGraphicsUnmapResources(1, &cuda_normals_, 0));
+  switch (type_) {
+    case kNormal:
+      checkCudaErrors(cudaGraphicsMapResources(1, &cuda_normals_));
+      checkCudaErrors(cudaGraphicsResourceGetMappedPointer(
+              (void **) &map_ptr, &map_size, cuda_normals_));
+      checkCudaErrors(cudaMemcpy(map_ptr, normals_or_colors,
+                                 normal_count * sizeof(float3),
+                                 cudaMemcpyDeviceToDevice));
+      checkCudaErrors(cudaGraphicsUnmapResources(1, &cuda_normals_, 0));
+      break;
+    case kColor:
+      checkCudaErrors(cudaGraphicsMapResources(1, &cuda_colors_));
+      checkCudaErrors(cudaGraphicsResourceGetMappedPointer(
+              (void **) &map_ptr, &map_size, cuda_colors_));
+      checkCudaErrors(cudaMemcpy(map_ptr, normals_or_colors,
+                                 normal_count * sizeof(float3),
+                                 cudaMemcpyDeviceToDevice));
+      checkCudaErrors(cudaGraphicsUnmapResources(1, &cuda_colors_, 0));
+      break;
+  }
 
   map_ptr = NULL;
   checkCudaErrors(cudaGraphicsMapResources(1, &cuda_triangles_));
@@ -287,9 +360,20 @@ void MeshObject::SetData(float3 *vertices, size_t vertex_count,
 void MeshObject::Render(glm::mat4 m, glm::mat4 v, glm::mat4 p) {
   glm::mat4 mvp = p * v * m;
   glUseProgram(program_);
-  glUniformMatrix4fv(uniforms_[0], 1, GL_FALSE, &mvp[0][0]);
-  glUniformMatrix4fv(uniforms_[1], 1, GL_FALSE, &v[0][0]);
-  glUniformMatrix4fv(uniforms_[2], 1, GL_FALSE, &m[0][0]);
+
+  switch (type_) {
+    case kNormal:
+      glUniformMatrix4fv(uniforms_[0], 1, GL_FALSE, &mvp[0][0]);
+      glUniformMatrix4fv(uniforms_[1], 1, GL_FALSE, &v[0][0]);
+      glUniformMatrix4fv(uniforms_[2], 1, GL_FALSE, &m[0][0]);
+      break;
+    case kColor:
+      glUniformMatrix4fv(uniforms_[0], 1, GL_FALSE, &mvp[0][0]);
+      break;
+    default:
+      break;
+  }
+
   glBindVertexArray(vao_);
 
   // If render mesh only:

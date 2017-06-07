@@ -1,5 +1,6 @@
 #include <glog/logging.h>
 #include <unordered_map>
+#include <color_util.h>
 
 #include "mc_tables.h"
 #include "map.h"
@@ -91,7 +92,6 @@ inline int AllocateVertexLockFree(const HashTableGPU &hash_table,
   if (use_fine_gradient) {
     mesh.vertices[ptr].normal = GradientAtPoint(hash_table, blocks, vertex_pos);
   }
-
   return ptr;
 }
 
@@ -117,6 +117,12 @@ inline int AllocateVertexWithMutex(const HashTableGPU &hash_table,
     if (use_fine_gradient) {
       mesh.vertices[ptr].normal = GradientAtPoint(hash_table, blocks, vertex_pos);
     }
+
+    float sdf, entropy;
+    uchar3 color;
+    TrilinearInterpolation(hash_table, blocks, vertex_pos, sdf, entropy, color);
+    float3 val = ValToRGB(1 - entropy, 0, 1);
+    mesh.vertices[ptr].color = make_float3(val.z, val.y, val.x);
   }
 
   return ptr;
@@ -554,6 +560,7 @@ void CompressVerticesKernel(MeshGPU        mesh,
     compact_mesh.vertex_remapper[idx] = addr;
     compact_mesh.vertices[addr] = mesh.vertices[idx].pos;
     compact_mesh.normals[addr]  = mesh.vertices[idx].normal;
+    compact_mesh.colors[addr]   = mesh.vertices[idx].color;
   }
 }
 
@@ -767,7 +774,8 @@ void Map::GetBoundingBoxes() {
 
   {
     const uint threads_per_block = BLOCK_SIZE;
-    const dim3 grid_size(occupied_block_count, 1);
+    const dim3 grid_size((occupied_block_count + threads_per_block - 1)
+                         / threads_per_block, 1);
     const dim3 block_size(threads_per_block, 1);
 
     GetBoundingBoxKernel <<< grid_size, block_size >>> (
@@ -776,4 +784,5 @@ void Map::GetBoundingBoxes() {
     checkCudaErrors(cudaDeviceSynchronize());
     checkCudaErrors(cudaGetLastError());
   }
+  LOG(INFO) << bbox_.vertex_count();
 }

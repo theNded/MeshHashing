@@ -6,11 +6,11 @@
 #define VH_COLOR_UTIL_H
 
 #include "common.h"
+#include "helper_math.h"
 
 // http://paulbourke.net/texture_colour/colourspace/
 __host__ __device__
-inline float3 ValToRGB(float v,
-                       const float vmin, const float vmax) {
+inline float3 ValToRGB(float v, const float vmin, const float vmax) {
   float3 c = make_float3(1.0f);
 
   float dv;

@@ -104,12 +104,19 @@ public:
   void SetData(float4* image);
 };
 
+enum MeshType {
+  kNormal,
+  kColor,
+  kNormalColor
+};
+
 class MeshObject : public GLObjectBase {
 protected:
   bool line_only_     = false;
 
   cudaGraphicsResource* cuda_vertices_;
   cudaGraphicsResource* cuda_normals_;
+  cudaGraphicsResource* cuda_colors_;
   cudaGraphicsResource* cuda_triangles_;
 
   int max_vertex_count_;
@@ -118,12 +125,16 @@ protected:
   int vertex_count_;
   int triangle_count_;
 
+  int vbo_count_;
+  MeshType type_;
+
 public:
   bool &line_only() {
     return line_only_;
   }
 
-  MeshObject(int max_vertex_count, int max_triangle_count);
+  MeshObject(int max_vertex_count, int max_triangle_count,
+             MeshType type = kNormal);
   ~MeshObject();
   void Render(glm::mat4 m, glm::mat4 v, glm::mat4 p);
   void SetData(float3* vertices, size_t vertex_count,

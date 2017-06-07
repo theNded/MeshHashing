@@ -14,12 +14,14 @@
 struct __ALIGN__(4) Vertex {
   float3 pos;
   float3 normal;
+  float3 color;
   int    ref_count;
 
   __device__
   void Clear() {
     pos = make_float3(0.0);
     normal = make_float3(0.0);
+    color = make_float3(0);
     ref_count = 0;
   }
 };
@@ -138,6 +140,7 @@ struct CompactMeshGPU {
 
   float3*   vertices;
   float3*   normals;
+  float3*   colors;
   int*      vertices_ref_count;
   uint*     vertex_counter;
 
@@ -166,6 +169,9 @@ public:
   }
   float3* normals() {
     return gpu_data_.normals;
+  }
+  float3* colors() {
+    return gpu_data_.colors;
   }
   int3* triangles() {
     return gpu_data_.triangles;
