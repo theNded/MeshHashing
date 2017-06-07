@@ -18,147 +18,131 @@
 #include "matrix.h"
 #include <cuda_gl_interop.h>
 
-class RendererBase {
+class GLObjectBase;
+
+class Renderer {
 protected:
   /// Shared
   static bool is_cuda_init_;
-
   bool is_gl_init_ = false;
-  gl_utils::Context gl_context_;
-
-  GLuint vao_;
-  GLuint* vbo_;
-  GLuint program_;
-  std::vector<GLuint> uniforms_;
-  GLuint texture_;
-
-public:
   static void InitCUDA();
 
-  RendererBase(gl_utils::Context& context);
-  RendererBase(std::string name, uint width, uint height);
-  ~RendererBase();
-  GLFWwindow* window() {
-    return gl_context_.window();
+  gl_utils::Context  gl_context_;
+  gl_utils::Control *control_;
+  uint               width_;
+  uint               height_;
+
+  std::vector<GLObjectBase*> objects_;
+
+  bool free_walk_     = false;
+
+  glm::mat4 m_;
+  glm::mat4 v_;
+  glm::mat4 p_;
+
+public:
+  Renderer(std::string name, uint width, uint height);
+  ~Renderer();
+
+  void Render(float4x4 cTw);
+  void ScreenCapture(unsigned char* data, int width, int height);
+
+  void AddObject(GLObjectBase* object) {
+    objects_.push_back(object);
   }
+
   gl_utils::Context& context() {
     return gl_context_;
   }
+  GLFWwindow* window() {
+    return gl_context_.window();
+  }
+  const uint& width() const {
+    return width_;
+  }
+  const uint& height() const {
+    return height_;
+  }
+  bool &free_walk() {
+    return free_walk_;
+  }
+};
 
+class GLObjectBase {
+protected:
+  GLuint  vao_;
+  GLuint* vbo_;
+  GLuint  program_;
+  GLuint  texture_;
+
+  std::vector<GLuint> uniforms_;
+
+public:
+  GLObjectBase(){};
+  ~GLObjectBase(){};
+
+  virtual void Render(glm::mat4 m, glm::mat4 v, glm::mat4 p) = 0;
   void CompileShader(std::string vert_glsl_path,
                      std::string frag_glsl_path,
                      std::vector<std::string>& uniform_names);
-  void ScreenCapture(unsigned char* data, int width, int height);
 };
 
-class FrameRenderer : public RendererBase {
-private:
+class FrameObject : public GLObjectBase {
+protected:
   static const GLfloat kVertices[8];
   static const GLubyte kIndices[6];
+
   cudaGraphicsResource* cuda_resource_;
 
+  uint width_;
+  uint height_;
 public:
-  FrameRenderer(std::string name, uint width, uint height);
-  ~FrameRenderer();
-  void Render(float4* image);
+  FrameObject(uint width, uint height);
+  ~FrameObject();
+
+  void Render(glm::mat4 m, glm::mat4 v, glm::mat4 p);
+  void SetData(float4* image);
 };
 
-class MeshRenderer : public RendererBase {
+class MeshObject : public GLObjectBase {
 protected:
-  bool free_walk_     = false;
   bool line_only_     = false;
 
   cudaGraphicsResource* cuda_vertices_;
   cudaGraphicsResource* cuda_normals_;
   cudaGraphicsResource* cuda_triangles_;
-  gl_utils::Control*    control_;
 
   int max_vertex_count_;
   int max_triangle_count_;
 
+  int vertex_count_;
+  int triangle_count_;
+
 public:
-  bool &free_walk() {
-    return free_walk_;
-  }
   bool &line_only() {
     return line_only_;
   }
 
-  /// Assume vertex_count == normal_count at current
-  MeshRenderer(std::string name, uint width, uint height,
-               int max_vertex_count, int triangle_count);
-  ~MeshRenderer();
-  void Render(float3* vertices, size_t vertex_count,
-              float3* normals,  size_t normal_count,
-              int3* triangles,  size_t triangle_count,
-              float4x4 mvp);
+  MeshObject(int max_vertex_count, int max_triangle_count);
+  ~MeshObject();
+  void Render(glm::mat4 m, glm::mat4 v, glm::mat4 p);
+  void SetData(float3* vertices, size_t vertex_count,
+               float3* normals,  size_t normal_count,
+               int3* triangles,  size_t triangle_count);
 };
 
-class LineRenderer : public RendererBase {
+class LineObject : public GLObjectBase {
 protected:
-  bool free_walk_     = false;
-  bool line_only_     = false;
-
   cudaGraphicsResource* cuda_vertices_;
-  gl_utils::Control*    control_;
 
-  int max_line_count_;
+  int max_vertex_count_;
+  int vertex_count_;
 
 public:
-  bool &free_walk() {
-    return free_walk_;
-  }
-  bool &line_only() {
-    return line_only_;
-  }
-
-  LineRenderer(gl_utils::Context& context, int max_line_count);
-  LineRenderer(std::string name, uint width, uint height, int max_line_count);
-  ~LineRenderer();
-  void Render(float3* vertices, size_t vertex_count, float4x4 mvp);
+  LineObject(int max_vertex_count);
+  ~LineObject();
+  void Render(glm::mat4 m, glm::mat4 v, glm::mat4 p);
+  void SetData(float3* vertices, size_t vertex_count);
 };
 
-/// An instance of MeshRenderer for easier use
-class MapMeshRenderer : public MeshRenderer {
-public:
-  MapMeshRenderer(std::string name, uint width, uint height,
-                  int max_vertex_count, int triangle_count)
-          : MeshRenderer(name, width, height,
-                         max_vertex_count, triangle_count) {
-    std::vector<std::string> uniform_names;
-    uniform_names.clear();
-    uniform_names.push_back("mvp");
-    uniform_names.push_back("view_mat");
-    uniform_names.push_back("model_mat");
-
-    CompileShader("../shader/mesh_vertex.glsl",
-                  "../shader/mesh_fragment.glsl",
-                  uniform_names);
-  }
-};
-
-class BBoxRenderer : public LineRenderer {
-public:
-  BBoxRenderer(gl_utils::Context& context, int max_line_count)
-          : LineRenderer(context, max_line_count) {
-    std::vector<std::string> uniform_names;
-    uniform_names.clear();
-    uniform_names.push_back("mvp");
-
-    CompileShader("../shader/line_vertex.glsl",
-                  "../shader/line_fragment.glsl",
-                  uniform_names);
-  }
-
-  BBoxRenderer(std::string name, uint width, uint height, int max_line_count)
-          : LineRenderer(name, width, height, max_line_count) {
-    std::vector<std::string> uniform_names;
-    uniform_names.clear();
-    uniform_names.push_back("mvp");
-
-    CompileShader("../shader/line_vertex.glsl",
-                  "../shader/line_fragment.glsl",
-                  uniform_names);
-  }
-};
 #endif //VH_RENDERER_H

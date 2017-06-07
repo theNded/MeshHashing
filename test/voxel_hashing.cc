@@ -38,22 +38,21 @@ int main(int argc, char** argv) {
   config.LoadConfig(dataset_type);
   rgbd_data.LoadDataset(datasets[dataset_type]);
 
-  MapMeshRenderer mesh_renderer("Mesh",
-                                config.sensor_params.width,
-                                config.sensor_params.height,
-                                config.mesh_params.max_vertex_count,
-                                config.mesh_params.max_triangle_count);
-  BBoxRenderer bbox_renderer(mesh_renderer.context(),
-                             config.hash_params.value_capacity * 12);
+  Renderer renderer("Mesh",
+                    config.sensor_params.width,
+                    config.sensor_params.height);
+  MeshObject mesh(config.mesh_params.max_vertex_count,
+                  config.mesh_params.max_triangle_count);
+  LineObject bbox(config.hash_params.value_capacity * 24);
+  renderer.free_walk() = args.free_walk;
+  mesh.line_only() = args.line_only;
+  renderer.AddObject(&mesh);
+  renderer.AddObject(&bbox);
 
   SetConstantSDFParams(config.sdf_params);
   Map       map(config.hash_params, config.mesh_params);
   Sensor    sensor(config.sensor_params);
   RayCaster ray_caster(config.ray_caster_params);
-
-  bbox_renderer.free_walk() = args.free_walk;
-  mesh_renderer.free_walk() = args.free_walk;
-  mesh_renderer.line_only() = args.line_only;
   map.use_fine_gradient()   = args.fine_gradient;
 
   cv::VideoWriter writer;
@@ -107,19 +106,18 @@ int main(int argc, char** argv) {
     }
     map.CompressMesh();
 
-    bbox_renderer.Render(map.bbox().vertices(),
-                         map.bbox().vertex_count(),
-                         cTw);
-    mesh_renderer.Render(map.compact_mesh().vertices(),
-                         (size_t)map.compact_mesh().vertex_count(),
-                         map.compact_mesh().normals(),
-                         (size_t)map.compact_mesh().vertex_count(),
-                         map.compact_mesh().triangles(),
-                         (size_t)map.compact_mesh().triangle_count(),
-                         cTw);
+    bbox.SetData(map.bbox().vertices(),
+                 map.bbox().vertex_count());
+    mesh.SetData(map.compact_mesh().vertices(),
+                 (size_t)map.compact_mesh().vertex_count(),
+                 map.compact_mesh().normals(),
+                 (size_t)map.compact_mesh().vertex_count(),
+                 map.compact_mesh().triangles(),
+                 (size_t)map.compact_mesh().triangle_count());
+    renderer.Render(cTw);
 
     if (args.record_video) {
-      bbox_renderer.ScreenCapture(screen.data, screen.cols, screen.rows);
+      renderer.ScreenCapture(screen.data, screen.cols, screen.rows);
       cv::flip(screen, screen, 0);
       writer << screen;
     }
