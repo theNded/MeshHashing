@@ -8,12 +8,15 @@ dataset_type:    4
 
 # Render
 free_walk:       1
-line_only:       0
+line_only:       1
 new_mesh_only:   0
 fine_gradient:   1
+# 0 for shaded map, 1 for entropy color map
+render_type:     1
 
 # Additional support
-ray_casting:     1
+bounding_box:    1
+ray_casting:     0
 
 # Result saving
 record_video:    0
@@ -21,4 +24,4 @@ save_mesh:       1
 filename_prefix: "livingroom-only"
 
 # Others
-run_frames:      -1
+run_frames:      100

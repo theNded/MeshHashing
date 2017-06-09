@@ -46,14 +46,22 @@ void Debugger::DebugHashToBlock() {
     HashEntry& entry = entries_[i];
     if (entry.ptr != FREE_ENTRY) {
       Block& block = blocks_[entry.ptr];
-
-      for (int j = 0; j < BLOCK_SIZE; ++j) {
-        LOG(INFO) << i << ": " << j << " "
-                  << "(" << (int)block.voxels[j].sweight.x << " , " << block.voxels[j].ssdf.x << ") "
-                  << "(" << (int)block.voxels[j].sweight.y << " , " << block.voxels[j].ssdf.y << ")";
+      if (block_map_.find(entry.pos) == block_map_.end()) {
+        std::vector<Block> vec;
+        vec.push_back(block);
+        block_map_.emplace(entry.pos, vec);
+      } else {
+        block_map_[entry.pos].push_back(block);
       }
     }
   }
-
-  getchar();
 }
+
+void Debugger::PrintDebugInfo() {
+  for (auto& item : block_map_) {
+    int3 pos = item.first;
+    LOG(INFO) << "(" << pos.x << " " << pos.y << " " << pos.z << "): "
+              << item.second.size();
+  }
+}
+

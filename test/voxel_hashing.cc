@@ -38,17 +38,24 @@ int main(int argc, char** argv) {
   config.LoadConfig(dataset_type);
   rgbd_data.LoadDataset(datasets[dataset_type]);
 
+  MeshType mesh_type = args.render_type == 0 ? kNormal : kColor;
+
   Renderer renderer("Mesh",
                     config.sensor_params.width,
                     config.sensor_params.height);
   MeshObject mesh(config.mesh_params.max_vertex_count,
                   config.mesh_params.max_triangle_count,
-                  kColor);
-  LineObject bbox(config.hash_params.value_capacity * 24);
-  renderer.free_walk() = args.free_walk;
+                  mesh_type);
   mesh.line_only() = args.line_only;
   renderer.AddObject(&mesh);
-  renderer.AddObject(&bbox);
+
+  LineObject* bbox;
+  if (args.bounding_box) {
+    bbox = new LineObject(config.hash_params.value_capacity * 24);
+    renderer.AddObject(bbox);
+  }
+
+  renderer.free_walk() = args.free_walk;
 
   SetConstantSDFParams(config.sdf_params);
   Map       map(config.hash_params, config.mesh_params);
@@ -91,6 +98,10 @@ int main(int argc, char** argv) {
     map.Integrate(sensor);
     map.MarchingCubes();
 
+    debugger.CoreDump(map.hash_table().gpu_data());
+    debugger.CoreDump(map.blocks().gpu_data());
+    debugger.DebugHashToBlock();
+
     if (args.ray_casting) {
       ray_caster.Cast(map, cTw);
       cv::imshow("RayCasting", ray_caster.surface_image());
@@ -107,11 +118,14 @@ int main(int argc, char** argv) {
     map.GetBoundingBoxes();
     map.CompressMesh();
 
-    bbox.SetData(map.bbox().vertices(),
-                 map.bbox().vertex_count());
+    if (args.bounding_box) {
+      bbox->SetData(map.bbox().vertices(),
+                    map.bbox().vertex_count());
+    }
     mesh.SetData(map.compact_mesh().vertices(),
                  (size_t)map.compact_mesh().vertex_count(),
-                 map.compact_mesh().colors(),
+                 args.render_type == 0 ?
+                 map.compact_mesh().normals() : map.compact_mesh().colors(),
                  (size_t)map.compact_mesh().vertex_count(),
                  map.compact_mesh().triangles(),
                  (size_t)map.compact_mesh().triangle_count());
@@ -123,11 +137,9 @@ int main(int argc, char** argv) {
       writer << screen;
     }
 
-//    debugger.CoreDump(map.hash_table().gpu_data());
-//    debugger.CoreDump(map.blocks().gpu_data());
-//    debugger.DebugHashToBlock();
   }
 
+  debugger.PrintDebugInfo();
 
   end = std::chrono::system_clock::now();
   std::chrono::duration<double> seconds = end - start;
@@ -137,5 +149,6 @@ int main(int argc, char** argv) {
   if (args.save_mesh) {
     map.SaveMesh(args.filename_prefix + ".obj");
   }
+
   return 0;
 }

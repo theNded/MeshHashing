@@ -9,8 +9,8 @@ value_capacity:    100000
 # SDF params
 voxel_size:                0.04
 sdf_upper_bound:           4.0
-truncation_distance_scale: 0.04
-truncation_distance:       0.12
+truncation_distance_scale: 0.02
+truncation_distance:       0.04
 weight_sample:             10
 weight_upper_bound:        255
 

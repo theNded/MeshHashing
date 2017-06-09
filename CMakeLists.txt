@@ -113,6 +113,7 @@ CUDA_ADD_LIBRARY(voxel-hashing-cuda
         ${VH}/src/map_core.cu
         ${VH}/src/map_fusion.cu
         ${VH}/src/map_mesh.cu
+        ${VH}/src/map_debug.cu
         ${VH}/src/ray_caster.cu)
 TARGET_LINK_LIBRARIES(voxel-hashing-cuda
         ${CUDA_DEPENDENCIES}

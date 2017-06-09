@@ -83,7 +83,9 @@ struct RuntimeParams {
   bool line_only;
   bool new_mesh_only;
   bool fine_gradient;
+  bool render_type;
 
+  bool bounding_box;
   bool ray_casting;
 
   bool record_video;

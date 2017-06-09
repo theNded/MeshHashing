@@ -19,7 +19,9 @@ void LoadRuntimeParams(std::string path, RuntimeParams& params) {
   params.line_only     = (int)fs["line_only"];
   params.new_mesh_only = (int)fs["new_mesh_only"];
   params.fine_gradient = (int)fs["fine_gradient"];
+  params.render_type   = (int)fs["render_type"];
 
+  params.bounding_box  = (int)fs["bounding_box"];
   params.ray_casting   = (int)fs["ray_casting"];
 
   params.record_video  = (int)fs["record_video"];

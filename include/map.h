@@ -20,10 +20,11 @@ private:
 
   CompactHashTable compact_hash_table_;
   CompactMesh      compact_mesh_;
-  BBox       bbox_;
 
   uint integrated_frame_count_;
   bool use_fine_gradient_;
+
+  BBox       bbox_;
 
 ////////////////////
 /// Core
