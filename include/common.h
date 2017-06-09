@@ -42,7 +42,7 @@ typedef signed char schar;
 
 /// Block size in voxel unit
 #define BLOCK_SIDE_LENGTH  8
-#define BLOCK_SIZE         512 // 8x8x8
+#define BLOCK_SIZE         (BLOCK_SIDE_LENGTH * BLOCK_SIDE_LENGTH * BLOCK_SIDE_LENGTH)
 #define MEMORY_LIMIT       100
 
 /// Entry state

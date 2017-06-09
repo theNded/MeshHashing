@@ -12,7 +12,7 @@ static const Dataset datasets[] = {
         {TUM1,           "/home/wei/data/TUM/rgbd_dataset_freiburg1_xyz/"},
         {TUM2,           "/home/wei/data/TUM/rgbd_dataset_freiburg2_xyz/"},
         {TUM3,           "/home/wei/data/TUM/rgbd_dataset_freiburg3_long_office_household/"},
-        {SUN3D,          "/home/wei/data/SUN3D/copyroom/"},
+        {SUN3D,          "/home/wei/data/SUN3D/lounge/"},
         {SUN3D_ORIGINAL, "/home/wei/data/SUN3D-Princeton/hotel_umd/maryland_hotel3/"},
         {PKU,            "/home/wei/data/3DVCR/lab3/"}
 };

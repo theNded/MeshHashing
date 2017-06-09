@@ -47,7 +47,7 @@ public:
 
   /// Reset and recycle
   void Reset();
-  void Recycle();
+  void Recycle(int frame_count);
 
 ////////////////////
 /// Fusion

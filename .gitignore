@@ -37,5 +37,6 @@ cmake-build-debug/
 bin/
 lib/
 .idea/
+result/
 # Others
 *~

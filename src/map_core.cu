@@ -45,13 +45,17 @@ void CollectGarbageBlocksKernel(CompactHashTableGPU compact_hash_table,
 
   Voxel v0 = blocks[entry.ptr].voxels[2*threadIdx.x+0];
   Voxel v1 = blocks[entry.ptr].voxels[2*threadIdx.x+1];
+  short c0 = blocks[entry.ptr].cubes[2*threadIdx.x+0].curr_index;
+  short c1 = blocks[entry.ptr].cubes[2*threadIdx.x+1].curr_index;
 
   float sdf0 = v0.sdf(), sdf1 = v1.sdf();
   if (v0.weight() == 0)	sdf0 = PINF;
   if (v1.weight() == 0)	sdf1 = PINF;
 
+  __shared__ int    shared_valid_triangle[BLOCK_SIZE / 2];
   __shared__ float	shared_min_sdf   [BLOCK_SIZE / 2];
   __shared__ uint		shared_max_weight[BLOCK_SIZE / 2];
+  shared_valid_triangle[threadIdx.x] = (c0 != 0) + (c1 != 0);
   shared_min_sdf[threadIdx.x] = fminf(fabsf(sdf0), fabsf(sdf1));
   shared_max_weight[threadIdx.x] = max(v0.weight(), v1.weight());
 
@@ -61,6 +65,7 @@ void CollectGarbageBlocksKernel(CompactHashTableGPU compact_hash_table,
 
     __syncthreads();
     if ((threadIdx.x  & (stride-1)) == (stride-1)) {
+      shared_valid_triangle[threadIdx.x] += shared_valid_triangle[threadIdx.x-stride/2];
       shared_min_sdf[threadIdx.x] = fminf(shared_min_sdf[threadIdx.x-stride/2],
                                           shared_min_sdf[threadIdx.x]);
       shared_max_weight[threadIdx.x] = max(shared_max_weight[threadIdx.x-stride/2],
@@ -70,14 +75,17 @@ void CollectGarbageBlocksKernel(CompactHashTableGPU compact_hash_table,
   __syncthreads();
 
   if (threadIdx.x == blockDim.x - 1) {
+    int valid_triangles = shared_valid_triangle[threadIdx.x];
     float min_sdf = shared_min_sdf[threadIdx.x];
     uint max_weight = shared_max_weight[threadIdx.x];
 
     // TODO(wei): check this weird reference
     float t = truncate_distance(5.0f);
 
+    // TODO(wei): add || valid_triangles == 0 when memory leak is dealt with
     compact_hash_table.entry_recycle_flags[idx] =
             (min_sdf >= t || max_weight == 0) ? 1 : 0;
+
   }
 }
 
@@ -193,16 +201,13 @@ void Map::Reset() {
 }
 
 /// Garbage collection
-void Map::Recycle() {
+void Map::Recycle(int frame_count) {
   // TODO(wei): change it via global parameters
-  bool kRecycle = true;
-  int garbage_collect_starve = 15;
 
-  if (kRecycle) {
-    if (integrated_frame_count_ > 0
-        && integrated_frame_count_ % garbage_collect_starve == 0) {
-      StarveOccupiedBlocks();
-    }
+  int kRecycleGap = 15;
+  if (frame_count % kRecycleGap == kRecycleGap - 1) {
+    StarveOccupiedBlocks();
+
     CollectGarbageBlocks();
     hash_table_.ResetMutexes();
     RecycleGarbageBlocks();

@@ -82,8 +82,10 @@ int main(int argc, char** argv) {
 
   std::chrono::time_point<std::chrono::system_clock> start, end;
 
+#ifdef DEBUG
   Debugger debugger(config.hash_params.entry_count,
                     config.hash_params.value_capacity);
+#endif
   while (rgbd_data.ProvideData(depth, color, wTc)) {
     start = std::chrono::system_clock::now();
 
@@ -99,9 +101,11 @@ int main(int argc, char** argv) {
     map.Integrate(sensor);
     map.MarchingCubes();
 
+#ifdef DEBUG
     debugger.CoreDump(map.hash_table().gpu_data());
     debugger.CoreDump(map.blocks().gpu_data());
     debugger.DebugHashToBlock();
+#endif
 
     if (args.ray_casting) {
       ray_caster.Cast(map, cTw);
@@ -139,13 +143,9 @@ int main(int argc, char** argv) {
     }
   }
 
+#ifdef DEBUG
   debugger.PrintDebugInfo();
-
-  end = std::chrono::system_clock::now();
-  std::chrono::duration<double> seconds = end - start;
-  LOG(INFO) << "Total time: " << seconds.count();
-  LOG(INFO) << "Fps: " << frame_count / seconds.count();
-
+#endif
   if (args.save_mesh) {
     map.SaveMesh(args.filename_prefix + ".obj");
   }
