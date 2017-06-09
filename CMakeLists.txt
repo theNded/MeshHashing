@@ -83,19 +83,19 @@ MESSAGE(STATUS ${CUDA_TOOLKIT_INCLUDE})
 
 INCLUDE_DIRECTORIES(
         ${VH}/include
-        ${VH}/gl_utils
-        ${VH}/cuda_utils
+        ${VH}/gl_util
+        ${VH}/cuda_util
         ${GLOG_INCLUDE_DIRS}
         ${CUDA_TOOLKIT_INCLUDE})
 
 #----------
 ## Building Libraries
-### 1. OpenGL utils
-ADD_LIBRARY(gl-utils SHARED
-        ${VH}/gl_utils/context.cc
-        ${VH}/gl_utils/control.cc
-        ${VH}/gl_utils/shader.cc)
-TARGET_LINK_LIBRARIES(gl-utils
+### 1. OpenGL util
+ADD_LIBRARY(gl-util SHARED
+        ${VH}/gl_util/context.cc
+        ${VH}/gl_util/control.cc
+        ${VH}/gl_util/shader.cc)
+TARGET_LINK_LIBRARIES(gl-util
         ${OPENGL_DEPENDENCIES}
         ${GLOG_LIBRARIES})
 
@@ -126,12 +126,12 @@ ADD_LIBRARY(voxel-hashing SHARED
         ${VH}/src/renderer.cc)
 TARGET_LINK_LIBRARIES(voxel-hashing
         voxel-hashing-cuda
-        gl-utils)
+        gl-util)
 
 #----------
 ## Unit tests
 ### CUDA - OpenGL intergration
-ADD_EXECUTABLE(cuda_gl_interp test/cuda_gl_interp.cc)
+ADD_EXECUTABLE(cuda_gl_interp unit_test/cuda_gl_interp.cc)
 TARGET_LINK_LIBRARIES(cuda_gl_interp
         voxel-hashing
         ${OpenCV_LIBRARIES}
@@ -140,20 +140,20 @@ TARGET_LINK_LIBRARIES(cuda_gl_interp
 ### Loop over
 MESSAGE(STATUS ${GLOG_LIBRARIES})
 ADD_EXECUTABLE(voxel_hashing
-        test/voxel_hashing.cc)
+        example/voxel_hashing.cc)
 TARGET_LINK_LIBRARIES(voxel_hashing
         voxel-hashing
         ${OpenCV_LIBRARIES}
         ${GLOG_LIBRARIES})
 
-### An ORB test
+### An ORB example
 FIND_PACKAGE(Pangolin REQUIRED)
 INCLUDE_DIRECTORIES(
         ../orb_slam2/
         ../orb_slam2/include
         ${EIGEN3_INCLUDE_DIR})
 LINK_DIRECTORIES(../orb_slam2/lib)
-ADD_EXECUTABLE(rgbd_orb test/rgbd_orb.cc)
+ADD_EXECUTABLE(rgbd_orb example/rgbd_orb.cc)
 TARGET_LINK_LIBRARIES(rgbd_orb
         voxel-hashing
         ORB_SLAM2

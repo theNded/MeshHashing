@@ -20,7 +20,7 @@ int main() {
   ////////// Load data here
   float * cpu_mem;
   float4* cuda_mem;
-  cv::Mat im = cv::imread("../test/img.png");
+  cv::Mat im = cv::imread("../example/img.png");
 
   cv::resize(im, im, cv::Size(640, 480));
   cpu_mem = new float[4 * sizeof(float) * 640 * 480];
