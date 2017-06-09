@@ -61,6 +61,7 @@ int main(int argc, char** argv) {
   Map       map(config.hash_params, config.mesh_params);
   Sensor    sensor(config.sensor_params);
   RayCaster ray_caster(config.ray_caster_params);
+
   map.use_fine_gradient()   = args.fine_gradient;
 
   cv::VideoWriter writer;
@@ -136,7 +137,6 @@ int main(int argc, char** argv) {
       cv::flip(screen, screen, 0);
       writer << screen;
     }
-
   }
 
   debugger.PrintDebugInfo();

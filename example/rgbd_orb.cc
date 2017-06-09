@@ -63,19 +63,21 @@ int main(int argc, char **argv) {
   config.LoadConfig(dataset_type);
   rgbd_data.LoadDataset(datasets[dataset_type]);
 
-  MapMeshRenderer mesh_renderer("Mesh",
-                                config.sensor_params.width,
-                                config.sensor_params.height,
-                                config.mesh_params.max_vertex_count,
-                                config.mesh_params.max_triangle_count);
+  Renderer mesh_renderer("Mesh",
+                         config.sensor_params.width,
+                         config.sensor_params.height);
+
+  MeshObject mesh(config.mesh_params.max_vertex_count,
+                  config.mesh_params.max_triangle_count);
+  mesh_renderer.free_walk()     = args.free_walk;
+  mesh.line_only()     = args.line_only;
+  mesh_renderer.AddObject(&mesh);
 
   SetConstantSDFParams(config.sdf_params);
   Map       map(config.hash_params, config.mesh_params);
   Sensor    sensor(config.sensor_params);
   RayCaster ray_caster(config.ray_caster_params);
 
-  mesh_renderer.free_walk()     = args.free_walk;
-  mesh_renderer.line_only()     = args.line_only;
   map.use_fine_gradient()       = args.fine_gradient;
 
   cv::VideoWriter writer;
@@ -129,13 +131,13 @@ int main(int argc, char **argv) {
       map.CollectAllBlocks();
     }
     map.CompressMesh();
-    mesh_renderer.Render(map.compact_mesh().vertices(),
-                         (size_t)map.compact_mesh().vertex_count(),
-                         map.compact_mesh().normals(),
-                         (size_t)map.compact_mesh().vertex_count(),
-                         map.compact_mesh().triangles(),
-                         (size_t)map.compact_mesh().triangle_count(),
-                         cTw);
+    mesh.SetData(map.compact_mesh().vertices(),
+                 (size_t)map.compact_mesh().vertex_count(),
+                 map.compact_mesh().normals(),
+                 (size_t)map.compact_mesh().vertex_count(),
+                 map.compact_mesh().triangles(),
+                 (size_t)map.compact_mesh().triangle_count());
+    mesh_renderer.Render(cTw);
 
     if (args.record_video) {
       mesh_renderer.ScreenCapture(screen.data, screen.cols, screen.rows);
