@@ -35,6 +35,7 @@ struct __ALIGN__(8) Voxel {
 
   __device__
   float sdf() {
+    if (sweight.x + sweight.y == 0) return 0;
     return (ssdf.x * sweight.x + ssdf.y * sweight.y) / (sweight.x + sweight.y);
   }
 

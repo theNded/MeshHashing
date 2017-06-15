@@ -4,24 +4,34 @@
 # 4   - SUN3D
 # 5   - SUN3D_ORIGINAL
 # 6   - PKU
-dataset_type:    4
+dataset_type:    0
 
-# Render
+# -----------
+# Render options
 free_walk:       0
-line_only:       1
-new_mesh_only:   0
-fine_gradient:   0
-# 0 for shaded map, 1 for entropy color map
-render_type:     1
 
-# Additional support
+# Polygon_mode draw triangle with only lines;
+# otherwise with entire planes
+ploygon_mode:    1
+
+# 1 - in frustum
+# 0 - in all
+mesh_range:      0
+
+# 0 - shaded map,
+# 1 - entropy color map
+render_type:     0
+# If use shaded map, set it to 1
+fine_gradient:   1
+
+# Additional settings
 bounding_box:    0
 ray_casting:     0
 
 # Result saving
 record_video:    1
 save_mesh:       1
-filename_prefix: "livingroom-only"
+filename_prefix: "lv2-entropy"
 
 # Others
 run_frames:      -1

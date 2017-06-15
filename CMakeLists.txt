@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.6)
+cmake_minimum_required(VERSION 3.5)
 PROJECT(voxel-hashing)
 cmake_policy(SET CMP0015 NEW)
 
@@ -117,13 +117,13 @@ CUDA_ADD_LIBRARY(voxel-hashing-cuda
         ${VH}/src/ray_caster.cu)
 TARGET_LINK_LIBRARIES(voxel-hashing-cuda
         ${CUDA_DEPENDENCIES}
-        ${OpenCV_LIBRARIES} # cv::Mat in sensor
+        -lopencv_core -lopencv_highgui -lopencv_imgproc# cv::Mat in sensor
         ${GLOG_LIBRARIES})
 
 ### 3. VoxelHashing C++
 ADD_LIBRARY(voxel-hashing SHARED
         ${VH}/src/dataset_manager.cc
-        ${VH}/src/debugger.cc
+        ${VH}/tool/cpp/debugger.cc
         ${VH}/src/renderer.cc)
 TARGET_LINK_LIBRARIES(voxel-hashing
         voxel-hashing-cuda
@@ -135,6 +135,12 @@ TARGET_LINK_LIBRARIES(voxel-hashing
 ADD_EXECUTABLE(cuda_gl_interp unit_test/cuda_gl_interp.cc)
 TARGET_LINK_LIBRARIES(cuda_gl_interp
         voxel-hashing
+        -lopencv_core -lopencv_highgui
+        ${GLOG_LIBRARIES})
+
+ADD_EXECUTABLE(block_visualizer unit_test/block_visualizer.cc)
+TARGET_LINK_LIBRARIES(block_visualizer
+        voxel-hashing
         ${OpenCV_LIBRARIES}
         ${GLOG_LIBRARIES})
 
@@ -144,7 +150,7 @@ ADD_EXECUTABLE(voxel_hashing
         example/voxel_hashing.cc)
 TARGET_LINK_LIBRARIES(voxel_hashing
         voxel-hashing
-        ${OpenCV_LIBRARIES}
+        -lopencv_core -lopencv_highgui
         ${GLOG_LIBRARIES})
 
 ### An ORB example
@@ -159,5 +165,5 @@ TARGET_LINK_LIBRARIES(rgbd_orb
         voxel-hashing
         ORB_SLAM2
         ${Pangolin_LIBRARIES}
-        ${OpenCV_LIBRARIES}
+        -lopencv_core -lopencv_highgui
         ${GLOG_LIBRARIES})

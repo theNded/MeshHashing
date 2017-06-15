@@ -2,6 +2,7 @@
 // Created by wei on 17-3-26.
 //
 #include <string>
+#include <vector>
 #include <cuda_runtime.h>
 #include <glog/logging.h>
 #include <opencv2/opencv.hpp>
@@ -15,13 +16,14 @@
 #include <opencv2/opencv.hpp>
 #include <sensor.h>
 #include <ray_caster.h>
-#include <debugger.h>
+#include "../tool/cpp/debugger.h"
 
 #include "renderer.h"
 
 #include "dataset_manager.h"
 #include "datasets.h"
 
+#define DEBUG
 
 /// Refer to constant.cu
 extern void SetConstantSDFParams(const SDFParams& params);
@@ -46,7 +48,7 @@ int main(int argc, char** argv) {
   MeshObject mesh(config.mesh_params.max_vertex_count,
                   config.mesh_params.max_triangle_count,
                   mesh_type);
-  mesh.line_only() = args.line_only;
+  mesh.ploygon_mode() = args.ploygon_mode;
   renderer.AddObject(&mesh);
 
   LineObject* bbox;
@@ -67,7 +69,7 @@ int main(int argc, char** argv) {
   cv::VideoWriter writer;
   cv::Mat screen;
   if (args.record_video) {
-    writer = cv::VideoWriter(args.filename_prefix + ".avi",
+    writer = cv::VideoWriter("../result/videos/" + args.filename_prefix + ".avi",
                              CV_FOURCC('X','V','I','D'),
                              30, cv::Size(config.sensor_params.width,
                                           config.sensor_params.height));
@@ -84,7 +86,9 @@ int main(int argc, char** argv) {
 
 #ifdef DEBUG
   Debugger debugger(config.hash_params.entry_count,
-                    config.hash_params.value_capacity);
+                    config.hash_params.value_capacity,
+                    config.mesh_params.max_vertex_count,
+                    config.mesh_params.max_triangle_count);
 #endif
   while (rgbd_data.ProvideData(depth, color, wTc)) {
     start = std::chrono::system_clock::now();
@@ -101,12 +105,6 @@ int main(int argc, char** argv) {
     map.Integrate(sensor);
     map.MarchingCubes();
 
-#ifdef DEBUG
-    debugger.CoreDump(map.hash_table().gpu_data());
-    debugger.CoreDump(map.blocks().gpu_data());
-    debugger.DebugHashToBlock();
-#endif
-
     if (args.ray_casting) {
       ray_caster.Cast(map, cTw);
       cv::imshow("RayCasting", ray_caster.surface_image());
@@ -117,7 +115,7 @@ int main(int argc, char** argv) {
     LOG(INFO) << "Total time: " << seconds.count();
     LOG(INFO) << "Fps: " << 1.0f / seconds.count();
 
-    if (! args.new_mesh_only) {
+    if (! args.mesh_range) {
       map.CollectAllBlocks();
     }
     map.GetBoundingBoxes();
@@ -127,13 +125,21 @@ int main(int argc, char** argv) {
       bbox->SetData(map.bbox().vertices(),
                     map.bbox().vertex_count());
     }
-    mesh.SetData(map.compact_mesh().vertices(),
-                 (size_t)map.compact_mesh().vertex_count(),
-                 args.render_type == 0 ?
-                 map.compact_mesh().normals() : map.compact_mesh().colors(),
-                 (size_t)map.compact_mesh().vertex_count(),
-                 map.compact_mesh().triangles(),
-                 (size_t)map.compact_mesh().triangle_count());
+
+    if (args.render_type == 0) {
+      mesh.SetData(map.compact_mesh().vertices(), map.compact_mesh().vertex_count(),
+                   map.compact_mesh().normals(), map.compact_mesh().vertex_count(),
+                   NULL, 0,
+                   map.compact_mesh().triangles(), map.compact_mesh().triangle_count());
+    } else {
+      mesh.SetData(map.compact_mesh().vertices(),
+                   map.compact_mesh().vertex_count(),
+                   NULL, 0,
+                   map.compact_mesh().colors(),
+                   map.compact_mesh().vertex_count(),
+                   map.compact_mesh().triangles(),
+                   map.compact_mesh().triangle_count());
+    }
     renderer.Render(cTw);
 
     if (args.record_video) {
@@ -141,13 +147,17 @@ int main(int argc, char** argv) {
       cv::flip(screen, screen, 0);
       writer << screen;
     }
+
   }
 
 #ifdef DEBUG
-  debugger.PrintDebugInfo();
+//  debugger.CoreDump(map.compact_hash_table().gpu_data());
+//  debugger.CoreDump(map.blocks().gpu_data());
+//  debugger.CoreDump(map.mesh().gpu_data());
+//  debugger.DebugAll();
 #endif
   if (args.save_mesh) {
-    map.SaveMesh(args.filename_prefix + ".obj");
+    map.SaveMesh("../result/models/" + args.filename_prefix + ".obj");
   }
 
   return 0;

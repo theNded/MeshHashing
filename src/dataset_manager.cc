@@ -16,8 +16,8 @@ void LoadRuntimeParams(std::string path, RuntimeParams& params) {
   params.dataset_type  = (int)fs["dataset_type"];
 
   params.free_walk     = (int)fs["free_walk"];
-  params.line_only     = (int)fs["line_only"];
-  params.new_mesh_only = (int)fs["new_mesh_only"];
+  params.ploygon_mode     = (int)fs["ploygon_mode"];
+  params.mesh_range = (int)fs["mesh_range"];
   params.fine_gradient = (int)fs["fine_gradient"];
   params.render_type   = (int)fs["render_type"];
 

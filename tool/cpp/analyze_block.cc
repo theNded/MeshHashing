@@ -6,6 +6,5 @@
 #include "renderer.h"
 
 int main() {
-  Renderer renderer("Block", 640, 480);
-  
+
 }

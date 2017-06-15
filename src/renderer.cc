@@ -72,6 +72,7 @@ void Renderer::Render(float4x4 cTw) {
     v_ = m_ * v_ * glm::inverse(m_);
   }
 
+  glClearColor(1, 1, 1, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   control_->UpdateCameraPose();
 
@@ -207,6 +208,7 @@ MeshObject::MeshObject(int max_vertex_count, int max_triangle_count,
       break;
     case kColor:
       uniform_names.push_back("mvp");
+
       CompileShader("../shader/mesh_vc_vertex.glsl",
                     "../shader/mesh_vc_fragment.glsl",
                     uniform_names);
@@ -307,7 +309,8 @@ MeshObject::~MeshObject() {
 }
 
 void MeshObject::SetData(float3 *vertices, size_t vertex_count,
-                         float3 *normals_or_colors,  size_t normal_count,
+                         float3 *normals,  size_t normal_count,
+                         float3 *colors,  size_t color_count,
                          int3 *triangles,  size_t triangle_count) {
   vertex_count_ = vertex_count;
   triangle_count_ = triangle_count;
@@ -331,7 +334,7 @@ void MeshObject::SetData(float3 *vertices, size_t vertex_count,
       checkCudaErrors(cudaGraphicsMapResources(1, &cuda_normals_));
       checkCudaErrors(cudaGraphicsResourceGetMappedPointer(
               (void **) &map_ptr, &map_size, cuda_normals_));
-      checkCudaErrors(cudaMemcpy(map_ptr, normals_or_colors,
+      checkCudaErrors(cudaMemcpy(map_ptr, normals,
                                  normal_count * sizeof(float3),
                                  cudaMemcpyDeviceToDevice));
       checkCudaErrors(cudaGraphicsUnmapResources(1, &cuda_normals_, 0));
@@ -340,10 +343,12 @@ void MeshObject::SetData(float3 *vertices, size_t vertex_count,
       checkCudaErrors(cudaGraphicsMapResources(1, &cuda_colors_));
       checkCudaErrors(cudaGraphicsResourceGetMappedPointer(
               (void **) &map_ptr, &map_size, cuda_colors_));
-      checkCudaErrors(cudaMemcpy(map_ptr, normals_or_colors,
-                                 normal_count * sizeof(float3),
+      checkCudaErrors(cudaMemcpy(map_ptr, colors,
+                                 color_count * sizeof(float3),
                                  cudaMemcpyDeviceToDevice));
       checkCudaErrors(cudaGraphicsUnmapResources(1, &cuda_colors_, 0));
+      break;
+    default:
       break;
   }
 
@@ -377,7 +382,7 @@ void MeshObject::Render(glm::mat4 m, glm::mat4 v, glm::mat4 p) {
   glBindVertexArray(vao_);
 
   // If render mesh only:
-  if (line_only_) {
+  if (ploygon_mode_) {
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
   }
   /// NOTE: Use GL_UNSIGNED_INT instead of GL_INT, otherwise it won't work
@@ -454,4 +459,95 @@ void LineObject::Render(glm::mat4 m, glm::mat4 v, glm::mat4 p) {
   glBindVertexArray(vao_);
 
   glDrawArrays(GL_LINES, 0, vertex_count_);
+}
+
+///////////////////
+/// class PointObject
+///////////////////
+PointObject::PointObject(int max_vertex_count) {
+  max_vertex_count_ = max_vertex_count;
+
+  std::vector<std::string> uniform_names;
+  uniform_names.clear();
+  uniform_names.push_back("mvp");
+
+  CompileShader("../shader/point_vertex.glsl",
+                "../shader/point_fragment.glsl",
+                uniform_names);
+
+  glGenVertexArrays(1, &vao_);
+  glBindVertexArray(vao_);
+
+  vbo_ = new GLuint[2];
+  glGenBuffers(2, vbo_);
+
+  /// Vertex positions
+  glEnableVertexAttribArray(0);
+  glBindBuffer(GL_ARRAY_BUFFER, vbo_[0]);
+  glBufferData(GL_ARRAY_BUFFER, max_vertex_count * sizeof(float3),
+               NULL, GL_STATIC_DRAW);
+  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+  glEnableVertexAttribArray(1);
+  glBindBuffer(GL_ARRAY_BUFFER, vbo_[1]);
+  glBufferData(GL_ARRAY_BUFFER, max_vertex_count * sizeof(float3),
+               NULL, GL_STATIC_DRAW);
+  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+  checkCudaErrors(cudaGraphicsGLRegisterBuffer(
+          &cuda_vertices_, vbo_[0], cudaGraphicsMapFlagsNone));
+  checkCudaErrors(cudaGraphicsGLRegisterBuffer(
+          &cuda_colors_, vbo_[1], cudaGraphicsMapFlagsNone));
+
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_PROGRAM_POINT_SIZE);
+  glDepthFunc(GL_LESS);
+}
+
+PointObject::~PointObject() {
+  glDeleteProgram(program_);
+  glDeleteBuffers(1, vbo_);
+  glDeleteVertexArrays(1, &vao_);
+
+  checkCudaErrors(cudaGraphicsUnregisterResource(cuda_vertices_));
+
+  delete[] vbo_;
+}
+
+void PointObject::SetData(float3 *vertices, size_t vertex_count,
+                          float3 *colors, size_t color_count) {
+  vertex_count_ = vertex_count;
+
+  LOG(INFO) << "Transfering from CUDA to OpenGL";
+  float3 *map_ptr;
+  size_t map_size;
+
+  map_ptr = NULL;
+  checkCudaErrors(cudaGraphicsMapResources(1, &cuda_vertices_));
+  checkCudaErrors(cudaGraphicsResourceGetMappedPointer(
+          (void **)&map_ptr, &map_size, cuda_vertices_));
+  checkCudaErrors(cudaMemcpy(map_ptr, vertices,
+                             vertex_count * sizeof(float3),
+                             cudaMemcpyDeviceToDevice));
+  checkCudaErrors(cudaGraphicsUnmapResources(1, &cuda_vertices_, 0));
+
+  map_ptr = NULL;
+  checkCudaErrors(cudaGraphicsMapResources(1, &cuda_colors_));
+  checkCudaErrors(cudaGraphicsResourceGetMappedPointer(
+          (void **)&map_ptr, &map_size, cuda_colors_));
+  checkCudaErrors(cudaMemcpy(map_ptr, colors,
+                             color_count * sizeof(float3),
+                             cudaMemcpyDeviceToDevice));
+  checkCudaErrors(cudaGraphicsUnmapResources(1, &cuda_colors_, 0));
+}
+
+void PointObject::Render(glm::mat4 m, glm::mat4 v, glm::mat4 p) {
+  LOG(INFO) << "OpenGL rendering";
+
+  glm::mat4 mvp = p * v * m;
+  glUseProgram(program_);
+  glUniformMatrix4fv(uniforms_[0], 1, GL_FALSE, &mvp[0][0]);
+  glBindVertexArray(vao_);
+
+  glDrawArrays(GL_POINTS, 0, vertex_count_);
 }

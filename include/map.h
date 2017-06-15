@@ -81,8 +81,14 @@ public:
   HashTable& hash_table() {
     return hash_table_;
   }
+  CompactHashTable& compact_hash_table() {
+    return compact_hash_table_;
+  }
   Blocks& blocks() {
     return blocks_;
+  }
+  Mesh& mesh() {
+    return mesh_;
   }
   CompactMesh& compact_mesh() {
     return compact_mesh_;

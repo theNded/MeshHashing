@@ -112,7 +112,7 @@ enum MeshType {
 
 class MeshObject : public GLObjectBase {
 protected:
-  bool line_only_     = false;
+  bool ploygon_mode_     = false;
 
   cudaGraphicsResource* cuda_vertices_;
   cudaGraphicsResource* cuda_normals_;
@@ -129,16 +129,19 @@ protected:
   MeshType type_;
 
 public:
-  bool &line_only() {
-    return line_only_;
+  bool &ploygon_mode() {
+    return ploygon_mode_;
   }
 
   MeshObject(int max_vertex_count, int max_triangle_count,
              MeshType type = kNormal);
   ~MeshObject();
   void Render(glm::mat4 m, glm::mat4 v, glm::mat4 p);
+
+  /// Set NULL if the property does not exist
   void SetData(float3* vertices, size_t vertex_count,
                float3* normals,  size_t normal_count,
+               float3* colors,  size_t color_count,
                int3* triangles,  size_t triangle_count);
 };
 
@@ -156,4 +159,19 @@ public:
   void SetData(float3* vertices, size_t vertex_count);
 };
 
+class PointObject : public GLObjectBase {
+protected:
+  cudaGraphicsResource* cuda_vertices_;
+  cudaGraphicsResource* cuda_colors_;
+
+  int max_vertex_count_;
+  int vertex_count_;
+
+public:
+  PointObject(int max_vertex_count);
+  ~PointObject();
+  void Render(glm::mat4 m, glm::mat4 v, glm::mat4 p);
+  void SetData(float3* vertices, size_t vertex_count,
+               float3* colors,   size_t color_count);
+};
 #endif //VH_RENDERER_H

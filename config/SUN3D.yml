@@ -10,7 +10,7 @@ value_capacity:    50000
 voxel_size:                0.04
 sdf_upper_bound:           14.0
 truncation_distance_scale: 0.02
-truncation_distance:       0.05
+truncation_distance:       0.06
 weight_sample:             10
 weight_upper_bound:        255
 

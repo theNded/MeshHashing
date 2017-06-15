@@ -70,7 +70,7 @@ int main(int argc, char **argv) {
   MeshObject mesh(config.mesh_params.max_vertex_count,
                   config.mesh_params.max_triangle_count);
   mesh_renderer.free_walk()     = args.free_walk;
-  mesh.line_only()     = args.line_only;
+  mesh.ploygon_mode()     = args.ploygon_mode;
   mesh_renderer.AddObject(&mesh);
 
   SetConstantSDFParams(config.sdf_params);
@@ -127,7 +127,7 @@ int main(int argc, char **argv) {
       cv::waitKey(1);
     }
 
-    if (! args.new_mesh_only) {
+    if (! args.mesh_range) {
       map.CollectAllBlocks();
     }
     map.CompressMesh();
@@ -135,6 +135,7 @@ int main(int argc, char **argv) {
                  (size_t)map.compact_mesh().vertex_count(),
                  map.compact_mesh().normals(),
                  (size_t)map.compact_mesh().vertex_count(),
+                 NULL, 0,
                  map.compact_mesh().triangles(),
                  (size_t)map.compact_mesh().triangle_count());
     mesh_renderer.Render(cTw);

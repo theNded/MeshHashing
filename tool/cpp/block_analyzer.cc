@@ -3,3 +3,7 @@
 //
 
 #include "block_analyzer.h"
+
+BlockObject::BlockObject() {
+
+}

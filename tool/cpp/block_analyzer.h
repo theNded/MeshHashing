@@ -8,36 +8,20 @@
 #include "block.h"
 #include "renderer.h"
 
-/// We have to render points and meshes
-/// Hence we have to dump a block along with its mesh
-class BlockObject : public GLObjectBase {
-protected:
-  static const GLfloat kVertices[8];
-  static const GLubyte kIndices[6];
-
-  cudaGraphicsResource* cuda_voxels_;
-  cudaGraphicsResource* cuda_vertices_;
-  cudaGraphicsResource* cuda_normals_;
-  cudaGraphicsResource* cuda_colors_;
-  cudaGraphicsResource* cuda_triangles_;
-
-  uint width_;
-  uint height_;
-
-public:
-  BlockObject();
-  ~BlockObject();
-
-  void Render(glm::mat4 m, glm::mat4 v, glm::mat4 p);
-  void SetData(Voxel* voxels,
-               float3* vertices,
-               float3* colors,
-               float3* triangles);
-};
-
 class BlockAnalyzer {
-  Block block;
+public:
+  /// Host code:
+  std::vector<float3> voxels;
+  std::vector<float2> ssdf;
+  std::vector<uchar2> sweight;
 
+  std::vector<float3> vertices;
+  std::vector<float3> colors;
+  std::vector<int3>   triangles;
+
+  void Save(int3 pos) {
+
+  }
 };
 
 

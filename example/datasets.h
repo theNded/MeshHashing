@@ -9,16 +9,16 @@
 
 static const Dataset datasets[] = {
         {ICL,            "/home/wei/data/ICL/lv1/"},
-        {TUM1,           "/home/wei/data/TUM/rgbd_dataset_freiburg1_xyz/"},
+        {TUM1,           "/home/wei/data/TUM/rgbd_dataset_freiburg1_rpy/"},
         {TUM2,           "/home/wei/data/TUM/rgbd_dataset_freiburg2_xyz/"},
         {TUM3,           "/home/wei/data/TUM/rgbd_dataset_freiburg3_long_office_household/"},
-        {SUN3D,          "/home/wei/data/SUN3D/lounge/"},
+        {SUN3D,          "/home/wei/data/SUN3D/copyroom/"},
         {SUN3D_ORIGINAL, "/home/wei/data/SUN3D-Princeton/hotel_umd/maryland_hotel3/"},
-        {PKU,            "/home/wei/data/3DVCR/lab3/"}
+        {PKU,            "/home/wei/data/3DVCR/lab4/"}
 };
 
 static const std::string orb_configs[] = {
-        "../config/ORB/ICL.yaml", // ICL nill
+        "../config/ORB/ICL.yaml",
         "../config/ORB/TUM1.yaml",
         "../config/ORB/TUM2.yaml",
         "../config/ORB/TUM3.yaml",

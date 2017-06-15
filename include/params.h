@@ -80,8 +80,8 @@ struct RuntimeParams {
   int  dataset_type;
 
   bool free_walk;
-  bool line_only;
-  bool new_mesh_only;
+  bool ploygon_mode;
+  bool mesh_range;
   bool fine_gradient;
   bool render_type;
 
