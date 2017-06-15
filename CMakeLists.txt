@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.6)
+cmake_minimum_required(VERSION 3.5)
 PROJECT(voxel-hashing)
 cmake_policy(SET CMP0015 NEW)
 
@@ -25,8 +25,6 @@ FIND_PACKAGE(GLFW3  REQUIRED)
 FIND_PACKAGE(GLEW   REQUIRED)
 FIND_PACKAGE(OpenGL REQUIRED)
 # CV utilities
-# Linear Algebra, optional
-FIND_PACKAGE(Eigen3 REQUIRED)
 FIND_PACKAGE(OpenCV REQUIRED)
 # Parallel computation
 FIND_PACKAGE(CUDA REQUIRED)
@@ -83,8 +81,8 @@ MESSAGE(STATUS ${CUDA_TOOLKIT_INCLUDE})
 
 INCLUDE_DIRECTORIES(
         ${VH}/include
-        ${VH}/gl_util
-        ${VH}/cuda_util
+        ${VH}/include/gl_util
+        ${VH}/include/cuda_util
         ${GLOG_INCLUDE_DIRS}
         ${CUDA_TOOLKIT_INCLUDE})
 
@@ -92,9 +90,9 @@ INCLUDE_DIRECTORIES(
 ## Building Libraries
 ### 1. OpenGL util
 ADD_LIBRARY(gl-util SHARED
-        ${VH}/gl_util/context.cc
-        ${VH}/gl_util/control.cc
-        ${VH}/gl_util/shader.cc)
+        ${VH}/include/gl_util/context.cc
+        ${VH}/include/gl_util/control.cc
+        ${VH}/include/gl_util/shader.cc)
 TARGET_LINK_LIBRARIES(gl-util
         ${OPENGL_DEPENDENCIES}
         ${GLOG_LIBRARIES})
@@ -131,7 +129,7 @@ TARGET_LINK_LIBRARIES(voxel-hashing
 #----------
 ## Unit tests
 ### CUDA - OpenGL intergration
-ADD_EXECUTABLE(cuda_gl_interp unit_test/cuda_gl_interp.cc)
+ADD_EXECUTABLE(cuda_gl_interp src/unit_test/cuda_gl_interp.cc)
 TARGET_LINK_LIBRARIES(cuda_gl_interp
         voxel-hashing
         ${OpenCV_LIBRARIES}
@@ -140,23 +138,27 @@ TARGET_LINK_LIBRARIES(cuda_gl_interp
 ### Loop over
 MESSAGE(STATUS ${GLOG_LIBRARIES})
 ADD_EXECUTABLE(voxel_hashing
-        example/voxel_hashing.cc)
+        src/example/voxel_hashing.cc)
 TARGET_LINK_LIBRARIES(voxel_hashing
         voxel-hashing
         ${OpenCV_LIBRARIES}
         ${GLOG_LIBRARIES})
 
 ### An ORB example
-FIND_PACKAGE(Pangolin REQUIRED)
-INCLUDE_DIRECTORIES(
-        ../orb_slam2/
-        ../orb_slam2/include
-        ${EIGEN3_INCLUDE_DIR})
-LINK_DIRECTORIES(../orb_slam2/lib)
-ADD_EXECUTABLE(rgbd_orb example/rgbd_orb.cc)
-TARGET_LINK_LIBRARIES(rgbd_orb
-        voxel-hashing
-        ORB_SLAM2
-        ${Pangolin_LIBRARIES}
-        ${OpenCV_LIBRARIES}
-        ${GLOG_LIBRARIES})
+OPTION(WITH_ORBSLAM2 "Build with orb slam" ON)
+if (WITH_ORBSLAM2)
+    MESSAGE(STATUS "Build with ORB-SLAM2")
+    FIND_PACKAGE(Pangolin REQUIRED)
+    INCLUDE_DIRECTORIES(
+            ../orb_slam2/
+            ../orb_slam2/include
+            ${EIGEN3_INCLUDE_DIR})
+    LINK_DIRECTORIES(../orb_slam2/lib)
+    ADD_EXECUTABLE(rgbd_orb src/example/rgbd_orb.cc)
+    TARGET_LINK_LIBRARIES(rgbd_orb
+            voxel-hashing
+            ORB_SLAM2
+            ${Pangolin_LIBRARIES}
+            ${OpenCV_LIBRARIES}
+            ${GLOG_LIBRARIES})
+endif(WITH_ORBSLAM2)

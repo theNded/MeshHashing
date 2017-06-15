@@ -7,8 +7,8 @@
 
 #include "common.h"
 
-#include <helper_cuda.h>
-#include <helper_math.h>
+#include "helper_cuda.h"
+#include "helper_math.h"
 
 #include "geometry_util.h"
 #include "params.h"
