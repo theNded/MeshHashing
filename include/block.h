@@ -17,6 +17,7 @@
 /// -------
 struct __ALIGN__(8) Voxel {
   float2  ssdf;		// signed distance function
+  float   stat;
   uchar2  sweight;	// accumulated sdf weight
   uchar3	color;	// color
 
@@ -46,6 +47,8 @@ struct __ALIGN__(8) Voxel {
 
   __device__
   float entropy() {
+    return stat;
+
     float wp = sweight.x;// * exp(- ssdf.x);
     float wn = sweight.y;// * exp(- ssdf.y);
     float r = wp / (wp + wn);

@@ -4,7 +4,7 @@
 # 4   - SUN3D
 # 5   - SUN3D_ORIGINAL
 # 6   - PKU
-dataset_type:    0
+dataset_type:    4
 
 # -----------
 # Render options
@@ -20,9 +20,9 @@ mesh_range:      0
 
 # 0 - shaded map,
 # 1 - entropy color map
-render_type:     0
+render_type:     1
 # If use shaded map, set it to 1
-fine_gradient:   1
+fine_gradient:   0
 
 # Additional settings
 bounding_box:    0
@@ -31,7 +31,7 @@ ray_casting:     0
 # Result saving
 record_video:    1
 save_mesh:       1
-filename_prefix: "lv2-entropy"
+filename_prefix: "copyroom-laplacian"
 
 # Others
 run_frames:      -1

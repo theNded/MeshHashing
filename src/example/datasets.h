@@ -8,7 +8,7 @@
 #include "dataset_manager.h"
 
 static const Dataset datasets[] = {
-        {ICL,            "/home/wei/data/ICL/lv1/"},
+        {ICL,            "/home/wei/data/ICL/office1/"},
         {TUM1,           "/home/wei/data/TUM/rgbd_dataset_freiburg1_rpy/"},
         {TUM2,           "/home/wei/data/TUM/rgbd_dataset_freiburg2_xyz/"},
         {TUM3,           "/home/wei/data/TUM/rgbd_dataset_freiburg3_long_office_household/"},

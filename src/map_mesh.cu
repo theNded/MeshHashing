@@ -1,6 +1,7 @@
 #include <glog/logging.h>
 #include <unordered_map>
 #include <color_util.h>
+#include <chrono>
 
 #include "mc_tables.h"
 #include "map.h"
@@ -121,8 +122,8 @@ inline int AllocateVertexWithMutex(const HashTableGPU &hash_table,
     float sdf, entropy;
     uchar3 color;
     TrilinearInterpolation(hash_table, blocks, vertex_pos, sdf, entropy, color);
-    float3 val = ValToRGB(1 - entropy, 0, 1);
-    mesh.vertices[ptr].color = make_float3(val.z, val.y, val.x);
+    float3 val = ValToRGB(entropy, 0, 1);
+    mesh.vertices[ptr].color = make_float3(val.x, val.y, val.z);
   }
 
   return ptr;
@@ -444,6 +445,48 @@ void RecycleVerticesKernel(
   }
 }
 
+__global__
+void UpdateStatisticsKernel(HashTableGPU        hash_table,
+                            CompactHashTableGPU compact_hash_table,
+                            BlocksGPU           blocks) {
+
+  const HashEntry &entry = compact_hash_table.compacted_entries[blockIdx.x];
+  const uint local_idx   = threadIdx.x;
+
+  int3  voxel_base_pos  = BlockToVoxel(entry.pos);
+  uint3 voxel_local_pos = IdxToVoxelLocalPos(local_idx);
+  int3 voxel_pos        = voxel_base_pos + make_int3(voxel_local_pos);
+
+  int3 offset[] = {
+          make_int3(1, 0, 0),
+          make_int3(-1, 0, 0),
+          make_int3(0, 1, 0),
+          make_int3(0, -1, 0),
+          make_int3(0, 0, 1),
+          make_int3(0, 0, -1)
+  };
+
+  int flag = true;
+  float sdf = blocks[entry.ptr].voxels[local_idx].sdf();
+  float laplacian = 8 * sdf;
+
+  for (int i = 0; i < 3; ++i) {
+    Voxel vp = GetVoxel(hash_table, blocks, VoxelToWorld(voxel_pos + offset[2*i]));
+    Voxel vn = GetVoxel(hash_table, blocks, VoxelToWorld(voxel_pos + offset[2*i+1]));
+    if (vp.weight() == 0 || vn.weight() == 0) {
+      blocks[entry.ptr].voxels[local_idx].stat = 1;
+      flag = false;
+      break;
+    }
+   laplacian += vp.sdf() + vn.sdf();
+  }
+
+  if (flag) {
+    blocks[entry.ptr].voxels[local_idx].stat = laplacian;
+  }
+}
+
+
 ////////////////////
 /// Host code
 ////////////////////
@@ -457,8 +500,22 @@ void Map::MarchingCubes() {
   const dim3 grid_size(occupied_block_count, 1);
   const dim3 block_size(threads_per_block, 1);
 
+  /// First update statistics
+//  UpdateStatisticsKernel<<<grid_size, block_size>>>(
+//          hash_table_.gpu_data(),
+//                  compact_hash_table_.gpu_data(),
+//                  blocks_.gpu_data());
+//  checkCudaErrors(cudaDeviceSynchronize());
+//  checkCudaErrors(cudaGetLastError());
+
   /// Use divide and conquer to avoid read-write conflict
+//#define REDUCTION
 #ifndef REDUCTION
+  std::ofstream mc_info;
+  //mc_info.open("../result/statistics/mc_2pass_gradient.txt", std::fstream::app);
+  std::chrono::time_point<std::chrono::system_clock> start, end;
+
+  start = std::chrono::system_clock::now();
   MarchingCubesPass1Kernel<<<grid_size, block_size>>>(
           hash_table_.gpu_data(),
                   compact_hash_table_.gpu_data(),
@@ -467,6 +524,12 @@ void Map::MarchingCubes() {
                   use_fine_gradient_);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
+
+  end = std::chrono::system_clock::now();
+  std::chrono::duration<double> seconds = end - start;
+  mc_info << seconds.count();
+
+  start = std::chrono::system_clock::now();
   MarchingCubesPass2Kernel<<<grid_size, block_size>>>(
           hash_table_.gpu_data(),
                   compact_hash_table_.gpu_data(),
@@ -475,7 +538,18 @@ void Map::MarchingCubes() {
                   use_fine_gradient_);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
+  end = std::chrono::system_clock::now();
+  seconds = end - start;
+  mc_info << " " << seconds.count() << "\n";
+  mc_info.close();
+
+
 #else
+  std::ofstream mc_info;
+  mc_info.open("../result/statistics/mc_reduction_gradient.txt", std::fstream::app);
+  std::chrono::time_point<std::chrono::system_clock> start, end;
+
+  start = std::chrono::system_clock::now();
   for (int i = 0; i < 4; ++i) {
     uchar3 mask0 = make_uchar3(kMCReductionMasks[i * 2 + 0][0],
                                kMCReductionMasks[i * 2 + 0][1],
@@ -493,6 +567,9 @@ void Map::MarchingCubes() {
     checkCudaErrors(cudaDeviceSynchronize());
     checkCudaErrors(cudaGetLastError());
   }
+  end = std::chrono::system_clock::now();
+  std::chrono::duration<double> seconds = end - start;
+  mc_info << seconds.count() << "\n";
 #endif
 
   RecycleTrianglesKernel<<<grid_size, block_size>>>(
@@ -536,7 +613,8 @@ void CollectVerticesAndTrianglesKernel(
 __global__
 void CompressVerticesKernel(MeshGPU        mesh,
                             CompactMeshGPU compact_mesh,
-                            uint           max_vertex_count) {
+                            uint           max_vertex_count,
+                            uint*          vertex_ref_count) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
 
   __shared__ int local_counter;
@@ -561,6 +639,8 @@ void CompressVerticesKernel(MeshGPU        mesh,
     compact_mesh.vertices[addr] = mesh.vertices[idx].pos;
     compact_mesh.normals[addr]  = mesh.vertices[idx].normal;
     compact_mesh.colors[addr]   = mesh.vertices[idx].color;
+
+    atomicAdd(vertex_ref_count, mesh.vertices[idx].ref_count);
   }
 }
 
@@ -599,6 +679,9 @@ void CompressTrianglesKernel(MeshGPU        mesh,
 /// CollectInFrustumBlocks or
 /// CollectAllBlocks
 void Map::CompressMesh() {
+  std::ofstream vertex_info;
+  vertex_info.open("../result/statistics/vertex_info.txt", std::fstream::app);
+
   compact_mesh_.Reset();
 
   int occupied_block_count = compact_hash_table_.entry_count();
@@ -625,12 +708,26 @@ void Map::CompressMesh() {
                          / threads_per_block, 1);
     const dim3 block_size(threads_per_block, 1);
 
+    uint* vertex_ref_count;
+    checkCudaErrors(cudaMalloc(&vertex_ref_count, sizeof(uint)));
+    checkCudaErrors(cudaMemset(vertex_ref_count, 0, sizeof(uint)));
+
     CompressVerticesKernel <<< grid_size, block_size >>> (
             mesh_.gpu_data(),
             compact_mesh_.gpu_data(),
-            mesh_.params().max_vertex_count);
+            mesh_.params().max_vertex_count,
+            vertex_ref_count);
+
     checkCudaErrors(cudaDeviceSynchronize());
     checkCudaErrors(cudaGetLastError());
+
+    uint vertex_ref_count_cpu;
+    checkCudaErrors(cudaMemcpy(&vertex_ref_count_cpu, vertex_ref_count, sizeof(uint),
+                               cudaMemcpyDeviceToHost));
+    checkCudaErrors(cudaFree(vertex_ref_count));
+
+    LOG(INFO) << vertex_ref_count_cpu;
+    vertex_info << vertex_ref_count_cpu;
   }
 
   {
@@ -650,6 +747,8 @@ void Map::CompressMesh() {
 
   LOG(INFO) << "Vertices: " << compact_mesh_.vertex_count()
             << "/" << (mesh_.params().max_vertex_count - mesh_.vertex_heap_count());
+  vertex_info << " " << compact_mesh_.vertex_count() << "\n";
+
   LOG(INFO) << "Triangles: " << compact_mesh_.triangle_count()
             << "/" << (mesh_.params().max_triangle_count - mesh_.triangle_heap_count());
 }
