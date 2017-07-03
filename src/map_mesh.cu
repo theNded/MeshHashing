@@ -501,12 +501,12 @@ void Map::MarchingCubes() {
   const dim3 block_size(threads_per_block, 1);
 
   /// First update statistics
-//  UpdateStatisticsKernel<<<grid_size, block_size>>>(
-//          hash_table_.gpu_data(),
-//                  compact_hash_table_.gpu_data(),
-//                  blocks_.gpu_data());
-//  checkCudaErrors(cudaDeviceSynchronize());
-//  checkCudaErrors(cudaGetLastError());
+  UpdateStatisticsKernel<<<grid_size, block_size>>>(
+          hash_table_.gpu_data(),
+                  compact_hash_table_.gpu_data(),
+                  blocks_.gpu_data());
+  checkCudaErrors(cudaDeviceSynchronize());
+  checkCudaErrors(cudaGetLastError());
 
   /// Use divide and conquer to avoid read-write conflict
 //#define REDUCTION

@@ -1,5 +1,6 @@
 %YAML:1.0
-# Hash params
+dataset_path:      "/home/wei/Work/data/ICL/office1/"
+
 bucket_count:      400000
 bucket_size:       10
 entry_count:       4000000

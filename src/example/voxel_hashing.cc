@@ -38,7 +38,7 @@ int main(int argc, char** argv) {
 
   DatasetType dataset_type = DatasetType(args.dataset_type);
   config.LoadConfig(dataset_type);
-  rgbd_data.LoadDataset(datasets[dataset_type]);
+  rgbd_data.LoadDataset(dataset_type);
 
   MeshType mesh_type = args.render_type == 0 ? kNormal : kColor;
 

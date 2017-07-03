@@ -296,6 +296,16 @@ void Load3DVCR(std::string dataset_path,
   }
 }
 
+const std::string kConfigPaths[] = {
+    "../config/ICL.yml",
+    "../config/TUM1.yml",
+    "../config/TUM2.yml",
+    "../config/TUM3.yml",
+    "../config/SUN3D.yml",
+    "../config/SUN3D_ORIGINAL.yml",
+    "../config/PKU.yml"
+};
+
 ////////////////////
 /// class ConfigManager
 ////////////////////
@@ -315,16 +325,6 @@ void ConfigManager::LoadConfig(std::string config_path) {
 }
 
 void ConfigManager::LoadConfig(DatasetType dataset_type) {
-  const std::string kConfigPaths[] = {
-          "../config/ICL.yml",
-          "../config/TUM1.yml",
-          "../config/TUM2.yml",
-          "../config/TUM3.yml",
-          "../config/SUN3D.yml",
-          "../config/SUN3D_ORIGINAL.yml",
-          "../config/PKU.yml"
-  };
-
   std::string config_path = kConfigPaths[dataset_type];
   LoadConfig(config_path);
 }
@@ -332,12 +332,19 @@ void ConfigManager::LoadConfig(DatasetType dataset_type) {
 ////////////////////
 /// class DataManager
 ////////////////////
+void DataManager::LoadDataset(DatasetType dataset_type) {
+  std::string config_path = kConfigPaths[dataset_type];
+  cv::FileStorage fs(config_path, cv::FileStorage::READ);
+  std::string dataset_path = (std::string)fs["dataset_path"];
+  LoadDataset(dataset_path, dataset_type);
+}
+
 void DataManager::LoadDataset(Dataset dataset) {
   LoadDataset(dataset.path, dataset.type);
 }
 
 void DataManager::LoadDataset(std::string dataset_path,
-                             DatasetType dataset_type) {
+                              DatasetType dataset_type) {
   switch (dataset_type) {
     case ICL:
       LoadICL(dataset_path, depth_image_list, color_image_list, wTcs);

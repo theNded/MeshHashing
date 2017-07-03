@@ -101,7 +101,7 @@ TARGET_LINK_LIBRARIES(gl-util
 SET(CUDA_SEPARABLE_COMPILATION ON)
 # sm MUST >= 50, otherwise separable compilation will be disabled...
 # compute_35, sm_50 is ok
-LIST(APPEND CUDA_NVCC_FLAGS -gencode=arch=compute_52,code=sm_52)
+LIST(APPEND CUDA_NVCC_FLAGS -gencode=arch=compute_52,code=sm_61)
 CUDA_ADD_LIBRARY(voxel-hashing-cuda
         ${VH}/src/constant.cu
         ${VH}/src/hash_table.cu
@@ -152,7 +152,7 @@ TARGET_LINK_LIBRARIES(voxel_hashing
         ${GLOG_LIBRARIES})
 
 ### An ORB example
-OPTION(WITH_ORBSLAM2 "Build with orb slam" ON)
+OPTION(WITH_ORBSLAM2 "Build with orb slam" OFF)
 if (WITH_ORBSLAM2)
     MESSAGE(STATUS "Build with ORB-SLAM2")
     FIND_PACKAGE(Pangolin REQUIRED)

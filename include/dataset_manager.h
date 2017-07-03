@@ -22,6 +22,7 @@ enum DatasetType {
   PKU = 6
 };
 
+// Deprecated:
 struct Dataset {
   DatasetType type;
   std::string path;
@@ -80,6 +81,8 @@ struct DataManager {
   std::vector<std::string> depth_image_list;
   std::vector<std::string> color_image_list;
   std::vector<float4x4>    wTcs;
+
+  void LoadDataset(DatasetType dataset_type);
 
   void LoadDataset(std::string dataset_path,
                    DatasetType dataset_type);

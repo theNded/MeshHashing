@@ -1,4 +1,7 @@
 %YAML:1.0
+
+dataset_path:      "/home/wei/Work/data/TUM/rgbd_dataset_freiburg1_rpy/"
+
 # Hash params
 bucket_count:      100000
 bucket_size:       10
