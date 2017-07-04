@@ -8,16 +8,17 @@ __device__
 inline float frac(float val) {
   return (val - floorf(val));
 }
+
 __device__
-inline float3 frac(const float3& val)  {
+inline float3 frac(const float3 &val) {
   return make_float3(frac(val.x), frac(val.y), frac(val.z));
 }
 
 // TODO(wei): refine it
 __device__
-inline Voxel GetVoxel(const HashTableGPU& hash_table,
-                      const BlocksGPU&    blocks,
-                      const float3        world_pos) {
+inline Voxel GetVoxel(const HashTableGPU &hash_table,
+                      const BlocksGPU &blocks,
+                      const float3 world_pos) {
   HashEntry hash_entry = hash_table.GetEntry(WorldToBlock(world_pos));
   Voxel v;
   if (hash_entry.ptr == FREE_ENTRY) {
@@ -30,13 +31,14 @@ inline Voxel GetVoxel(const HashTableGPU& hash_table,
   return v;
 }
 
+/// Interpolation of statistics involved
 __device__
-inline bool TrilinearInterpolation(const HashTableGPU& hash_table,
-                                   const BlocksGPU& blocks,
-                                   const float3& pos,
-                                   float& sdf,
-                                   float& entropy,
-                                   uchar3& color) {
+inline bool TrilinearInterpolation(const HashTableGPU &hash_table,
+                                   const BlocksGPU &blocks,
+                                   const float3 &pos,
+                                   float &sdf,
+                                   Stat  &stats,
+                                   uchar3 &color) {
   const float offset = kSDFParams.voxel_size;
   const float3 pos_corner = pos - 0.5f * offset;
   float3 ratio = frac(WorldToVoxelf(pos));
@@ -45,80 +47,97 @@ inline bool TrilinearInterpolation(const HashTableGPU& hash_table,
   Voxel v;
 
   sdf = 0.0f;
-  entropy = 0.0f;
+  stats.Clear();
+
   float3 colorf = make_float3(0.0f, 0.0f, 0.0f);
   float3 v_color;
 
   /// 000
-  v = GetVoxel(hash_table, blocks, pos_corner+make_float3(0.0f, 0.0f, 0.0f));
-  if(v.weight() == 0) return false;
+  v = GetVoxel(hash_table, blocks, pos_corner + make_float3(0.0f, 0.0f, 0.0f));
+  if (v.weight() == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
-  w = (1.0f-ratio.x)*(1.0f-ratio.y)*(1.0f-ratio.z);
-  sdf    += w * v.sdf();
-  entropy += w * v.entropy();
+  w = (1.0f - ratio.x) * (1.0f - ratio.y) * (1.0f - ratio.z);
+  sdf += w * v.sdf();
+  stats.entropy   += w * v.entropy();
+  stats.laplacian += w * v.stats.laplacian;
+  stats.duration  += w * v.stats.duration;
   colorf += w * v_color;
 
   /// 001
-  v = GetVoxel(hash_table, blocks, pos_corner+make_float3(0.0f, 0.0f, offset));
-  if(v.weight() == 0) return false;
+  v = GetVoxel(hash_table, blocks, pos_corner + make_float3(0.0f, 0.0f, offset));
+  if (v.weight() == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
-  w = (1.0f-ratio.x)*(1.0f-ratio.y)*ratio.z;
-  sdf    += w * v.sdf();
-  entropy += w * v.entropy();
+  w = (1.0f - ratio.x) * (1.0f - ratio.y) * ratio.z;
+  sdf += w * v.sdf();
+  stats.entropy   += w * v.entropy();
+  stats.laplacian += w * v.stats.laplacian;
+  stats.duration  += w * v.stats.duration;
   colorf += w * v_color;
 
   /// 010
-  v = GetVoxel(hash_table, blocks, pos_corner+make_float3(0.0f, offset, 0.0f));
-  if(v.weight() == 0) return false;
+  v = GetVoxel(hash_table, blocks, pos_corner + make_float3(0.0f, offset, 0.0f));
+  if (v.weight() == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
-  w = (1.0f-ratio.x)*ratio.y *(1.0f-ratio.z);
-  sdf    += w * v.sdf();
-  entropy += w * v.entropy();
+  w = (1.0f - ratio.x) * ratio.y * (1.0f - ratio.z);
+  sdf += w * v.sdf();
+  stats.entropy   += w * v.entropy();
+  stats.laplacian += w * v.stats.laplacian;
+  stats.duration  += w * v.stats.duration;
   colorf += w * v_color;
 
   /// 011
-  v = GetVoxel(hash_table, blocks, pos_corner+make_float3(0.0f, offset, offset));
-  if(v.weight() == 0) return false;
+  v = GetVoxel(hash_table, blocks, pos_corner + make_float3(0.0f, offset, offset));
+  if (v.weight() == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
-  w = (1.0f-ratio.x)*ratio.y*ratio.z;
-  sdf    += w * v.sdf();
-  entropy += w * v.entropy();
+  w = (1.0f - ratio.x) * ratio.y * ratio.z;
+  sdf += w * v.sdf();
+  stats.entropy   += w * v.entropy();
+  stats.laplacian += w * v.stats.laplacian;
+  stats.duration  += w * v.stats.duration;
   colorf += w * v_color;
 
   /// 100
-  v = GetVoxel(hash_table, blocks, pos_corner+make_float3(offset, 0.0f, 0.0f));
-  if(v.weight() == 0) return false;
+  v = GetVoxel(hash_table, blocks, pos_corner + make_float3(offset, 0.0f, 0.0f));
+  if (v.weight() == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
-  w = ratio.x*(1.0f-ratio.y)*(1.0f-ratio.z);
-  sdf    +=	w * v.sdf();
-  entropy += w * v.entropy();
+  w = ratio.x * (1.0f - ratio.y) * (1.0f - ratio.z);
+  sdf += w * v.sdf();
+  stats.entropy   += w * v.entropy();
+  stats.laplacian += w * v.stats.laplacian;
+  stats.duration  += w * v.stats.duration;
   colorf += w * v_color;
 
   /// 101
-  v = GetVoxel(hash_table, blocks, pos_corner+make_float3(offset, 0.0f, offset));
-  if(v.weight() == 0) return false;
+  v = GetVoxel(hash_table, blocks, pos_corner + make_float3(offset, 0.0f, offset));
+  if (v.weight() == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
-  w = ratio.x*(1.0f-ratio.y)*ratio.z;
-  sdf    +=	w * v.sdf();
-  entropy += w * v.entropy();
-  colorf += w	* v_color;
+  w = ratio.x * (1.0f - ratio.y) * ratio.z;
+  sdf += w * v.sdf();
+  stats.entropy   += w * v.entropy();
+  stats.laplacian += w * v.stats.laplacian;
+  stats.duration  += w * v.stats.duration;
+  colorf += w * v_color;
 
   /// 110
-  v = GetVoxel(hash_table, blocks, pos_corner+make_float3(offset, offset, 0.0f));
-  if(v.weight() == 0) return false;
+  v = GetVoxel(hash_table, blocks, pos_corner + make_float3(offset, offset, 0.0f));
+  if (v.weight() == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
-  w = ratio.x*ratio.y*(1.0f-ratio.z);
-  sdf    +=	w * v.sdf();
-  entropy += w * v.entropy();
+  w = ratio.x * ratio.y * (1.0f - ratio.z);
+  sdf += w * v.sdf();
+  stats.entropy   += w * v.entropy();
+  stats.laplacian += w * v.stats.laplacian;
+  stats.duration  += w * v.stats.duration;
   colorf += w * v_color;
 
   /// 111
-  v = GetVoxel(hash_table, blocks, pos_corner+make_float3(offset, offset, offset));
-  if(v.weight() == 0) return false;
+  v = GetVoxel(hash_table, blocks, pos_corner + make_float3(offset, offset, offset));
+  if (v.weight() == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
-  w = ratio.x*ratio.y*ratio.z;
-  sdf    += w * v.sdf();
-  entropy += w * v.entropy();
+  w = ratio.x * ratio.y * ratio.z;
+  sdf += w * v.sdf();
+  stats.entropy   += w * v.entropy();
+  stats.laplacian += w * v.stats.laplacian;
+  stats.duration  += w * v.stats.duration;
   colorf += w * v_color;
 
   color = make_uchar3(colorf.x, colorf.y, colorf.z);
@@ -126,11 +145,11 @@ inline bool TrilinearInterpolation(const HashTableGPU& hash_table,
 }
 
 __device__
-inline bool TrilinearInterpolation(const HashTableGPU& hash_table,
-                                   const BlocksGPU& blocks,
-                                   const float3& pos,
-                                   float& sdf,
-                                   uchar3& color) {
+inline bool TrilinearInterpolation(const HashTableGPU &hash_table,
+                                   const BlocksGPU &blocks,
+                                   const float3 &pos,
+                                   float &sdf,
+                                   uchar3 &color) {
   const float offset = kSDFParams.voxel_size;
   const float3 pos_corner = pos - 0.5f * offset;
   float3 ratio = frac(WorldToVoxelf(pos));
@@ -143,67 +162,67 @@ inline bool TrilinearInterpolation(const HashTableGPU& hash_table,
   float3 v_color;
 
   /// 000
-  v = GetVoxel(hash_table, blocks, pos_corner+make_float3(0.0f, 0.0f, 0.0f));
-  if(v.weight() == 0) return false;
+  v = GetVoxel(hash_table, blocks, pos_corner + make_float3(0.0f, 0.0f, 0.0f));
+  if (v.weight() == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
-  w = (1.0f-ratio.x)*(1.0f-ratio.y)*(1.0f-ratio.z);
-  sdf    += w * v.sdf();
+  w = (1.0f - ratio.x) * (1.0f - ratio.y) * (1.0f - ratio.z);
+  sdf += w * v.sdf();
   colorf += w * v_color;
 
   /// 001
-  v = GetVoxel(hash_table, blocks, pos_corner+make_float3(0.0f, 0.0f, offset));
-  if(v.weight() == 0) return false;
+  v = GetVoxel(hash_table, blocks, pos_corner + make_float3(0.0f, 0.0f, offset));
+  if (v.weight() == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
-  w = (1.0f-ratio.x)*(1.0f-ratio.y)*ratio.z;
-  sdf    += w * v.sdf();
+  w = (1.0f - ratio.x) * (1.0f - ratio.y) * ratio.z;
+  sdf += w * v.sdf();
   colorf += w * v_color;
 
   /// 010
-  v = GetVoxel(hash_table, blocks, pos_corner+make_float3(0.0f, offset, 0.0f));
-  if(v.weight() == 0) return false;
+  v = GetVoxel(hash_table, blocks, pos_corner + make_float3(0.0f, offset, 0.0f));
+  if (v.weight() == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
-  w = (1.0f-ratio.x)*ratio.y *(1.0f-ratio.z);
-  sdf    += w * v.sdf();
+  w = (1.0f - ratio.x) * ratio.y * (1.0f - ratio.z);
+  sdf += w * v.sdf();
   colorf += w * v_color;
 
   /// 011
-  v = GetVoxel(hash_table, blocks, pos_corner+make_float3(0.0f, offset, offset));
-  if(v.weight() == 0) return false;
+  v = GetVoxel(hash_table, blocks, pos_corner + make_float3(0.0f, offset, offset));
+  if (v.weight() == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
-  w = (1.0f-ratio.x)*ratio.y*ratio.z;
-  sdf    += w * v.sdf();
+  w = (1.0f - ratio.x) * ratio.y * ratio.z;
+  sdf += w * v.sdf();
   colorf += w * v_color;
 
   /// 100
-  v = GetVoxel(hash_table, blocks, pos_corner+make_float3(offset, 0.0f, 0.0f));
-  if(v.weight() == 0) return false;
+  v = GetVoxel(hash_table, blocks, pos_corner + make_float3(offset, 0.0f, 0.0f));
+  if (v.weight() == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
-  w = ratio.x*(1.0f-ratio.y)*(1.0f-ratio.z);
-  sdf    +=	w * v.sdf();
+  w = ratio.x * (1.0f - ratio.y) * (1.0f - ratio.z);
+  sdf += w * v.sdf();
   colorf += w * v_color;
 
   /// 101
-  v = GetVoxel(hash_table, blocks, pos_corner+make_float3(offset, 0.0f, offset));
-  if(v.weight() == 0) return false;
+  v = GetVoxel(hash_table, blocks, pos_corner + make_float3(offset, 0.0f, offset));
+  if (v.weight() == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
-  w = ratio.x*(1.0f-ratio.y)*ratio.z;
-  sdf    +=	w * v.sdf();
-  colorf += w	* v_color;
+  w = ratio.x * (1.0f - ratio.y) * ratio.z;
+  sdf += w * v.sdf();
+  colorf += w * v_color;
 
   /// 110
-  v = GetVoxel(hash_table, blocks, pos_corner+make_float3(offset, offset, 0.0f));
-  if(v.weight() == 0) return false;
+  v = GetVoxel(hash_table, blocks, pos_corner + make_float3(offset, offset, 0.0f));
+  if (v.weight() == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
-  w = ratio.x*ratio.y*(1.0f-ratio.z);
-  sdf    +=	w * v.sdf();
+  w = ratio.x * ratio.y * (1.0f - ratio.z);
+  sdf += w * v.sdf();
   colorf += w * v_color;
 
   /// 111
-  v = GetVoxel(hash_table, blocks, pos_corner+make_float3(offset, offset, offset));
-  if(v.weight() == 0) return false;
+  v = GetVoxel(hash_table, blocks, pos_corner + make_float3(offset, offset, offset));
+  if (v.weight() == 0) return false;
   v_color = make_float3(v.color.x, v.color.y, v.color.z);
-  w = ratio.x*ratio.y*ratio.z;
-  sdf    += w * v.sdf();
+  w = ratio.x * ratio.y * ratio.z;
+  sdf += w * v.sdf();
   colorf += w * v_color;
 
   color = make_uchar3(colorf.x, colorf.y, colorf.z);
@@ -212,7 +231,7 @@ inline bool TrilinearInterpolation(const HashTableGPU& hash_table,
 
 __device__
 /// sdf_near: -, sdf_far: +
-inline float LinearIntersection(float t_near,   float t_far,
+inline float LinearIntersection(float t_near, float t_far,
                                 float sdf_near, float sdf_far) {
   return t_near + (sdf_near / (sdf_near - sdf_far)) * (t_far - t_near);
 }
@@ -220,29 +239,31 @@ inline float LinearIntersection(float t_near,   float t_far,
 // d0 near, d1 far
 __device__
 /// Iteratively
-inline bool BisectionIntersection(const HashTableGPU& hash_table,
-                                  const BlocksGPU& blocks,
-                                  const float3& world_cam_pos,
-                                  const float3& world_cam_dir,
+inline bool BisectionIntersection(const HashTableGPU &hash_table,
+                                  const BlocksGPU &blocks,
+                                  const float3 &world_cam_pos,
+                                  const float3 &world_cam_dir,
                                   float sdf_near, float t_near,
-                                  float sdf_far,  float t_far,
-                                  float& t, uchar3& color) {
+                                  float sdf_far, float t_far,
+                                  float &t, uchar3 &color) {
   float l = t_near, r = t_far, m = (l + r) * 0.5f;
   float l_sdf = sdf_near, r_sdf = sdf_far, m_sdf;
 
   const uint kIterations = 3;
 #pragma unroll 1
-  for(uint i = 0; i < kIterations; i++) {
+  for (uint i = 0; i < kIterations; i++) {
     m = LinearIntersection(l, r, l_sdf, r_sdf);
-    if(!TrilinearInterpolation(hash_table, blocks,
-                               world_cam_pos + m * world_cam_dir,
-                               m_sdf, color))
+    if (!TrilinearInterpolation(hash_table, blocks,
+                                world_cam_pos + m * world_cam_dir,
+                                m_sdf, color))
       return false;
 
     if (l_sdf * m_sdf > 0.0) {
-      l = m; l_sdf = m_sdf;
+      l = m;
+      l_sdf = m_sdf;
     } else {
-      r = m; r_sdf = m_sdf;
+      r = m;
+      r_sdf = m_sdf;
     }
   }
   t = m;
@@ -250,48 +271,54 @@ inline bool BisectionIntersection(const HashTableGPU& hash_table,
 }
 
 __device__
-inline float3 GradientAtPoint(const HashTableGPU& hash_table,
-                              const BlocksGPU& blocks,
-                              const float3& pos) {
+inline float3 GradientAtPoint(const HashTableGPU &hash_table,
+                              const BlocksGPU &blocks,
+                              const float3 &pos) {
   const float voxelSize = kSDFParams.voxel_size;
   float3 offset = make_float3(voxelSize, voxelSize, voxelSize);
 
   /// negative
-  float distn00; uchar3 colorn00;
+  float distn00;
+  uchar3 colorn00;
   TrilinearInterpolation(hash_table, blocks,
-                         pos-make_float3(0.5f*offset.x, 0.0f, 0.0f),
+                         pos - make_float3(0.5f * offset.x, 0.0f, 0.0f),
                          distn00, colorn00);
-  float dist0n0; uchar3 color0n0;
+  float dist0n0;
+  uchar3 color0n0;
   TrilinearInterpolation(hash_table, blocks,
-                         pos-make_float3(0.0f, 0.5f*offset.y, 0.0f),
+                         pos - make_float3(0.0f, 0.5f * offset.y, 0.0f),
                          dist0n0, color0n0);
-  float dist00n; uchar3 color00n;
+  float dist00n;
+  uchar3 color00n;
   TrilinearInterpolation(hash_table, blocks,
-                         pos-make_float3(0.0f, 0.0f, 0.5f*offset.z),
+                         pos - make_float3(0.0f, 0.0f, 0.5f * offset.z),
                          dist00n, color00n);
 
   /// positive
-  float distp00; uchar3 colorp00;
+  float distp00;
+  uchar3 colorp00;
   TrilinearInterpolation(hash_table, blocks,
-                         pos+make_float3(0.5f*offset.x, 0.0f, 0.0f),
+                         pos + make_float3(0.5f * offset.x, 0.0f, 0.0f),
                          distp00, colorp00);
-  float dist0p0; uchar3 color0p0;
+  float dist0p0;
+  uchar3 color0p0;
   TrilinearInterpolation(hash_table, blocks,
-                         pos+make_float3(0.0f, 0.5f*offset.y, 0.0f),
+                         pos + make_float3(0.0f, 0.5f * offset.y, 0.0f),
                          dist0p0, color0p0);
-  float dist00p; uchar3 color00p;
+  float dist00p;
+  uchar3 color00p;
   TrilinearInterpolation(hash_table, blocks,
-                         pos+make_float3(0.0f, 0.0f, 0.5f*offset.z),
+                         pos + make_float3(0.0f, 0.0f, 0.5f * offset.z),
                          dist00p, color00p);
 
-  float3 grad = make_float3((distp00-distn00)/offset.x,
-                            (dist0p0-dist0n0)/offset.y,
-                            (dist00p-dist00n)/offset.z);
+  float3 grad = make_float3((distp00 - distn00) / offset.x,
+                            (dist0p0 - dist0n0) / offset.y,
+                            (dist00p - dist00n) / offset.z);
 
   float l = length(grad);
-  if(l == 0.0f) {
+  if (l == 0.0f) {
     return make_float3(0.0f, 0.0f, 0.0f);
   }
 
-  return grad/l;
+  return grad / l;
 }

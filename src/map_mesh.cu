@@ -119,10 +119,11 @@ inline int AllocateVertexWithMutex(const HashTableGPU &hash_table,
       mesh.vertices[ptr].normal = GradientAtPoint(hash_table, blocks, vertex_pos);
     }
 
-    float sdf, entropy;
+    float sdf;
+    Stat  stats;
     uchar3 color;
-    TrilinearInterpolation(hash_table, blocks, vertex_pos, sdf, entropy, color);
-    float3 val = ValToRGB(entropy, 0, 1);
+    TrilinearInterpolation(hash_table, blocks, vertex_pos, sdf, stats, color);
+    float3 val = ValToRGB(stats.duration, 0, 100);
     mesh.vertices[ptr].color = make_float3(val.x, val.y, val.z);
   }
 
@@ -232,7 +233,10 @@ void MarchingCubesLockFreeKernel(
     }
   }
 
-  if (this_cube.curr_index == cube_index) return;
+  if (this_cube.curr_index == cube_index) {
+    return;
+  }
+
   int i = 0;
   for (int t = 0; kTriangleTable[cube_index][t] != -1; t += 3, ++i) {
     int triangle_ptrs = this_cube.triangle_ptrs[i];
@@ -350,7 +354,12 @@ void MarchingCubesPass2Kernel(
   Cube &this_cube       = blocks[entry.ptr].cubes[local_idx];
 
   /// Cube type unchanged: NO need to update triangles
-  if (this_cube.curr_index == this_cube.prev_index) return;
+  if (this_cube.curr_index == this_cube.prev_index) {
+    blocks[entry.ptr].voxels[local_idx].stats.duration += 1.0f;
+    return;
+  }
+  blocks[entry.ptr].voxels[local_idx].stats.duration = 0;
+
   if (kEdgeTable[this_cube.curr_index] == 0
       || kEdgeTable[this_cube.curr_index] == 255) {
     return;
@@ -445,6 +454,7 @@ void RecycleVerticesKernel(
   }
 }
 
+/// Only update Laplacian at current
 __global__
 void UpdateStatisticsKernel(HashTableGPU        hash_table,
                             CompactHashTableGPU compact_hash_table,
@@ -466,7 +476,6 @@ void UpdateStatisticsKernel(HashTableGPU        hash_table,
           make_int3(0, 0, -1)
   };
 
-  int flag = true;
   float sdf = blocks[entry.ptr].voxels[local_idx].sdf();
   float laplacian = 8 * sdf;
 
@@ -474,16 +483,13 @@ void UpdateStatisticsKernel(HashTableGPU        hash_table,
     Voxel vp = GetVoxel(hash_table, blocks, VoxelToWorld(voxel_pos + offset[2*i]));
     Voxel vn = GetVoxel(hash_table, blocks, VoxelToWorld(voxel_pos + offset[2*i+1]));
     if (vp.weight() == 0 || vn.weight() == 0) {
-      blocks[entry.ptr].voxels[local_idx].stat = 1;
-      flag = false;
-      break;
+      blocks[entry.ptr].voxels[local_idx].stats.laplacian = 1;
+      return;
     }
    laplacian += vp.sdf() + vn.sdf();
   }
 
-  if (flag) {
-    blocks[entry.ptr].voxels[local_idx].stat = laplacian;
-  }
+  blocks[entry.ptr].voxels[local_idx].stats.laplacian = laplacian;
 }
 
 
@@ -542,7 +548,6 @@ void Map::MarchingCubes() {
   seconds = end - start;
   mc_info << " " << seconds.count() << "\n";
   mc_info.close();
-
 
 #else
   std::ofstream mc_info;

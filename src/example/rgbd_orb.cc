@@ -35,10 +35,18 @@
 #include "sensor.h"
 #include "ray_caster.h"
 #include "renderer.h"
-#include "datasets.h"
 
+static const std::string orb_configs[] = {
+    "../config/ORB/ICL.yaml",
+    "../config/ORB/TUM1.yaml",
+    "../config/ORB/TUM2.yaml",
+    "../config/ORB/TUM3.yaml",
+    "../config/ORB/SUN3D.yaml",
+    "../config/ORB/SUN3D_ORIGINAL.yaml",
+    "../config/ORB/PKU.yaml"
+};
 
-std::string path_to_vocabulary = "../../orb_slam2/Vocabulary/ORBvoc.bin";
+std::string path_to_vocabulary = "../../../opensource/orb_slam2/Vocabulary/ORBvoc.bin";
 
 extern void SetConstantSDFParams(const SDFParams& params);
 
@@ -61,7 +69,7 @@ int main(int argc, char **argv) {
 
   DatasetType dataset_type = DatasetType(args.dataset_type);
   config.LoadConfig(dataset_type);
-  rgbd_data.LoadDataset(datasets[dataset_type]);
+  rgbd_data.LoadDataset(dataset_type);
 
   Renderer mesh_renderer("Mesh",
                          config.sensor_params.width,

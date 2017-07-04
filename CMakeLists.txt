@@ -152,15 +152,18 @@ TARGET_LINK_LIBRARIES(voxel_hashing
         ${GLOG_LIBRARIES})
 
 ### An ORB example
-OPTION(WITH_ORBSLAM2 "Build with orb slam" OFF)
+OPTION(WITH_ORBSLAM2 "Build with orb slam" ON)
 if (WITH_ORBSLAM2)
+    SET(ORB_SLAM2_PATH ../../opensource/orb_slam2)
     MESSAGE(STATUS "Build with ORB-SLAM2")
+
     FIND_PACKAGE(Pangolin REQUIRED)
+    FIND_PACKAGE(Eigen3 REQUIRED)
     INCLUDE_DIRECTORIES(
-            ../orb_slam2/
-            ../orb_slam2/include
+            ${ORB_SLAM2_PATH}
+            ${ORB_SLAM2_PATH}/include
             ${EIGEN3_INCLUDE_DIR})
-    LINK_DIRECTORIES(../orb_slam2/lib)
+    LINK_DIRECTORIES(${ORB_SLAM2_PATH}/lib)
     ADD_EXECUTABLE(rgbd_orb src/example/rgbd_orb.cc)
     TARGET_LINK_LIBRARIES(rgbd_orb
             voxel-hashing

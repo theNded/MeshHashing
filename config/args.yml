@@ -19,10 +19,10 @@ ploygon_mode:    1
 mesh_range:      0
 
 # 0 - shaded map,
-# 1 - entropy color map
+# 1 - color map (entropy, laplacian, duration, whatever)
 render_type:     1
 # If use shaded map, set it to 1
-fine_gradient:   0
+fine_gradient:   1
 
 # Additional settings
 bounding_box:    0

@@ -57,11 +57,11 @@ void CastKernel(const HashTableGPU hash_table,
     float3 world_sample_pos = world_cam_pos + t * world_ray_dir;
     float  sdf;
     uchar3 color;
-    float entropy;
+    Stat stats;
 
     /// a voxel surrounded by valid voxels
     if (TrilinearInterpolation(hash_table, blocks, world_sample_pos,
-                               sdf, entropy, color)) {
+                               sdf, stats, color)) {
       /// Zero crossing exist
       if (prev_sample.weight > 0 // valid previous sample
           && prev_sample.sdf > 0.0f && sdf < 0.0f) { // zero-crossing
@@ -120,7 +120,7 @@ void CastKernel(const HashTableGPU hash_table,
                           * 20.0f / (distance * distance);
 
               /// Uncertainty: low -> entropy high
-              c3 = ValToRGB(1 - entropy, 0.0f, 1.0f);
+              c3 = ValToRGB(stats.entropy, 0.0f, 1.0f);
               gpu_data.surface_image[pixel_idx]
                       = make_float4(c3.x, c3.y, c3.z, 1.0f);
             }
@@ -132,7 +132,7 @@ void CastKernel(const HashTableGPU hash_table,
 
       /// No zero crossing || not good
       prev_sample.sdf = sdf;
-      prev_sample.entropy = entropy;
+      prev_sample.entropy = stats.entropy;
       prev_sample.t = t;
       prev_sample.weight = 1;
     }
