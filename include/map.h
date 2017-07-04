@@ -26,6 +26,9 @@ private:
 
   BBox       bbox_;
 
+  /// Focus on Pass1, Pass2, and lock free
+  std::fstream time_profile_;
+
 ////////////////////
 /// Core
 ////////////////////
@@ -42,7 +45,7 @@ public:
   void CollectAllBlocks();
 
   /// Life cycle
-  Map(const HashParams& hash_params, const MeshParams& mesh_params);
+  Map(const HashParams& hash_params, const MeshParams& mesh_params, const std::string& time_profile);
   ~Map();
 
   /// Reset and recycle

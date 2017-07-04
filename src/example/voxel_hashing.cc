@@ -16,6 +16,7 @@
 #include <opencv2/opencv.hpp>
 #include <sensor.h>
 #include <ray_caster.h>
+#include <timer.h>
 #include "../tool/cpp/debugger.h"
 
 #include "renderer.h"
@@ -59,7 +60,7 @@ int main(int argc, char** argv) {
   renderer.free_walk() = args.free_walk;
 
   SetConstantSDFParams(config.sdf_params);
-  Map       map(config.hash_params, config.mesh_params);
+  Map       map(config.hash_params, config.mesh_params, "../result/statistics/" + args.time_profile + ".txt");
   Sensor    sensor(config.sensor_params);
   RayCaster ray_caster(config.ray_caster_params);
 
@@ -90,7 +91,8 @@ int main(int argc, char** argv) {
                     config.mesh_params.max_triangle_count);
 #endif
   while (rgbd_data.ProvideData(depth, color, wTc)) {
-    start = std::chrono::system_clock::now();
+    Timer timer;
+    timer.Tick();
 
     frame_count ++;
     if (args.run_frames > 0
@@ -109,10 +111,9 @@ int main(int argc, char** argv) {
       cv::imshow("RayCasting", ray_caster.surface_image());
       cv::waitKey(1);
     }
-    end = std::chrono::system_clock::now();
-    std::chrono::duration<double> seconds = end - start;
-    LOG(INFO) << "Total time: " << seconds.count();
-    LOG(INFO) << "Fps: " << 1.0f / seconds.count();
+    double seconds = timer.Tock();
+    LOG(INFO) << "Total time: " << seconds;
+    LOG(INFO) << "Fps: " << 1.0f / seconds;
 
     if (! args.mesh_range) {
       map.CollectAllBlocks();

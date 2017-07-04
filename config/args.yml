@@ -4,7 +4,7 @@
 # 4   - SUN3D
 # 5   - SUN3D_ORIGINAL
 # 6   - PKU
-dataset_type:    4
+dataset_type:    0
 
 # -----------
 # Render options
@@ -22,16 +22,17 @@ mesh_range:      0
 # 1 - color map (entropy, laplacian, duration, whatever)
 render_type:     1
 # If use shaded map, set it to 1
-fine_gradient:   1
+fine_gradient:   0
 
 # Additional settings
-bounding_box:    0
+bounding_box:    1
 ray_casting:     0
 
 # Result saving
 record_video:    1
 save_mesh:       1
 filename_prefix: "copyroom-laplacian"
+time_profile:    "time-profile-llll"
 
 # Others
 run_frames:      -1

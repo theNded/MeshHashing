@@ -2,6 +2,7 @@
 #include <unordered_map>
 #include <color_util.h>
 #include <chrono>
+#include <timer.h>
 
 #include "mc_tables.h"
 #include "map.h"
@@ -93,6 +94,14 @@ inline int AllocateVertexLockFree(const HashTableGPU &hash_table,
   if (use_fine_gradient) {
     mesh.vertices[ptr].normal = GradientAtPoint(hash_table, blocks, vertex_pos);
   }
+
+  float sdf;
+  Stat  stats;
+  uchar3 color;
+  TrilinearInterpolation(hash_table, blocks, vertex_pos, sdf, stats, color);
+  float3 val = ValToRGB(stats.duration, 0, 100);
+  mesh.vertices[ptr].color = make_float3(val.x, val.y, val.z);
+
   return ptr;
 }
 
@@ -234,8 +243,10 @@ void MarchingCubesLockFreeKernel(
   }
 
   if (this_cube.curr_index == cube_index) {
+    blocks[map_entry.ptr].voxels[local_idx].stats.duration += 1.0f;
     return;
   }
+  blocks[map_entry.ptr].voxels[local_idx].stats.duration = 0;
 
   int i = 0;
   for (int t = 0; kTriangleTable[cube_index][t] != -1; t += 3, ++i) {
@@ -467,7 +478,7 @@ void UpdateStatisticsKernel(HashTableGPU        hash_table,
   uint3 voxel_local_pos = IdxToVoxelLocalPos(local_idx);
   int3 voxel_pos        = voxel_base_pos + make_int3(voxel_local_pos);
 
-  int3 offset[] = {
+  const int3 offset[] = {
           make_int3(1, 0, 0),
           make_int3(-1, 0, 0),
           make_int3(0, 1, 0),
@@ -517,11 +528,8 @@ void Map::MarchingCubes() {
   /// Use divide and conquer to avoid read-write conflict
 //#define REDUCTION
 #ifndef REDUCTION
-  std::ofstream mc_info;
-  //mc_info.open("../result/statistics/mc_2pass_gradient.txt", std::fstream::app);
-  std::chrono::time_point<std::chrono::system_clock> start, end;
-
-  start = std::chrono::system_clock::now();
+  Timer timer;
+  timer.Tick();
   MarchingCubesPass1Kernel<<<grid_size, block_size>>>(
           hash_table_.gpu_data(),
                   compact_hash_table_.gpu_data(),
@@ -530,12 +538,11 @@ void Map::MarchingCubes() {
                   use_fine_gradient_);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
+  double pass1_seconds = timer.Tock();
+  LOG(INFO) << "Pass1 duration: " << pass1_seconds;
+  time_profile_ << pass1_seconds << " ";
 
-  end = std::chrono::system_clock::now();
-  std::chrono::duration<double> seconds = end - start;
-  mc_info << seconds.count();
-
-  start = std::chrono::system_clock::now();
+  timer.Tick();
   MarchingCubesPass2Kernel<<<grid_size, block_size>>>(
           hash_table_.gpu_data(),
                   compact_hash_table_.gpu_data(),
@@ -544,17 +551,14 @@ void Map::MarchingCubes() {
                   use_fine_gradient_);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
-  end = std::chrono::system_clock::now();
-  seconds = end - start;
-  mc_info << " " << seconds.count() << "\n";
-  mc_info.close();
+  double pass2_seconds = timer.Tock();
+  LOG(INFO) << "Pass2 duration: " << pass2_seconds;
+  time_profile_ << pass2_seconds << "\n";
+
 
 #else
-  std::ofstream mc_info;
-  mc_info.open("../result/statistics/mc_reduction_gradient.txt", std::fstream::app);
-  std::chrono::time_point<std::chrono::system_clock> start, end;
-
-  start = std::chrono::system_clock::now();
+  Timer timer;
+  timer.Tick();
   for (int i = 0; i < 4; ++i) {
     uchar3 mask0 = make_uchar3(kMCReductionMasks[i * 2 + 0][0],
                                kMCReductionMasks[i * 2 + 0][1],
@@ -572,9 +576,8 @@ void Map::MarchingCubes() {
     checkCudaErrors(cudaDeviceSynchronize());
     checkCudaErrors(cudaGetLastError());
   }
-  end = std::chrono::system_clock::now();
-  std::chrono::duration<double> seconds = end - start;
-  mc_info << seconds.count() << "\n";
+  LOG(INFO) << "lock-free duration: " << timer.Tock();
+
 #endif
 
   RecycleTrianglesKernel<<<grid_size, block_size>>>(

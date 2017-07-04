@@ -90,7 +90,9 @@ struct RuntimeParams {
 
   bool record_video;
   bool save_mesh;
+
   std::string filename_prefix;
+  std::string time_profile;
 
   int run_frames;
 };

@@ -45,17 +45,17 @@ void CollectGarbageBlocksKernel(CompactHashTableGPU compact_hash_table,
 
   Voxel v0 = blocks[entry.ptr].voxels[2*threadIdx.x+0];
   Voxel v1 = blocks[entry.ptr].voxels[2*threadIdx.x+1];
-  short c0 = blocks[entry.ptr].cubes[2*threadIdx.x+0].curr_index;
-  short c1 = blocks[entry.ptr].cubes[2*threadIdx.x+1].curr_index;
+  //short c0 = blocks[entry.ptr].cubes[2*threadIdx.x+0].curr_index;
+  //short c1 = blocks[entry.ptr].cubes[2*threadIdx.x+1].curr_index;
 
   float sdf0 = v0.sdf(), sdf1 = v1.sdf();
   if (v0.weight() == 0)	sdf0 = PINF;
   if (v1.weight() == 0)	sdf1 = PINF;
 
-  __shared__ int    shared_valid_triangle[BLOCK_SIZE / 2];
+  // __shared__ int    shared_valid_triangle[BLOCK_SIZE / 2];
   __shared__ float	shared_min_sdf   [BLOCK_SIZE / 2];
   __shared__ uint		shared_max_weight[BLOCK_SIZE / 2];
-  shared_valid_triangle[threadIdx.x] = (c0 != 0) + (c1 != 0);
+  // shared_valid_triangle[threadIdx.x] = (c0 != 0) + (c1 != 0);
   shared_min_sdf[threadIdx.x] = fminf(fabsf(sdf0), fabsf(sdf1));
   shared_max_weight[threadIdx.x] = max(v0.weight(), v1.weight());
 
@@ -65,7 +65,7 @@ void CollectGarbageBlocksKernel(CompactHashTableGPU compact_hash_table,
 
     __syncthreads();
     if ((threadIdx.x  & (stride-1)) == (stride-1)) {
-      shared_valid_triangle[threadIdx.x] += shared_valid_triangle[threadIdx.x-stride/2];
+      // shared_valid_triangle[threadIdx.x] += shared_valid_triangle[threadIdx.x-stride/2];
       shared_min_sdf[threadIdx.x] = fminf(shared_min_sdf[threadIdx.x-stride/2],
                                           shared_min_sdf[threadIdx.x]);
       shared_max_weight[threadIdx.x] = max(shared_max_weight[threadIdx.x-stride/2],
@@ -75,7 +75,7 @@ void CollectGarbageBlocksKernel(CompactHashTableGPU compact_hash_table,
   __syncthreads();
 
   if (threadIdx.x == blockDim.x - 1) {
-    int valid_triangles = shared_valid_triangle[threadIdx.x];
+    //int valid_triangles = shared_valid_triangle[threadIdx.x];
     float min_sdf = shared_min_sdf[threadIdx.x];
     uint max_weight = shared_max_weight[threadIdx.x];
 
@@ -175,7 +175,7 @@ void CollectAllBlocksKernel(HashTableGPU        hash_table,
 ///////////////////
 
 /// Life cycle
-Map::Map(const HashParams &hash_params, const MeshParams &mesh_params) {
+Map::Map(const HashParams &hash_params, const MeshParams &mesh_params, const std::string& time_profile) {
   hash_table_.Resize(hash_params);
   compact_hash_table_.Resize(hash_params.entry_count);
   blocks_.Resize(hash_params.value_capacity);
@@ -183,9 +183,13 @@ Map::Map(const HashParams &hash_params, const MeshParams &mesh_params) {
   mesh_.Resize(mesh_params);
   compact_mesh_.Resize(mesh_params);
   bbox_.Resize(hash_params.value_capacity * 24);
+
+  time_profile_.open(time_profile, std::ios::out);
 }
 
-Map::~Map() {}
+Map::~Map() {
+  time_profile_.close();
+}
 
 /// Reset
 void Map::Reset() {

@@ -27,6 +27,7 @@ void LoadRuntimeParams(std::string path, RuntimeParams& params) {
   params.record_video  = (int)fs["record_video"];
   params.save_mesh     = (int)fs["save_mesh"];
   params.filename_prefix = (std::string)fs["filename_prefix"];
+  params.time_profile    = (std::string)fs["time_profile"];
 
   params.run_frames    = (int)fs["run_frames"];
 }

@@ -136,7 +136,7 @@ TARGET_LINK_LIBRARIES(cuda_gl_interp
         -lopencv_core -lopencv_highgui
         ${GLOG_LIBRARIES})
 
-ADD_EXECUTABLE(block_visualizer src/unit_test/block_visualizer.cc)
+ADD_EXECUTABLE(block_visualizer src/unit_test/block_visualizer.cc include/timer.h)
 TARGET_LINK_LIBRARIES(block_visualizer
         voxel-hashing
         ${OpenCV_LIBRARIES}
