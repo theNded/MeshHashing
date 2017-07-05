@@ -31,6 +31,7 @@ inline Voxel GetVoxel(const HashTableGPU &hash_table,
   return v;
 }
 
+// TODO: simplify this code
 /// Interpolation of statistics involved
 __device__
 inline bool TrilinearInterpolation(const HashTableGPU &hash_table,

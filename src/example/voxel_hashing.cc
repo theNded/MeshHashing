@@ -88,15 +88,15 @@ int main(int argc, char** argv) {
   Debugger debugger(config.hash_params.entry_count,
                     config.hash_params.value_capacity,
                     config.mesh_params.max_vertex_count,
-                    config.mesh_params.max_triangle_count);
+                    config.mesh_params.max_triangle_count,
+                    config.sdf_params.voxel_size);
 #endif
   while (rgbd_data.ProvideData(depth, color, wTc)) {
     Timer timer;
     timer.Tick();
 
     frame_count ++;
-    if (args.run_frames > 0
-        &&  frame_count > args.run_frames)
+    if (args.run_frames > 0 &&  frame_count > args.run_frames)
       break;
 
     sensor.Process(depth, color);
@@ -132,13 +132,10 @@ int main(int argc, char** argv) {
                    NULL, 0,
                    map.compact_mesh().triangles(), map.compact_mesh().triangle_count());
     } else {
-      mesh.SetData(map.compact_mesh().vertices(),
-                   map.compact_mesh().vertex_count(),
+      mesh.SetData(map.compact_mesh().vertices(), map.compact_mesh().vertex_count(),
                    NULL, 0,
-                   map.compact_mesh().colors(),
-                   map.compact_mesh().vertex_count(),
-                   map.compact_mesh().triangles(),
-                   map.compact_mesh().triangle_count());
+                   map.compact_mesh().colors(), map.compact_mesh().vertex_count(),
+                   map.compact_mesh().triangles(), map.compact_mesh().triangle_count());
     }
     renderer.Render(cTw);
 
@@ -151,10 +148,10 @@ int main(int argc, char** argv) {
   }
 
 #ifdef DEBUG
-//  debugger.CoreDump(map.compact_hash_table().gpu_data());
-//  debugger.CoreDump(map.blocks().gpu_data());
-//  debugger.CoreDump(map.mesh().gpu_data());
-//  debugger.DebugAll();
+  debugger.CoreDump(map.compact_hash_table().gpu_data());
+  debugger.CoreDump(map.blocks().gpu_data());
+  debugger.CoreDump(map.mesh().gpu_data());
+  debugger.DebugAll();
 #endif
   if (args.save_mesh) {
     map.SaveMesh("../result/models/" + args.filename_prefix + ".obj");

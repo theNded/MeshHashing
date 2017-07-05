@@ -14,17 +14,17 @@
 
 class Map {
 private:
-  HashTable   hash_table_;
-  Blocks      blocks_;
-  Mesh        mesh_;
+  HashTable        hash_table_;
+  Blocks           blocks_;
+  Mesh             mesh_;
 
   CompactHashTable compact_hash_table_;
   CompactMesh      compact_mesh_;
 
-  uint integrated_frame_count_;
-  bool use_fine_gradient_;
+  uint             integrated_frame_count_;
+  bool             use_fine_gradient_;
 
-  BBox       bbox_;
+  BBox             bbox_;
 
   /// Focus on Pass1, Pass2, and lock free
   std::fstream time_profile_;
@@ -38,14 +38,15 @@ private:
   void CollectGarbageBlocks();
   void RecycleGarbageBlocks();
 
+public:
   /// Compress entries
   void CollectInFrustumBlocks(Sensor& sensor);
-
-public:
   void CollectAllBlocks();
 
   /// Life cycle
-  Map(const HashParams& hash_params, const MeshParams& mesh_params, const std::string& time_profile);
+  Map(const HashParams& hash_params,
+      const MeshParams& mesh_params,
+      const std::string& time_profile);
   ~Map();
 
   /// Reset and recycle
@@ -67,10 +68,14 @@ public:
 ////////////////////
 public:
   void MarchingCubes();
-  void SaveMesh(std::string path);
-
   void CompressMesh();
 
+  void SaveMesh(std::string path);
+
+
+////////////////////
+/// Access functions
+////////////////////
   /// Only classes with Kernel function should call it
   /// The other part of the hash_table should be hidden
   const uint& frame_count() {

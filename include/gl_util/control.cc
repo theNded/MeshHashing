@@ -106,7 +106,7 @@ void Control::UpdateCameraPose() {
 }
 
 void Control::InitParameters() {
-  position_         = glm::vec3(0, 7, 0);
+  position_         = glm::vec3(0, 2, 0);
   horizontal_angle_ = (float)M_PI;
   vertical_angle_   = -(float)M_PI_2; // 0.0
   move_speed_       = 0.5f;

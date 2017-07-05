@@ -35,4 +35,4 @@ filename_prefix: "copyroom-laplacian"
 time_profile:    "time-profile-llll"
 
 # Others
-run_frames:      -1
+run_frames:      10

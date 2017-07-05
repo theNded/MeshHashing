@@ -39,9 +39,9 @@ struct MeshGPU {
   // Dynamic memory management for vertices
   // We need compact operation,
   // as MC during updating might release some triangles
-  uint*   vertex_heap;
-  uint*   vertex_heap_counter;
-  Vertex* vertices;
+  uint*     vertex_heap;
+  uint*     vertex_heap_counter;
+  Vertex*   vertices;
 
   uint*     triangle_heap;
   uint*     triangle_heap_counter;
@@ -138,6 +138,7 @@ struct CompactMeshGPU {
   // Remap from the separated vertices to the compacted vertices
   int*      vertex_remapper;
 
+  // They are decoupled so as to be separately assigned to the rendering pipeline
   float3*   vertices;
   float3*   normals;
   float3*   colors;
