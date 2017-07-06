@@ -145,6 +145,10 @@ struct __ALIGN__(8) Block {
   float3 vertices[BLOCK_SIZE * 4];
   int    cube_type[BLOCK_SIZE];
 
+  float3 n;
+  float  d;
+  float  ratio;
+
   __device__
   void Clear() {
 #ifdef __CUDACC__

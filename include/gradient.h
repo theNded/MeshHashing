@@ -31,6 +31,51 @@ inline Voxel GetVoxel(const HashTableGPU &hash_table,
   return v;
 }
 
+
+__device__
+inline Voxel GetVoxel(const HashTableGPU& hash_table,
+                      BlocksGPU&          blocks,
+                      const HashEntry&    curr_entry,
+                      const uint3         voxel_local_pos) {
+  Voxel v; v.Clear();
+
+  int3 block_offset = make_int3(voxel_local_pos) / BLOCK_SIDE_LENGTH;
+
+  if (block_offset == make_int3(0)) {
+    uint i = VoxelLocalPosToIdx(voxel_local_pos);
+    v = blocks[curr_entry.ptr].voxels[i];
+  } else {
+    HashEntry entry = hash_table.GetEntry(curr_entry.pos + block_offset);
+    if (entry.ptr == FREE_ENTRY) return v;
+    uint i = VoxelLocalPosToIdx(voxel_local_pos % BLOCK_SIDE_LENGTH);
+
+    v = blocks[entry.ptr].voxels[i];
+  }
+
+  return v;
+}
+
+__device__
+inline Cube& GetCube(const HashTableGPU& hash_table,
+                     BlocksGPU&          blocks,
+                     const HashEntry&    curr_entry,
+                     const uint3         voxel_local_pos) {
+
+  int3 block_offset = make_int3(voxel_local_pos) / BLOCK_SIDE_LENGTH;
+
+  if (block_offset == make_int3(0)) {
+    uint i = VoxelLocalPosToIdx(voxel_local_pos);
+    return blocks[curr_entry.ptr].cubes[i];
+  } else {
+    HashEntry entry = hash_table.GetEntry(curr_entry.pos + block_offset);
+    if (entry.ptr == FREE_ENTRY) {
+      printf("GetCube: should never reach here!\n");
+    }
+    uint i = VoxelLocalPosToIdx(voxel_local_pos % BLOCK_SIDE_LENGTH);
+    return blocks[entry.ptr].cubes[i];
+  }
+}
+
 // TODO: simplify this code
 /// Interpolation of statistics involved
 __device__

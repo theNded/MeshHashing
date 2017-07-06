@@ -106,9 +106,9 @@ int main(int argc, char** argv) {
     LOG(INFO) << "Camera position: " << camera_pos.x << " " << camera_pos.y << " " << camera_pos.z;
 
     map.Integrate(sensor);
-
-    if (frame_count > 1) // Re-estimate the SDF field
-      map.PlaneFitting(camera_pos);
+//
+//    if (frame_count > 1) // Re-estimate the SDF field
+//      map.PlaneFitting(camera_pos);
 
     map.MarchingCubes();
 

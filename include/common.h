@@ -41,7 +41,7 @@ typedef signed char schar;
 #define HANDLE_COLLISIONS
 
 /// Block size in voxel unit
-#define BLOCK_SIDE_LENGTH  4
+#define BLOCK_SIDE_LENGTH  8
 #define BLOCK_SIZE         (BLOCK_SIDE_LENGTH * BLOCK_SIDE_LENGTH * BLOCK_SIDE_LENGTH)
 #define MEMORY_LIMIT       100
 
