@@ -10,7 +10,7 @@ int main() {
   Renderer renderer("Block", 640, 480);
   renderer.free_walk() = true;
 
-  std::ifstream in("../result/statistics/(5,-5,33).txt");
+  std::ifstream in("../result/statistics/(1,1,5).txt");
   int block_side_length, block_voxel_count;
   in >> block_side_length >> block_voxel_count;
   LOG(INFO) << "Sizes: " << block_side_length << " " << block_voxel_count;
@@ -21,12 +21,11 @@ int main() {
   float3 *voxel_colors  = new float3[block_voxel_count];
 
   for (int i = 0; i < block_voxel_count; ++i) {
-    float3 voxel_pos; float sdf; float2 ssdf; uint2 sweight;
+    float3 voxel_pos; float sdf; uint weight;
     in >> voxel_pos.x >> voxel_pos.y >> voxel_pos.z;
-    in >> sdf >> ssdf.x >> ssdf.y >> sweight.x >> sweight.y;
+    in >> sdf >> weight;
     voxel_centers[i] = voxel_pos;
-    voxel_colors[i] = (sweight.x + sweight.y == 0) ? make_float3(1)
-                                                   : ValToRGB(sdf, -0.1f, 0.1f);
+    voxel_colors[i] = (weight == 0) ? make_float3(1) : ValToRGB(sdf, -0.1f, 0.1f);
   }
 
   float3* cuda_voxel_centers, *cuda_voxel_colors;

@@ -260,6 +260,8 @@ void MarchingCubesPass1Kernel(
   short cube_index = 0;
   this_cube.prev_index = this_cube.curr_index;
   this_cube.curr_index = 0;
+
+  int cnt = 0;
 #pragma unroll 1
   for (int i = 0; i < kVertexCount; ++i) {
     uint3 offset = make_uint3(kVertexCubeTable[i][0],
@@ -280,6 +282,44 @@ void MarchingCubesPass1Kernel(
   // if (this_cube.curr_index == this_cube.prev_index) return;
   if (kEdgeTable[cube_index] == 0 || kEdgeTable[cube_index] == 255)
     return;
+
+  float kTr = 0.01;
+
+  /// Compute hamming distance
+  int noise_bit[3];
+  for (int i = 0; i < 6; ++i) {
+    //if (cube_index == 3 || cube_index == 48) break;
+
+    short binary_xor = cube_index ^ kRegularCubeIndices[i];
+    short dist = 0;
+    for (int j = 0; j < 8; ++j) {
+      short mask = (1 << j);
+      if (mask & binary_xor) {
+        noise_bit[dist] = j;
+        dist ++;
+        if (dist > 3) break;
+      }
+    }
+    if (dist > 3) continue;
+
+    bool edge_case = true;
+    for (int j = 0; j < dist; ++j) {
+      if (fabs(d[noise_bit[j]]) > kTr) {
+        edge_case = false;
+        break;
+      }
+    }
+    if (edge_case) {
+      for (int j = 0; j < dist; ++j) {
+        d[noise_bit[j]] = - d[noise_bit[j]];
+      }
+      this_cube.curr_index = cube_index = kRegularCubeIndices[i];
+      break;
+    }
+
+    //printf("(%d %d) -> %d\n", cube_index, kRegularCubeIndices[i], dist);
+  }
+
 
   //////////
   /// 2. Determine vertices (ptr allocated via (shared) edges
@@ -356,7 +396,8 @@ void MarchingCubesPass2Kernel(
 
   //////////
   /// 3. Assign triangles
-  for (int t = 0, i = 0;
+  int i = 0;
+  for (int t = 0;
        kTriangleTable[this_cube.curr_index][t] != -1;
        t += 3, ++i) {
     int triangle_ptr = this_cube.triangle_ptrs[i];

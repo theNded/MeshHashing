@@ -31,7 +31,7 @@ inline Voxel GetVoxel(const HashTableGPU &hash_table,
   return v;
 }
 
-
+// TODO: put a dummy here
 __device__
 inline Voxel GetVoxel(const HashTableGPU& hash_table,
                       BlocksGPU&          blocks,
