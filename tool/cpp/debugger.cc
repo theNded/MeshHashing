@@ -101,9 +101,7 @@ void Debugger::DebugAll() {
       float3 world_pos = voxel_size_ * make_float3(voxel_pos + make_int3(local_pos));
 
       out << world_pos.x << " " << world_pos.y << " " << world_pos.z << " "
-          << block.voxels[i].sdf() << " "
-          << block.voxels[i].ssdf.x << " " << block.voxels[i].ssdf.y << " "
-          << (int) block.voxels[i].sweight.x << " " << (int) block.voxels[i].sweight.y << " "
+          << block.voxels[i].sdf << " " << (int) block.voxels[i].weight
           << "\n";
 
       /// Mesh info

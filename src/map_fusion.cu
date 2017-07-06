@@ -53,24 +53,20 @@ void UpdateBlocksKernel(CompactHashTableGPU compact_hash_table,
                                             sensor_params.min_depth_range,
                                             sensor_params.max_depth_range)),
                      1.0f);
-  float2 ssdf;
-  uchar2 sweight;
 
   float truncation = truncate_distance(depth);
   if (sdf <= -truncation)
     return;
   if (sdf >= 0.0f) {
-    ssdf = make_float2(fminf(truncation, sdf), 0);
-    sweight = make_uchar2(weight, 0);
+    sdf = fminf(truncation, sdf);
   } else {
-    ssdf = make_float2(0, fmaxf(-truncation, sdf));
-    sweight = make_uchar2(0, weight);
+    sdf = fmaxf(-truncation, sdf);
   }
 
   /// 5. Update
   Voxel delta;
-  delta.ssdf = ssdf;
-  delta.sweight = sweight;
+  delta.sdf = sdf;
+  delta.weight = weight;
 
   if (sensor_data.color_image) {
     float4 color = tex2D(color_texture, image_pos.x, image_pos.y);

@@ -102,8 +102,14 @@ int main(int argc, char** argv) {
     sensor.Process(depth, color);
     sensor.set_transform(wTc);
     cTw = wTc.getInverse();
+    float3 camera_pos = make_float3(wTc.m14, wTc.m24, wTc.m34);
+    LOG(INFO) << "Camera position: " << camera_pos.x << " " << camera_pos.y << " " << camera_pos.z;
 
     map.Integrate(sensor);
+
+    if (frame_count > 1) // Re-estimate the SDF field
+      map.PlaneFitting(camera_pos);
+
     map.MarchingCubes();
 
     if (args.ray_casting) {
@@ -148,10 +154,10 @@ int main(int argc, char** argv) {
   }
 
 #ifdef DEBUG
-  debugger.CoreDump(map.compact_hash_table().gpu_data());
-  debugger.CoreDump(map.blocks().gpu_data());
-  debugger.CoreDump(map.mesh().gpu_data());
-  debugger.DebugAll();
+//  debugger.CoreDump(map.compact_hash_table().gpu_data());
+//  debugger.CoreDump(map.blocks().gpu_data());
+//  debugger.CoreDump(map.mesh().gpu_data());
+//  debugger.DebugAll();
 #endif
   if (args.save_mesh) {
     map.SaveMesh("../result/models/" + args.filename_prefix + ".obj");
