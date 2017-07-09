@@ -35,6 +35,7 @@ struct __ALIGN__(8) Voxel {
   float  sdf;    // signed distance function
   uchar  weight;  // accumulated sdf weight
   uchar3 color;  // color
+  char   flip;
 
 #ifdef STATS
   Stat   stats;
@@ -50,6 +51,7 @@ struct __ALIGN__(8) Voxel {
   void Clear() {
     sdf = 0.0f;
     weight = 0;
+    flip = 0;
     color = make_uchar3(0, 0, 0);
   }
 

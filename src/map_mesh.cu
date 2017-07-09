@@ -229,6 +229,144 @@ void MarchingCubesLockFreeKernel(
 }
 
 __global__
+void MarchingCubesCheckFlipKernel(
+    HashTableGPU        hash_table,
+    CompactHashTableGPU compact_hash_table,
+    BlocksGPU           blocks,
+    MeshGPU             mesh,
+    bool                use_fine_gradient) {
+
+  const HashEntry &entry = compact_hash_table.compacted_entries[blockIdx.x];
+  const uint local_idx = threadIdx.x;
+
+  int3 voxel_base_pos = BlockToVoxel(entry.pos);
+  uint3 voxel_local_pos = IdxToVoxelLocalPos(local_idx);
+  int3 voxel_pos = voxel_base_pos + make_int3(voxel_local_pos);
+  float3 world_pos = VoxelToWorld(voxel_pos);
+
+  Cube &this_cube = blocks[entry.ptr].cubes[local_idx];
+  blocks[entry.ptr].voxels[local_idx].flip = 0;
+
+  //////////
+  /// 1. Read the scalar values, see mc_tables.h
+  Voxel v;
+  const int kVertexCount = 8;
+  const float kVoxelSize = kSDFParams.voxel_size;
+  const float kThreshold = 0.2f;
+  const float kIsoLevel = 0;
+
+  float d[kVertexCount];
+  float3 p[kVertexCount];
+
+  short cube_index = 0;
+  this_cube.prev_index = this_cube.curr_index;
+
+  int cnt = 0;
+#pragma unroll 1
+  for (int i = 0; i < kVertexCount; ++i) {
+    uint3 offset = make_uint3(kVertexCubeTable[i][0],
+                              kVertexCubeTable[i][1],
+                              kVertexCubeTable[i][2]);
+    v = GetVoxel(hash_table, blocks, entry, voxel_local_pos + offset);
+    if (v.weight == 0) return;
+
+    p[i] = world_pos + kVoxelSize * make_float3(offset);
+    d[i] = v.sdf;
+    if (fabs(d[i]) > kThreshold) return;
+
+    if (d[i] < kIsoLevel) cube_index |= (1 << i);
+  }
+  if (kEdgeTable[cube_index] == 0 || kEdgeTable[cube_index] == 255)
+    return;
+
+  float kTr = 0.01;
+  /// Step 1: temporal
+  short temporal_diff = cube_index ^ this_cube.prev_index;
+  int dist = 0;
+  while (temporal_diff) {
+    temporal_diff &= (temporal_diff - 1);
+    dist++;
+  }
+  if (dist > 3) return;
+
+  /// Step 2: Spatially closest
+  float min_dist = 1e10;
+  int min_idx = -1;
+  for (int i = 0; i < 6; ++i) {
+    short spatial_diff = cube_index ^kRegularCubeIndices[i];
+    short hamming_dist = 0;
+    float euclid_dist;
+
+    for (int j = 0; j < 8; ++j) {
+      short mask = (1 << j);
+      if (mask & spatial_diff) {
+        hamming_dist++;
+        euclid_dist += fabs(d[j]);
+        if (hamming_dist > 3) break;
+      }
+    }
+
+    if (hamming_dist <= 3 && euclid_dist < min_dist) {
+      min_dist = euclid_dist;
+      min_idx = i;
+    }
+  }
+  if (min_idx < 0) return;
+
+  /// Step 3: Valid?
+  int noise_bit[3];
+  short hamming_dist = 0;
+  short binary_xor = cube_index ^ kRegularCubeIndices[min_idx];
+  for (int j = 0; j < 8; ++j) {
+    short mask = (1 << j);
+    if (mask & binary_xor) {
+      noise_bit[hamming_dist] = j;
+      hamming_dist++;
+    }
+  }
+
+  for (int j = 0; j < hamming_dist; ++j) {
+    if (fabs(d[noise_bit[j]]) > kTr) {
+      return;
+    }
+  }
+
+  for (int j = 0; j < hamming_dist; ++j) {
+    uint3 offset = make_uint3(kVertexCubeTable[noise_bit[j]][0],
+                              kVertexCubeTable[noise_bit[j]][1],
+                              kVertexCubeTable[noise_bit[j]][2]);
+    uint3 voxel_to_flip = voxel_local_pos + offset;
+    int3 block_offset = make_int3(voxel_to_flip) / BLOCK_SIDE_LENGTH;
+
+    if (block_offset == make_int3(0)) {
+      uint i = VoxelLocalPosToIdx(voxel_to_flip);
+      blocks[entry.ptr].voxels[i].flip = 1;
+    } else {
+      HashEntry entry = hash_table.GetEntry(entry.pos + block_offset);
+      uint i = VoxelLocalPosToIdx(voxel_to_flip % BLOCK_SIDE_LENGTH);
+      blocks[entry.ptr].voxels[i].flip = 1;
+    }
+  }
+}
+
+__global__
+void MarchingCubesFlipKernel(
+    HashTableGPU        hash_table,
+    CompactHashTableGPU compact_hash_table,
+    BlocksGPU           blocks,
+    MeshGPU             mesh,
+    bool                use_fine_gradient) {
+
+  const HashEntry &entry = compact_hash_table.compacted_entries[blockIdx.x];
+  const uint local_idx = threadIdx.x;
+
+  if (blocks[entry.ptr].voxels[local_idx].flip) {
+    blocks[entry.ptr].voxels[local_idx].sdf = -blocks[entry.ptr].voxels[local_idx].sdf;
+  }
+  blocks[entry.ptr].voxels[local_idx].flip = 0;
+}
+
+__global__
 void MarchingCubesPass1Kernel(
         HashTableGPU        hash_table,
         CompactHashTableGPU compact_hash_table,
@@ -258,7 +396,7 @@ void MarchingCubesPass1Kernel(
   float3 p[kVertexCount];
 
   short cube_index = 0;
-  this_cube.prev_index = this_cube.curr_index;
+  //this_cube.prev_index = this_cube.curr_index;
   this_cube.curr_index = 0;
 
   int cnt = 0;
@@ -283,68 +421,6 @@ void MarchingCubesPass1Kernel(
   if (kEdgeTable[cube_index] == 0 || kEdgeTable[cube_index] == 255)
     return;
 
-  float kTr = 0.01;
-
-  /// Compute hamming distance and find the closest regular case
-  short binary_xor = cube_index ^ this_cube.prev_index;
-  int dist = 0;
-  while (binary_xor) {
-    binary_xor &= (binary_xor - 1);
-    dist++;
-  }
-
-  if (dist <= 3) {
-    float min_dist = 1e10;
-    int min_idx = -1;
-    for (int i = 0; i < 6; ++i) {
-      short binary_xor = cube_index ^kRegularCubeIndices[i];
-      short hamming_dist = 0;
-      float euclid_dist;
-      for (int j = 0; j < 8; ++j) {
-        short mask = (1 << j);
-        if (mask & binary_xor) {
-          hamming_dist++;
-          euclid_dist += fabs(d[j]);
-          if (hamming_dist > 3) break;
-        }
-      }
-
-      if (hamming_dist <= 3 && euclid_dist < min_dist) {
-        min_dist = euclid_dist;
-        min_idx = i;
-      }
-    }
-
-    if (min_idx != -1) {
-      int noise_bit[3];
-      short hamming_dist = 0;
-      short binary_xor = cube_index ^kRegularCubeIndices[min_idx];
-      for (int j = 0; j < 8; ++j) {
-        short mask = (1 << j);
-        if (mask & binary_xor) {
-          noise_bit[hamming_dist] = j;
-          hamming_dist++;
-        }
-      }
-
-      bool edge_case = true;
-      for (int j = 0; j < hamming_dist; ++j) {
-        if (fabs(d[noise_bit[j]]) > kTr) {
-          edge_case = false;
-          break;
-        }
-      }
-      if (edge_case) {
-        for (int j = 0; j < hamming_dist; ++j) {
-          d[noise_bit[j]] = -d[noise_bit[j]];
-        }
-        this_cube.curr_index = cube_index = kRegularCubeIndices[min_idx];
-      }
-
-      //printf("(%d %d) -> %d\n", cube_index, kRegularCubeIndices[i], dist);
-    }
-  }
-
   //////////
   /// 2. Determine vertices (ptr allocated via (shared) edges
   /// If the program reach here, the voxels holding edges must exist
@@ -368,16 +444,6 @@ void MarchingCubesPass1Kernel(
                               use_fine_gradient);
     }
   }
-}
-
-__global__
-void MarchingCubesFlipKernel(
-    HashTableGPU        hash_table,
-    CompactHashTableGPU compact_hash_table,
-    BlocksGPU           blocks,
-    MeshGPU             mesh,
-    bool                use_fine_gradient) {
-
 }
 
 __global__
@@ -563,6 +629,32 @@ void Map::MarchingCubes() {
 //#define REDUCTION
 #ifndef REDUCTION
   Timer timer;
+  timer.Tick();
+  MarchingCubesCheckFlipKernel<<<grid_size, block_size>>>(
+      hash_table_.gpu_data(),
+          compact_hash_table_.gpu_data(),
+          blocks_.gpu_data(),
+          mesh_.gpu_data(),
+          use_fine_gradient_);
+  checkCudaErrors(cudaDeviceSynchronize());
+  checkCudaErrors(cudaGetLastError());
+  double check_flip_seconds = timer.Tock();
+  LOG(INFO) << "Check flip duration: " << check_flip_seconds;
+  time_profile_ << check_flip_seconds << " ";
+
+  timer.Tick();
+  MarchingCubesFlipKernel<<<grid_size, block_size>>>(
+      hash_table_.gpu_data(),
+          compact_hash_table_.gpu_data(),
+          blocks_.gpu_data(),
+          mesh_.gpu_data(),
+          use_fine_gradient_);
+  checkCudaErrors(cudaDeviceSynchronize());
+  checkCudaErrors(cudaGetLastError());
+  double flip_seconds = timer.Tock();
+  LOG(INFO) << "Flip duration: " << flip_seconds;
+  time_profile_ << flip_seconds << " ";
+
   timer.Tick();
   MarchingCubesPass1Kernel<<<grid_size, block_size>>>(
           hash_table_.gpu_data(),
