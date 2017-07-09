@@ -31,8 +31,9 @@ ray_casting:     0
 # Result saving
 record_video:    1
 save_mesh:       1
-filename_prefix: "lv-no-hamming"
-time_profile:    "time-profile-llll"
+filename_prefix: "1"
+time_profile:    "1"
+memo_profile:    "1"
 
 # Others
 run_frames:     -1

@@ -93,6 +93,7 @@ struct RuntimeParams {
 
   std::string filename_prefix;
   std::string time_profile;
+  std::string memo_profile;
 
   int run_frames;
 };

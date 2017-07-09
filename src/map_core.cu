@@ -178,7 +178,10 @@ void CollectAllBlocksKernel(HashTableGPU        hash_table,
 ///////////////////
 
 /// Life cycle
-Map::Map(const HashParams &hash_params, const MeshParams &mesh_params, const std::string& time_profile) {
+Map::Map(const HashParams &hash_params,
+         const MeshParams &mesh_params,
+         const std::string& time_profile,
+         const std::string& memo_profile) {
   hash_table_.Resize(hash_params);
   compact_hash_table_.Resize(hash_params.entry_count);
   blocks_.Resize(hash_params.value_capacity);
@@ -188,10 +191,12 @@ Map::Map(const HashParams &hash_params, const MeshParams &mesh_params, const std
   bbox_.Resize(hash_params.value_capacity * 24);
 
   time_profile_.open(time_profile, std::ios::out);
+  memo_profile_.open(memo_profile, std::ios::out);
 }
 
 Map::~Map() {
   time_profile_.close();
+  memo_profile_.close();
 }
 
 /// Reset

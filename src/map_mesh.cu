@@ -237,24 +237,24 @@ void MarchingCubesPass1Kernel(
         bool                use_fine_gradient) {
 
   const HashEntry &entry = compact_hash_table.compacted_entries[blockIdx.x];
-  const uint local_idx   = threadIdx.x;
+  const uint local_idx = threadIdx.x;
 
-  int3  voxel_base_pos  = BlockToVoxel(entry.pos);
+  int3 voxel_base_pos = BlockToVoxel(entry.pos);
   uint3 voxel_local_pos = IdxToVoxelLocalPos(local_idx);
-  int3 voxel_pos        = voxel_base_pos + make_int3(voxel_local_pos);
-  float3 world_pos      = VoxelToWorld(voxel_pos);
+  int3 voxel_pos = voxel_base_pos + make_int3(voxel_local_pos);
+  float3 world_pos = VoxelToWorld(voxel_pos);
 
   Cube &this_cube = blocks[entry.ptr].cubes[local_idx];
 
   //////////
   /// 1. Read the scalar values, see mc_tables.h
   Voxel v;
-  const int   kVertexCount = 8;
-  const float kVoxelSize   = kSDFParams.voxel_size;
-  const float kThreshold   = 0.2f;
-  const float kIsoLevel    = 0;
+  const int kVertexCount = 8;
+  const float kVoxelSize = kSDFParams.voxel_size;
+  const float kThreshold = 0.2f;
+  const float kIsoLevel = 0;
 
-  float  d[kVertexCount];
+  float d[kVertexCount];
   float3 p[kVertexCount];
 
   short cube_index = 0;
@@ -285,41 +285,65 @@ void MarchingCubesPass1Kernel(
 
   float kTr = 0.01;
 
-  /// Compute hamming distance
-  int noise_bit[3];
-  for (int i = 0; i < 6; ++i) {
-    //if (cube_index == 3 || cube_index == 48) break;
-
-    short binary_xor = cube_index ^ kRegularCubeIndices[i];
-    short dist = 0;
-    for (int j = 0; j < 8; ++j) {
-      short mask = (1 << j);
-      if (mask & binary_xor) {
-        noise_bit[dist] = j;
-        dist ++;
-        if (dist > 3) break;
-      }
-    }
-    if (dist > 3) continue;
-
-    bool edge_case = true;
-    for (int j = 0; j < dist; ++j) {
-      if (fabs(d[noise_bit[j]]) > kTr) {
-        edge_case = false;
-        break;
-      }
-    }
-    if (edge_case) {
-      for (int j = 0; j < dist; ++j) {
-        d[noise_bit[j]] = - d[noise_bit[j]];
-      }
-      this_cube.curr_index = cube_index = kRegularCubeIndices[i];
-      break;
-    }
-
-    //printf("(%d %d) -> %d\n", cube_index, kRegularCubeIndices[i], dist);
+  /// Compute hamming distance and find the closest regular case
+  short binary_xor = cube_index ^ this_cube.prev_index;
+  int dist = 0;
+  while (binary_xor) {
+    binary_xor &= (binary_xor - 1);
+    dist++;
   }
 
+  if (dist <= 3) {
+    float min_dist = 1e10;
+    int min_idx = -1;
+    for (int i = 0; i < 6; ++i) {
+      short binary_xor = cube_index ^kRegularCubeIndices[i];
+      short hamming_dist = 0;
+      float euclid_dist;
+      for (int j = 0; j < 8; ++j) {
+        short mask = (1 << j);
+        if (mask & binary_xor) {
+          hamming_dist++;
+          euclid_dist += fabs(d[j]);
+          if (hamming_dist > 3) break;
+        }
+      }
+
+      if (hamming_dist <= 3 && euclid_dist < min_dist) {
+        min_dist = euclid_dist;
+        min_idx = i;
+      }
+    }
+
+    if (min_idx != -1) {
+      int noise_bit[3];
+      short hamming_dist = 0;
+      short binary_xor = cube_index ^kRegularCubeIndices[min_idx];
+      for (int j = 0; j < 8; ++j) {
+        short mask = (1 << j);
+        if (mask & binary_xor) {
+          noise_bit[hamming_dist] = j;
+          hamming_dist++;
+        }
+      }
+
+      bool edge_case = true;
+      for (int j = 0; j < hamming_dist; ++j) {
+        if (fabs(d[noise_bit[j]]) > kTr) {
+          edge_case = false;
+          break;
+        }
+      }
+      if (edge_case) {
+        for (int j = 0; j < hamming_dist; ++j) {
+          d[noise_bit[j]] = -d[noise_bit[j]];
+        }
+        this_cube.curr_index = cube_index = kRegularCubeIndices[min_idx];
+      }
+
+      //printf("(%d %d) -> %d\n", cube_index, kRegularCubeIndices[i], dist);
+    }
+  }
 
   //////////
   /// 2. Determine vertices (ptr allocated via (shared) edges
@@ -344,6 +368,16 @@ void MarchingCubesPass1Kernel(
                               use_fine_gradient);
     }
   }
+}
+
+__global__
+void MarchingCubesFlipKernel(
+    HashTableGPU        hash_table,
+    CompactHashTableGPU compact_hash_table,
+    BlocksGPU           blocks,
+    MeshGPU             mesh,
+    bool                use_fine_gradient) {
+
 }
 
 __global__
@@ -687,9 +721,6 @@ void CompressTrianglesKernel(MeshGPU        mesh,
 /// CollectInFrustumBlocks or
 /// CollectAllBlocks
 void Map::CompressMesh() {
-  std::ofstream vertex_info;
-  vertex_info.open("../result/statistics/vertex_info.txt", std::fstream::app);
-
   compact_mesh_.Reset();
 
   int occupied_block_count = compact_hash_table_.entry_count();
@@ -735,7 +766,7 @@ void Map::CompressMesh() {
     checkCudaErrors(cudaFree(vertex_ref_count));
 
     LOG(INFO) << vertex_ref_count_cpu;
-    vertex_info << vertex_ref_count_cpu;
+    memo_profile_ << vertex_ref_count_cpu;
   }
 
   {
@@ -755,7 +786,7 @@ void Map::CompressMesh() {
 
   LOG(INFO) << "Vertices: " << compact_mesh_.vertex_count()
             << "/" << (mesh_.params().max_vertex_count - mesh_.vertex_heap_count());
-  vertex_info << " " << compact_mesh_.vertex_count() << "\n";
+  memo_profile_ << " " << compact_mesh_.vertex_count() << "\n";
 
   LOG(INFO) << "Triangles: " << compact_mesh_.triangle_count()
             << "/" << (mesh_.params().max_triangle_count - mesh_.triangle_heap_count());

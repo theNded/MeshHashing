@@ -27,7 +27,8 @@ private:
   BBox             bbox_;
 
   /// Focus on Pass1, Pass2, and lock free
-  std::fstream time_profile_;
+  std::fstream     time_profile_;
+  std::fstream     memo_profile_;
 
 ////////////////////
 /// Core
@@ -46,7 +47,8 @@ public:
   /// Life cycle
   Map(const HashParams& hash_params,
       const MeshParams& mesh_params,
-      const std::string& time_profile);
+      const std::string& time_profile,
+      const std::string& memo_profile);
   ~Map();
 
   /// Reset and recycle

@@ -43,8 +43,8 @@ int main(int argc, char** argv) {
   MeshType mesh_type = args.render_type == 0 ? kNormal : kColor;
 
   Renderer renderer("Mesh",
-                    config.sensor_params.width,
-                    config.sensor_params.height);
+                    config.sensor_params.width * 2,
+                    config.sensor_params.height * 2);
   MeshObject mesh(config.mesh_params.max_vertex_count,
                   config.mesh_params.max_triangle_count,
                   mesh_type);
@@ -60,7 +60,9 @@ int main(int argc, char** argv) {
   renderer.free_walk() = args.free_walk;
 
   SetConstantSDFParams(config.sdf_params);
-  Map       map(config.hash_params, config.mesh_params, "../result/statistics/" + args.time_profile + ".txt");
+  Map       map(config.hash_params, config.mesh_params,
+                "../result/3dv/" + args.time_profile + ".txt",
+                "../result/3dv/" + args.memo_profile + ".txt");
   Sensor    sensor(config.sensor_params);
   RayCaster ray_caster(config.ray_caster_params);
 
@@ -69,12 +71,12 @@ int main(int argc, char** argv) {
   cv::VideoWriter writer;
   cv::Mat screen;
   if (args.record_video) {
-    writer = cv::VideoWriter("../result/videos/" + args.filename_prefix + ".avi",
+    writer = cv::VideoWriter("../result/3dv/" + args.filename_prefix + ".avi",
                              CV_FOURCC('X','V','I','D'),
-                             30, cv::Size(config.sensor_params.width,
-                                          config.sensor_params.height));
-    screen = cv::Mat(config.sensor_params.height,
-                     config.sensor_params.width,
+                             30, cv::Size(config.sensor_params.width * 2,
+                                          config.sensor_params.height * 2));
+    screen = cv::Mat(config.sensor_params.height * 2,
+                     config.sensor_params.width * 2,
                      CV_8UC3);
   }
 
@@ -160,7 +162,7 @@ int main(int argc, char** argv) {
 //  debugger.DebugAll();
 #endif
   if (args.save_mesh) {
-    map.SaveMesh("../result/models/" + args.filename_prefix + ".obj");
+    map.SaveMesh("../result/3dv/" + args.filename_prefix + ".obj");
   }
 
   return 0;
