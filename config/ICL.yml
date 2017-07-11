@@ -1,5 +1,5 @@
 %YAML:1.0
-dataset_path:      "/home/wei/Work/data/ICL/lv1/"
+dataset_path:      "/home/wei/Work/data/ICL/office1/"
 
 bucket_count:      80000
 bucket_size:       10

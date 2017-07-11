@@ -12,7 +12,7 @@ free_walk:       0
 
 # Polygon_mode draw triangle with only lines;
 # otherwise with entire planes
-ploygon_mode:    1
+ploygon_mode:    0
 
 # 1 - in frustum
 # 0 - in all
@@ -31,9 +31,9 @@ ray_casting:     0
 # Result saving
 record_video:    1
 save_mesh:       1
-filename_prefix: "1"
-time_profile:    "1"
-memo_profile:    "1"
+filename_prefix: "lounge-shading"
+time_profile:    "tum3-nhm"
+memo_profile:    "tum3-nhm"
 
 # Others
 run_frames:     -1

@@ -8,7 +8,7 @@ in vec3 light_dir_c;
 out vec3 color;
 
 void main() {
-  vec3  light_w = vec3(0, 3, 0);
+  vec3  light_w = vec3(0, 2, 0);
 	vec3  light_color = vec3(1, 1, 1);
 	float light_power = 10.0f;
 

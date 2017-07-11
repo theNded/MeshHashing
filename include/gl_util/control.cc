@@ -11,6 +11,7 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glog/logging.h>
 
 namespace gl_utils {
 Control::Control(const Context& context) {
@@ -96,6 +97,11 @@ void Control::UpdateCameraPose() {
     position_ -= up * move_speed_ * delta_time;
   }
 
+  LOG(INFO) << "----------";
+  LOG(INFO) << position_.x << " " << position_.y << " " << position_.z;
+  LOG(INFO) << horizontal_angle_;
+  LOG(INFO) << vertical_angle_;
+
   // Camera matrix
   view_mat_ = glm::lookAt(
       position_,
@@ -106,9 +112,21 @@ void Control::UpdateCameraPose() {
 }
 
 void Control::InitParameters() {
-  position_         = glm::vec3(0, 2, 0);
-  horizontal_angle_ = (float)M_PI;
-  vertical_angle_   = -(float)M_PI_2; // 0.0
+  // TUM3
+//  position_ = glm::vec3(-0.0381861, 2.91101, -1.57104);
+//  horizontal_angle_ = (float)M_PI;
+//  vertical_angle_ = -1.123f;
+
+  // lounge
+  position_ = glm::vec3(0.272362, 0.877346, 1.46175);
+  horizontal_angle_ = 2.942f;
+  vertical_angle_ = -0.112f;
+
+
+  // Default
+  //position_         = glm::vec3(0, 2, 0);
+  //horizontal_angle_ = (float)M_PI;
+  //vertical_angle_   = -(float)M_PI_2; // 0.0
   move_speed_       = 0.5f;
   rotate_speed_     = 0.2f;
 }

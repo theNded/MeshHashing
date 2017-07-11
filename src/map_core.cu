@@ -11,6 +11,7 @@
 #include <list>
 #include <glog/logging.h>
 #include <device_launch_parameters.h>
+#include <mc_tables.h>
 
 
 #define PINF  __int_as_float(0x7f800000)
@@ -94,15 +95,60 @@ void CollectGarbageBlocksKernel(CompactHashTableGPU compact_hash_table,
 
 /// !!! Their mesh not recycled
 __global__
-void RecycleGarbageBlocksKernel(HashTableGPU        hash_table,
+void RecycleGarbageBlocksTrianglesKernel(HashTableGPU        hash_table,
                                 CompactHashTableGPU compact_hash_table,
-                                BlocksGPU      blocks,
+                                BlocksGPU           blocks,
                                 MeshGPU             mesh) {
-  const uint idx = blockIdx.x*blockDim.x + threadIdx.x;
+  const uint idx = blockIdx.x;
+  if (compact_hash_table.entry_recycle_flags[idx] == 0) return;
 
-  if (idx < (*compact_hash_table.compacted_entry_counter)
-      && compact_hash_table.entry_recycle_flags[idx] != 0) {
-    const HashEntry& entry = compact_hash_table.compacted_entries[idx];
+  const HashEntry& entry = compact_hash_table.compacted_entries[idx];
+  const uint local_idx = threadIdx.x;  //inside an SDF block
+  Cube &cube = blocks[entry.ptr].cubes[local_idx];
+
+  for (int i = 0; i < Cube::kMaxTrianglesPerCube; ++i) {
+    int triangle_ptr = cube.triangle_ptrs[i];
+    if (triangle_ptr == FREE_PTR) continue;
+
+    // Clear ref_count of its pointed vertices
+    mesh.ReleaseTriangle(mesh.triangles[triangle_ptr]);
+    mesh.triangles[triangle_ptr].Clear();
+    mesh.FreeTriangle(triangle_ptr);
+    cube.triangle_ptrs[i] = FREE_PTR;
+  }
+}
+
+__global__
+void RecycleGarbageBlocksVerticesKernel(HashTableGPU        hash_table,
+                                         CompactHashTableGPU compact_hash_table,
+                                         BlocksGPU           blocks,
+                                         MeshGPU             mesh) {
+  if (compact_hash_table.entry_recycle_flags[blockIdx.x] == 0) return;
+  const HashEntry &entry = compact_hash_table.compacted_entries[blockIdx.x];
+  const uint local_idx = threadIdx.x;
+
+  Cube &cube = blocks[entry.ptr].cubes[local_idx];
+
+  __shared__ int valid_vertex_count;
+  if (threadIdx.x == 0) valid_vertex_count = 0;
+  __syncthreads();
+
+#pragma unroll 1
+  for (int i = 0; i < 3; ++i) {
+    if (cube.vertex_ptrs[i] != FREE_PTR) {
+      if (mesh.vertices[cube.vertex_ptrs[i]].ref_count <= 0) {
+        mesh.vertices[cube.vertex_ptrs[i]].Clear();
+        mesh.FreeVertex(cube.vertex_ptrs[i]);
+        cube.vertex_ptrs[i] = FREE_PTR;
+      }
+      else {
+        atomicAdd(&valid_vertex_count, 1);
+      }
+    }
+  }
+
+  __syncthreads();
+  if (threadIdx.x == 0 && valid_vertex_count == 0) {
     if (hash_table.FreeEntry(entry.pos)) {
       blocks[entry.ptr].Clear();
     }
@@ -263,18 +309,25 @@ void Map::CollectGarbageBlocks() {
 // TODO(wei): Check vertex / triangles in detail
 // including garbage collection
 void Map::RecycleGarbageBlocks() {
-  const uint threads_per_block = 64;
+  const uint threads_per_block = BLOCK_SIZE;
 
   uint processing_block_count = compact_hash_table_.entry_count();
   if (processing_block_count <= 0)
     return;
 
-  const dim3 grid_size((processing_block_count + threads_per_block - 1)
-                       / threads_per_block, 1);
+  const dim3 grid_size(processing_block_count, 1);
   const dim3 block_size(threads_per_block, 1);
 
-  RecycleGarbageBlocksKernel <<<grid_size, block_size >>>(
+  RecycleGarbageBlocksTrianglesKernel <<<grid_size, block_size >>>(
           hash_table_.gpu_data(),
+          compact_hash_table_.gpu_data(),
+          blocks_.gpu_data(),
+          mesh_.gpu_data());
+  checkCudaErrors(cudaDeviceSynchronize());
+  checkCudaErrors(cudaGetLastError());
+
+  RecycleGarbageBlocksVerticesKernel <<<grid_size, block_size >>>(
+      hash_table_.gpu_data(),
           compact_hash_table_.gpu_data(),
           blocks_.gpu_data(),
           mesh_.gpu_data());
