@@ -137,11 +137,15 @@ TARGET_LINK_LIBRARIES(cuda_gl_interp
         -lopencv_core -lopencv_highgui
         ${GLOG_LIBRARIES})
 
-ADD_EXECUTABLE(block_visualizer src/unit_test/block_visualizer.cc include/timer.h)
+ADD_EXECUTABLE(block_visualizer src/unit_test/block_visualizer.cc include/timer.h src/unit_test/video_clip.cc)
 TARGET_LINK_LIBRARIES(block_visualizer
         voxel-hashing
         ${OpenCV_LIBRARIES}
         ${GLOG_LIBRARIES})
+
+ADD_EXECUTABLE(video_clip src/unit_test/video_clip.cc)
+TARGET_LINK_LIBRARIES(video_clip
+        -lopencv_core -lopencv_highgui)
 
 ### Loop over
 MESSAGE(STATUS ${GLOG_LIBRARIES})

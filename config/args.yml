@@ -4,15 +4,15 @@
 # 4   - SUN3D
 # 5   - SUN3D_ORIGINAL
 # 6   - PKU
-dataset_type:    4
+dataset_type:    3
 
 # -----------
 # Render options
-free_walk:       0
+free_walk:       1
 
 # Polygon_mode draw triangle with only lines;
 # otherwise with entire planes
-ploygon_mode:    0
+ploygon_mode:    1
 
 # 1 - in frustum
 # 0 - in all
@@ -20,9 +20,9 @@ mesh_range:      0
 
 # 0 - shaded map,
 # 1 - color map (entropy, laplacian, duration, whatever)
-render_type:     0
+render_type:     1
 # If use shaded map, set it to 1
-fine_gradient:   1
+fine_gradient:   0
 
 # Additional settings
 bounding_box:    0
@@ -31,7 +31,7 @@ ray_casting:     0
 # Result saving
 record_video:    1
 save_mesh:       1
-filename_prefix: "lounge-shading"
+filename_prefix: "tum-color"
 time_profile:    "tum3-nhm"
 memo_profile:    "tum3-nhm"
 

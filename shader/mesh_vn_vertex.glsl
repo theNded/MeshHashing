@@ -22,7 +22,7 @@ void main() {
   vec3 position_c = (view_mat * model_mat * vec4(position, 1.0f)).xyz;
   eye_dir_c = vec3(0, 0, 0) - position_c;
 
-  vec3 light_w = vec3(0, 3, 0);
+  vec3 light_w = vec3(0.0, 3, -1.5);
   vec3 light_c = (view_mat * vec4(light_w, 1.0f)).xyz;
   light_dir_c = light_c + eye_dir_c;
 
