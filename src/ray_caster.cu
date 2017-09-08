@@ -1,5 +1,6 @@
 #include <matrix.h>
 #include <geometry_util.h>
+#include <glog/logging.h>
 #include "color_util.h"
 #include "gradient.h"
 #include "ray_caster.h"
@@ -22,6 +23,7 @@ void CastKernel(const HashTableGPU hash_table,
 
   if (x >= ray_caster_params.width || y >= ray_caster_params.height)
     return;
+
 
   int pixel_idx = y * ray_caster_params.width + x;
   gpu_data.depth_image [pixel_idx] = make_float4(MINF, MINF, MINF, MINF);
@@ -52,16 +54,20 @@ void CastKernel(const HashTableGPU hash_table,
   prev_sample.weight = 0;
 
   /// NOT zig-zag; just evenly sampling along the ray
+  // TODO: Check this weird case : return causes illegal address failure
+  bool return_flag = false;
+
 #pragma unroll 1
-  for (float t = t_min; t < t_max; t += ray_caster_params.raycast_step) {
+  for (float t = t_min; t < t_max & !return_flag; t += ray_caster_params.raycast_step) {
     float3 world_sample_pos = world_cam_pos + t * world_ray_dir;
     float  sdf;
     uchar3 color;
     Stat stats;
 
     /// a voxel surrounded by valid voxels
-    if (TrilinearInterpolation(hash_table, blocks, world_sample_pos,
+    if (  TrilinearInterpolation(hash_table, blocks, world_sample_pos,
                                sdf, stats, color)) {
+
       /// Zero crossing exist
       if (prev_sample.weight > 0 // valid previous sample
           && prev_sample.sdf > 0.0f && sdf < 0.0f) { // zero-crossing
@@ -87,9 +93,9 @@ void CastKernel(const HashTableGPU hash_table,
             float depth = interpolated_t * camera_ray_dir.z;
 
             float3 rgb = ValToRGB(depth, 0.3, 5.0);
-            gpu_data.depth_image [pixel_idx]
-                    = make_float4(rgb.x, rgb.y, rgb.z, 1.0f);
-
+            //printf("%f %f %f\n", rgb.x, rgb.y, rgb.z);
+            gpu_data.depth_image [pixel_idx] = make_float4(rgb.x, rgb.y, rgb.z, 1.0f);
+            //break;
             gpu_data.vertex_image[pixel_idx]
                     = make_float4(ImageReprojectToCamera(x, y, depth,
                                                          ray_caster_params.fx,
@@ -119,13 +125,13 @@ void CastKernel(const HashTableGPU hash_table,
               float3 c3 = make_float3(0.62f, 0.72f, 0.88) * dot(-n3, l3)
                           * 20.0f / (distance * distance);
 
-              /// Uncertainty: low -> entropy high
-              c3 = ValToRGB(stats.entropy, 0.0f, 1.0f);
+              // Uncertainty: low -> entropy high
+              //c3 = ValToRGB(stats.entropy, 0.0f, 1.0f);
               gpu_data.surface_image[pixel_idx]
                       = make_float4(c3.x, c3.y, c3.z, 1.0f);
             }
 
-            return;
+            return_flag = true;
           }
         }
       }

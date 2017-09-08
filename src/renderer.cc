@@ -398,6 +398,7 @@ LineObject::LineObject(int max_vertex_count) {
   std::vector<std::string> uniform_names;
   uniform_names.clear();
   uniform_names.push_back("mvp");
+  uniform_names.push_back("uni_color");
 
   CompileShader("../shader/line_vertex.glsl",
                 "../shader/line_fragment.glsl",
@@ -433,8 +434,9 @@ LineObject::~LineObject(){
   delete[] vbo_;
 }
 
-void LineObject::SetData(float3 *vertices, size_t vertex_count) {
+void LineObject::SetData(float3 *vertices, size_t vertex_count, float3 color) {
   vertex_count_ = vertex_count;
+  color_ = color;
 
   LOG(INFO) << "Transfering from CUDA to OpenGL";
   float3 *map_ptr;
@@ -456,8 +458,14 @@ void LineObject::Render(glm::mat4 m, glm::mat4 v, glm::mat4 p) {
   glm::mat4 mvp = p * v * m;
   glUseProgram(program_);
   glUniformMatrix4fv(uniforms_[0], 1, GL_FALSE, &mvp[0][0]);
+
+  glm::vec3 c;
+  c[0] = color_.x, c[1] = color_.y, c[2] = color_.z;
+  glUniform3fv(uniforms_[1], 1, &c[0]);
   glBindVertexArray(vao_);
 
+  glEnable(GL_LINE_SMOOTH);
+  glLineWidth(5.0f);
   glDrawArrays(GL_LINES, 0, vertex_count_);
 }
 

@@ -151,12 +151,13 @@ protected:
 
   int max_vertex_count_;
   int vertex_count_;
+  float3 color_;
 
 public:
   LineObject(int max_vertex_count);
   ~LineObject();
   void Render(glm::mat4 m, glm::mat4 v, glm::mat4 p);
-  void SetData(float3* vertices, size_t vertex_count);
+  void SetData(float3* vertices, size_t vertex_count, float3 color);
 };
 
 class PointObject : public GLObjectBase {

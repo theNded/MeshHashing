@@ -3,17 +3,17 @@
 dataset_path:      "/home/wei/Work/data/TUM/rgbd_dataset_freiburg3_long_office_household/"
 
 # Hash params
-bucket_count:      400000
+bucket_count:      40000
 bucket_size:       10
-entry_count:       4000000
+entry_count:       400000
 linked_list_size:  7
-value_capacity:    100000
+value_capacity:    50000
 
 # SDF params
-voxel_size:                0.04
+voxel_size:                0.03
 sdf_upper_bound:           4.0
-truncation_distance_scale: 0.02
-truncation_distance:       0.04
+truncation_distance_scale: 0.01
+truncation_distance:       0.03
 weight_sample:             10
 weight_upper_bound:        255
 
@@ -23,7 +23,7 @@ fy:              539.2
 cx:              320.1
 cy:              247.6
 min_depth_range: 0.5
-max_depth_range: 2.5
+max_depth_range: 3.0
 range_factor:    0.0002
 height:          480
 width:           640
@@ -36,5 +36,5 @@ sample_sdf_threshold: 0.808
 sdf_threshold:        0.800
 enable_gradient:      1
 
-max_vertex_count:     2000000
-max_triangle_count:   3000000
+max_vertex_count:     1800000
+max_triangle_count:   3400000

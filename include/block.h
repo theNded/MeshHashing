@@ -29,8 +29,6 @@ struct __ALIGN__(4) Stat {
   }
 };
 
-#define STATS
-
 struct __ALIGN__(8) Voxel {
   float  sdf;    // signed distance function
   uchar  weight;  // accumulated sdf weight
@@ -142,12 +140,12 @@ struct __ALIGN__(8) Block {
   Cube  cubes[BLOCK_SIZE];
 
   /// ! Temporary solution for planar fitting!
-  float3 vertices[BLOCK_SIZE * 4];
-  int    cube_type[BLOCK_SIZE];
+//  float3 vertices[BLOCK_SIZE * 4];
+//  int    cube_type[BLOCK_SIZE];
 
-  float3 n;
-  float  d;
-  float  ratio;
+  //float3 n;
+//  float  d;
+//  float  ratio;
 
   __device__
   void Clear() {

@@ -397,7 +397,7 @@ bool DataManager::ProvideData(cv::Mat &depth,
     return false;
   }
 
-  {
+   {
     LOG(INFO) << frame_id << "/" << depth_image_list.size();
     depth = cv::imread(depth_image_list[frame_id], CV_LOAD_IMAGE_UNCHANGED);
     color = cv::imread(color_image_list[frame_id]);
@@ -407,7 +407,7 @@ bool DataManager::ProvideData(cv::Mat &depth,
 
     wTc = wTcs[0].getInverse() * wTcs[frame_id];
     ++frame_id;
-  }; //while (frame_id >= 1960 && frame_id <= 1985);
+  } ///while (frame_id >= 1960 && frame_id <= 1985);
 
   return true;
   // TODO: Network situation

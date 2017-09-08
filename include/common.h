@@ -51,4 +51,8 @@ typedef signed char schar;
 #define NO_OFFSET   0
 
 #define FREE_PTR   -2
+
+//#define STATS
+//#define REDUCTION
+
 #endif //_VH_COMMON_H_

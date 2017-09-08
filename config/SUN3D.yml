@@ -23,7 +23,7 @@ fy:              525.0
 cx:              319.5
 cy:              239.5
 min_depth_range: 0.5
-max_depth_range: 1.6
+max_depth_range: 2.0
 range_factor:    0.001
 height:          480
 width:           640

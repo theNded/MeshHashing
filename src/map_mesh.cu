@@ -200,13 +200,54 @@ void MarchingCubesLockFreeKernel(
                                              use_fine_gradient);
     }
   }
+//  if (this_cube.curr_index == cube_index) {
+//    blocks[map_entry.ptr].voxels[local_idx].stats.duration += 1.0f;
+//    return;
+//  }
+//  blocks[map_entry.ptr].voxels[local_idx].stats.duration = 0;
 
-  if (this_cube.curr_index == cube_index) {
-    blocks[map_entry.ptr].voxels[local_idx].stats.duration += 1.0f;
+  this_cube.curr_index = cube_index;
+}
+
+
+__global__
+void MarchingCubesLockFreePass2Kernel(
+    HashTableGPU        hash_table,
+    CompactHashTableGPU compact_hash_table,
+    BlocksGPU           blocks,
+    MeshGPU             mesh,
+    uchar3              mask0,
+    uchar3              mask1,
+    bool                use_fine_gradient) {
+
+  const HashEntry &map_entry = compact_hash_table.compacted_entries[blockIdx.x];
+  const uint local_idx = threadIdx.x;
+
+  int3 voxel_base_pos   = BlockToVoxel(map_entry.pos);
+  uint3 voxel_local_pos = IdxToVoxelLocalPos(local_idx);
+  int3 voxel_pos        = voxel_base_pos + make_int3(voxel_local_pos);
+  float3 world_pos      = VoxelToWorld(voxel_pos);
+
+  if (!check_mask(voxel_local_pos, mask0)
+      && !check_mask(voxel_local_pos, mask1))
     return;
-  }
-  blocks[map_entry.ptr].voxels[local_idx].stats.duration = 0;
 
+  Cube &this_cube = blocks[map_entry.ptr].cubes[local_idx];
+  const int kEdgeCount = 12;
+  int vertex_ptr[kEdgeCount];
+
+#pragma unroll 1
+  for (int i = 0; i < kEdgeCount; ++i) {
+    if (kEdgeTable[this_cube.curr_index] & (1 << i)) {
+      uint4 c_idx = make_uint4(kEdgeCubeTable[i][0], kEdgeCubeTable[i][1],
+                               kEdgeCubeTable[i][2], kEdgeCubeTable[i][3]);
+      Cube &cube = GetCube(hash_table, blocks, map_entry,
+                           voxel_local_pos + make_uint3(c_idx.x, c_idx.y, c_idx.z));
+      vertex_ptr[i] = GetVertexWithMutex(cube, c_idx.w);
+    }
+  }
+
+  int cube_index = this_cube.curr_index;
   int i = 0;
   for (int t = 0; kTriangleTable[cube_index][t] != -1; t += 3, ++i) {
     int triangle_ptrs = this_cube.triangle_ptrs[i];
@@ -225,7 +266,68 @@ void MarchingCubesLockFreeKernel(
       mesh.ComputeTriangleNormal(mesh.triangles[triangle_ptrs]);
     }
   }
-  this_cube.curr_index = cube_index;
+}
+
+__device__
+void RefineMesh(short& prev_cube, short& curr_cube, float d[8]) {
+
+  float kTr = 0.0075;
+
+  /// Step 1: temporal
+  short temporal_diff = curr_cube ^ prev_cube;
+  int dist = 0;
+  while (temporal_diff) {
+    temporal_diff &= (temporal_diff - 1);
+    dist++;
+  }
+  if (dist > 3) return;
+
+  /// Step 2: Spatially closest
+  float min_dist = 1e10;
+  int min_idx = -1;
+  for (int i = 0; i < 6; ++i) {
+    short spatial_diff = curr_cube ^ kRegularCubeIndices[i];
+    short hamming_dist = 0;
+    float euclid_dist;
+
+    for (int j = 0; j < 8; ++j) {
+      short mask = (1 << j);
+      if (mask & spatial_diff) {
+        hamming_dist++;
+        euclid_dist += fabs(d[j]);
+        if (hamming_dist > 3) break;
+      }
+    }
+
+    if (hamming_dist <= 3 && euclid_dist < min_dist) {
+      min_dist = euclid_dist;
+      min_idx = i;
+    }
+  }
+  if (min_idx < 0) return;
+
+  /// Step 3: Valid?
+  int noise_bit[3];
+  short hamming_dist = 0;
+  short binary_xor = curr_cube ^ kRegularCubeIndices[min_idx];
+  for (int j = 0; j < 8; ++j) {
+    short mask = (1 << j);
+    if (mask & binary_xor) {
+      noise_bit[hamming_dist] = j;
+      hamming_dist++;
+    }
+  }
+
+  for (int j = 0; j < hamming_dist; ++j) {
+    if (fabs(d[noise_bit[j]]) > kTr) {
+      return;
+    }
+  }
+
+  for (int j = 0; j < hamming_dist; ++j) {
+    d[noise_bit[j]] = -d[noise_bit[j]];
+    curr_cube = kRegularCubeIndices[min_idx];
+  }
 }
 
 __global__
@@ -283,71 +385,15 @@ void MarchingCubesPass1Kernel(
   if (kEdgeTable[cube_index] == 0 || kEdgeTable[cube_index] == 255)
     return;
 
-  float kTr = 0.002;
-
-  /// Step 1: temporal
-  short temporal_diff = cube_index ^ this_cube.prev_index;
-  int dist = 0;
-  while (temporal_diff) {
-    temporal_diff &= (temporal_diff - 1);
-    dist++;
-  }
-  if (dist > 3) goto allocatev;
-
-  /// Step 2: Spatially closest
-  float min_dist = 1e10;
-  int min_idx = -1;
-  for (int i = 0; i < 6; ++i) {
-    short spatial_diff = cube_index ^ kRegularCubeIndices[i];
-    short hamming_dist = 0;
-    float euclid_dist;
-
-    for (int j = 0; j < 8; ++j) {
-      short mask = (1 << j);
-      if (mask & spatial_diff) {
-        hamming_dist++;
-        euclid_dist += fabs(d[j]);
-        if (hamming_dist > 3) break;
-      }
-    }
-
-    if (hamming_dist <= 3 && euclid_dist < min_dist) {
-      min_dist = euclid_dist;
-      min_idx = i;
-    }
-  }
-  if (min_idx < 0) goto allocatev;
-
-  /// Step 3: Valid?
-  int noise_bit[3];
-  short hamming_dist = 0;
-  short binary_xor = cube_index ^ kRegularCubeIndices[min_idx];
-  for (int j = 0; j < 8; ++j) {
-    short mask = (1 << j);
-    if (mask & binary_xor) {
-      noise_bit[hamming_dist] = j;
-      hamming_dist++;
-    }
-  }
-
-  for (int j = 0; j < hamming_dist; ++j) {
-    if (fabs(d[noise_bit[j]]) > kTr) {
-      goto allocatev;
-    }
-  }
-
-  for (int j = 0; j < hamming_dist; ++j) {
-    d[noise_bit[j]] = -d[noise_bit[j]];
-    this_cube.curr_index = kRegularCubeIndices[min_idx];
-    cube_index = kRegularCubeIndices[min_idx];
-  }
-
   //////////
   /// 2. Determine vertices (ptr allocated via (shared) edges
   /// If the program reach here, the voxels holding edges must exist
   /// This operation is in 2-pass
   /// pass1: Allocate
-allocatev:
+  //
+  RefineMesh(this_cube.prev_index, this_cube.curr_index, d);
+  cube_index = this_cube.curr_index;
+
   const int kEdgeCount = 12;
 
 #pragma unroll 1
@@ -386,11 +432,11 @@ void MarchingCubesPass2Kernel(
   Cube &this_cube       = blocks[entry.ptr].cubes[local_idx];
 
   /// Cube type unchanged: NO need to update triangles
-  if (this_cube.curr_index == this_cube.prev_index) {
-    blocks[entry.ptr].voxels[local_idx].stats.duration += 1.0f;
-    return;
-  }
-  blocks[entry.ptr].voxels[local_idx].stats.duration = 0;
+//  if (this_cube.curr_index == this_cube.prev_index) {
+//    blocks[entry.ptr].voxels[local_idx].stats.duration += 1.0f;
+//    return;
+//  }
+//  blocks[entry.ptr].voxels[local_idx].stats.duration = 0;
 
   if (kEdgeTable[this_cube.curr_index] == 0
       || kEdgeTable[this_cube.curr_index] == 255) {
@@ -488,6 +534,7 @@ void RecycleVerticesKernel(
 }
 
 /// Only update Laplacian at current
+#ifdef STATS
 __global__
 void UpdateStatisticsKernel(HashTableGPU        hash_table,
                             CompactHashTableGPU compact_hash_table,
@@ -524,7 +571,7 @@ void UpdateStatisticsKernel(HashTableGPU        hash_table,
 
   blocks[entry.ptr].voxels[local_idx].stats.laplacian = laplacian;
 }
-
+#endif
 
 ////////////////////
 /// Host code
@@ -540,15 +587,16 @@ void Map::MarchingCubes() {
   const dim3 block_size(threads_per_block, 1);
 
   /// First update statistics
+#ifdef STATS
   UpdateStatisticsKernel<<<grid_size, block_size>>>(
       hash_table_.gpu_data(),
           compact_hash_table_.gpu_data(),
           blocks_.gpu_data());
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
+#endif
 
   /// Use divide and conquer to avoid read-write conflict
-//#define REDUCTION
 #ifndef REDUCTION
   Timer timer;
   timer.Tick();
@@ -561,8 +609,8 @@ void Map::MarchingCubes() {
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
   double pass1_seconds = timer.Tock();
-  LOG(INFO) << "Pass1 duration: " << pass1_seconds;
-  time_profile_ << pass1_seconds << " ";
+//  LOG(INFO) << "Pass1 duration: " << pass1_seconds;
+//  time_profile_ << pass1_seconds << " ";
 
   timer.Tick();
   MarchingCubesPass2Kernel<<<grid_size, block_size>>>(
@@ -574,8 +622,8 @@ void Map::MarchingCubes() {
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
   double pass2_seconds = timer.Tock();
-  LOG(INFO) << "Pass2 duration: " << pass2_seconds;
-  time_profile_ << pass2_seconds << "\n";
+//  LOG(INFO) << "Pass2 duration: " << pass2_seconds;
+//  time_profile_ << pass2_seconds << "\n";
 
 
 #else
@@ -595,6 +643,16 @@ void Map::MarchingCubes() {
                     mesh_.gpu_data(),
                     mask0, mask1,
                     use_fine_gradient_);
+    checkCudaErrors(cudaDeviceSynchronize());
+    checkCudaErrors(cudaGetLastError());
+
+    MarchingCubesLockFreePass2Kernel<<<grid_size, block_size>>>(
+        hash_table_.gpu_data(),
+            compact_hash_table_.gpu_data(),
+            blocks_.gpu_data(),
+            mesh_.gpu_data(),
+            mask0, mask1,
+            use_fine_gradient_);
     checkCudaErrors(cudaDeviceSynchronize());
     checkCudaErrors(cudaGetLastError());
   }
@@ -708,10 +766,7 @@ void CompressTrianglesKernel(MeshGPU        mesh,
 /// Assume this operation is following
 /// CollectInFrustumBlocks or
 /// CollectAllBlocks
-void Map::CompressMesh() {
-  std::ofstream vertex_info;
-  vertex_info.open("../result/statistics/vertex_info.txt", std::fstream::app);
-
+void Map::CompressMesh(int3& stats) {
   compact_mesh_.Reset();
 
   int occupied_block_count = compact_hash_table_.entry_count();
@@ -722,6 +777,7 @@ void Map::CompressMesh() {
     const dim3 grid_size(occupied_block_count, 1);
     const dim3 block_size(threads_per_block, 1);
 
+    LOG(INFO) << "Before: " << compact_mesh_.vertex_count() << " " << compact_mesh_.triangle_count();
     CollectVerticesAndTrianglesKernel <<< grid_size, block_size >>> (
         compact_hash_table_.gpu_data(),
             blocks_.gpu_data(),
@@ -757,7 +813,7 @@ void Map::CompressMesh() {
     checkCudaErrors(cudaFree(vertex_ref_count));
 
     LOG(INFO) << vertex_ref_count_cpu;
-    vertex_info << vertex_ref_count_cpu;
+    stats.z = vertex_ref_count_cpu;
   }
 
   {
@@ -777,17 +833,19 @@ void Map::CompressMesh() {
 
   LOG(INFO) << "Vertices: " << compact_mesh_.vertex_count()
             << "/" << (mesh_.params().max_vertex_count - mesh_.vertex_heap_count());
-  vertex_info << " " << compact_mesh_.vertex_count() << "\n";
+  stats.y = compact_mesh_.vertex_count();
 
   LOG(INFO) << "Triangles: " << compact_mesh_.triangle_count()
             << "/" << (mesh_.params().max_triangle_count - mesh_.triangle_heap_count());
+  stats.x = compact_mesh_.triangle_count();
 }
 
 void Map::SaveMesh(std::string path) {
   LOG(INFO) << "Copying data from GPU";
 
   CollectAllBlocks();
-  CompressMesh();
+  int3 stats;
+  CompressMesh(stats);
 
   uint compact_vertex_count = compact_mesh_.vertex_count();
   uint compact_triangle_count = compact_mesh_.triangle_count();

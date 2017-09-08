@@ -105,8 +105,8 @@ inline bool TrilinearInterpolation(const HashTableGPU &hash_table,
   w = (1.0f - ratio.x) * (1.0f - ratio.y) * (1.0f - ratio.z);
   sdf += w * v.sdf;
   //stats.entropy   += w * v.entropy();
-  stats.laplacian += w * v.stats.laplacian;
-  stats.duration  += w * v.stats.duration;
+  //stats.laplacian += w * v.stats.laplacian;
+//  // stats.duration  += w * v.stats.duration;
   colorf += w * v_color;
 
   /// 001
@@ -116,8 +116,8 @@ inline bool TrilinearInterpolation(const HashTableGPU &hash_table,
   w = (1.0f - ratio.x) * (1.0f - ratio.y) * ratio.z;
   sdf += w * v.sdf;
   //stats.entropy   += w * v.entropy();
-  stats.laplacian += w * v.stats.laplacian;
-  stats.duration  += w * v.stats.duration;
+  //stats.laplacian += w * v.stats.laplacian;
+  // stats.duration  += w * v.stats.duration;
   colorf += w * v_color;
 
   /// 010
@@ -127,8 +127,8 @@ inline bool TrilinearInterpolation(const HashTableGPU &hash_table,
   w = (1.0f - ratio.x) * ratio.y * (1.0f - ratio.z);
   sdf += w * v.sdf;
   //stats.entropy   += w * v.entropy();
-  stats.laplacian += w * v.stats.laplacian;
-  stats.duration  += w * v.stats.duration;
+  //stats.laplacian += w * v.stats.laplacian;
+  // stats.duration  += w * v.stats.duration;
   colorf += w * v_color;
 
   /// 011
@@ -138,8 +138,8 @@ inline bool TrilinearInterpolation(const HashTableGPU &hash_table,
   w = (1.0f - ratio.x) * ratio.y * ratio.z;
   sdf += w * v.sdf;
   //stats.entropy   += w * v.entropy();
-  stats.laplacian += w * v.stats.laplacian;
-  stats.duration  += w * v.stats.duration;
+  //stats.laplacian += w * v.stats.laplacian;
+  // stats.duration  += w * v.stats.duration;
   colorf += w * v_color;
 
   /// 100
@@ -149,8 +149,8 @@ inline bool TrilinearInterpolation(const HashTableGPU &hash_table,
   w = ratio.x * (1.0f - ratio.y) * (1.0f - ratio.z);
   sdf += w * v.sdf;
   //stats.entropy   += w * v.entropy();
-  stats.laplacian += w * v.stats.laplacian;
-  stats.duration  += w * v.stats.duration;
+  //stats.laplacian += w * v.stats.laplacian;
+  // stats.duration  += w * v.stats.duration;
   colorf += w * v_color;
 
   /// 101
@@ -160,8 +160,8 @@ inline bool TrilinearInterpolation(const HashTableGPU &hash_table,
   w = ratio.x * (1.0f - ratio.y) * ratio.z;
   sdf += w * v.sdf;
   //stats.entropy   += w * v.entropy();
-  stats.laplacian += w * v.stats.laplacian;
-  stats.duration  += w * v.stats.duration;
+  //stats.laplacian += w * v.stats.laplacian;
+  // stats.duration  += w * v.stats.duration;
   colorf += w * v_color;
 
   /// 110
@@ -171,8 +171,8 @@ inline bool TrilinearInterpolation(const HashTableGPU &hash_table,
   w = ratio.x * ratio.y * (1.0f - ratio.z);
   sdf += w * v.sdf;
   //stats.entropy   += w * v.entropy();
-  stats.laplacian += w * v.stats.laplacian;
-  stats.duration  += w * v.stats.duration;
+  //stats.laplacian += w * v.stats.laplacian;
+  // stats.duration  += w * v.stats.duration;
   colorf += w * v_color;
 
   /// 111
@@ -182,8 +182,8 @@ inline bool TrilinearInterpolation(const HashTableGPU &hash_table,
   w = ratio.x * ratio.y * ratio.z;
   sdf += w * v.sdf;
   //stats.entropy   += w * v.entropy();
-  stats.laplacian += w * v.stats.laplacian;
-  stats.duration  += w * v.stats.duration;
+  //stats.laplacian += w * v.stats.laplacian;
+  // stats.duration  += w * v.stats.duration;
   colorf += w * v_color;
 
   color = make_uchar3(colorf.x, colorf.y, colorf.z);

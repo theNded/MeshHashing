@@ -17,6 +17,7 @@
 #include <sensor.h>
 #include <ray_caster.h>
 #include <timer.h>
+#include <queue>
 #include "../tool/cpp/debugger.h"
 
 #include "renderer.h"
@@ -43,8 +44,8 @@ int main(int argc, char** argv) {
   MeshType mesh_type = args.render_type == 0 ? kNormal : kColor;
 
   Renderer renderer("Mesh",
-                    config.sensor_params.width * 2,
-                    config.sensor_params.height * 2);
+                    config.sensor_params.width ,
+                    config.sensor_params.height);
   MeshObject mesh(config.mesh_params.max_vertex_count,
                   config.mesh_params.max_triangle_count,
                   mesh_type);
@@ -56,6 +57,12 @@ int main(int argc, char** argv) {
     bbox = new LineObject(config.hash_params.value_capacity * 24);
     renderer.AddObject(bbox);
   }
+
+  LineObject* traj;
+  traj = new LineObject(30000);
+  renderer.AddObject(traj);
+  float3* traj_cuda;
+  checkCudaErrors(cudaMalloc(&traj_cuda, 30000 * sizeof(float3)));
 
   renderer.free_walk() = args.free_walk;
 
@@ -73,10 +80,10 @@ int main(int argc, char** argv) {
   if (args.record_video) {
     writer = cv::VideoWriter("../result/3dv/" + args.filename_prefix + ".avi",
                              CV_FOURCC('X','V','I','D'),
-                             30, cv::Size(config.sensor_params.width * 2,
-                                          config.sensor_params.height * 2));
-    screen = cv::Mat(config.sensor_params.height * 2,
-                     config.sensor_params.width * 2,
+                             30, cv::Size(config.sensor_params.width,
+                                          config.sensor_params.height ));
+    screen = cv::Mat(config.sensor_params.height ,
+                     config.sensor_params.width ,
                      CV_8UC3);
   }
 
@@ -93,47 +100,94 @@ int main(int argc, char** argv) {
                     config.mesh_params.max_triangle_count,
                     config.sdf_params.voxel_size);
 #endif
+
+  //std::ofstream out_trs("trs.txt"), out_vtx_our("our.txt"), out_vtx_base("baseline.txt");
+  std::ofstream time_prof("reduction.txt");
+  double all_seconds = 0, meshing_seconds = 0, rendering_seconds = 0, compressing_seconds = 0;
+  float3 prev_cam_pos;
   while (rgbd_data.ProvideData(depth, color, wTc)) {
-    Timer timer;
-    timer.Tick();
+    Timer timer_all, timer_meshing, timer_rendering, timer_compressing;
 
     frame_count ++;
     if (args.run_frames > 0 &&  frame_count > args.run_frames)
       break;
 
+
     sensor.Process(depth, color);
     sensor.set_transform(wTc);
     cTw = wTc.getInverse();
+
     float3 camera_pos = make_float3(wTc.m14, wTc.m24, wTc.m34);
     LOG(INFO) << "Camera position: " << camera_pos.x << " " << camera_pos.y << " " << camera_pos.z;
 
-    map.Integrate(sensor);
-//
-//    if (frame_count > 1) // Re-estimate the SDF field
-//      map.PlaneFitting(camera_pos);
+    if (frame_count > 1) {
+//      checkCudaErrors(cudaMemcpy(traj_cuda + 2 * frame_count - 2, &prev_cam_pos, sizeof(float3), cudaMemcpyHostToDevice));
+//      checkCudaErrors(cudaMemcpy(traj_cuda + 2 * frame_count - 1, &camera_pos, sizeof(float3), cudaMemcpyHostToDevice));
 
-    map.MarchingCubes();
+      float scale = 0.25;
+      float4 v1 = wTc * make_float4(scale, scale, 2*scale, 1);
+      checkCudaErrors(cudaMemcpy(traj_cuda +  + 0, &camera_pos, sizeof(float3), cudaMemcpyHostToDevice));
+      checkCudaErrors(cudaMemcpy(traj_cuda +  + 1, &v1, sizeof(float3), cudaMemcpyHostToDevice));
+
+      float4 v2 = wTc * make_float4(scale, -scale, 2*scale, 1);
+      checkCudaErrors(cudaMemcpy(traj_cuda +  + 2, &camera_pos, sizeof(float3), cudaMemcpyHostToDevice));
+      checkCudaErrors(cudaMemcpy(traj_cuda +  + 3, &v2, sizeof(float3), cudaMemcpyHostToDevice));
+
+      float4 v3 = wTc * make_float4(-scale, scale, 2*scale, 1) ;
+      checkCudaErrors(cudaMemcpy(traj_cuda +   + 4, &camera_pos, sizeof(float3), cudaMemcpyHostToDevice));
+      checkCudaErrors(cudaMemcpy(traj_cuda +   + 5, &v3, sizeof(float3), cudaMemcpyHostToDevice));
+
+      float4 v4 = wTc * make_float4(-scale, -scale, 2*scale, 1);
+      checkCudaErrors(cudaMemcpy(traj_cuda +   + 6, &camera_pos, sizeof(float3), cudaMemcpyHostToDevice));
+      checkCudaErrors(cudaMemcpy(traj_cuda +   + 7, &v4, sizeof(float3), cudaMemcpyHostToDevice));
+
+      checkCudaErrors(cudaMemcpy(traj_cuda +   + 8, &v1, sizeof(float3), cudaMemcpyHostToDevice));
+      checkCudaErrors(cudaMemcpy(traj_cuda +   + 9, &v2, sizeof(float3), cudaMemcpyHostToDevice));
+      checkCudaErrors(cudaMemcpy(traj_cuda +   + 10, &v2, sizeof(float3), cudaMemcpyHostToDevice));
+      checkCudaErrors(cudaMemcpy(traj_cuda +   + 11, &v4, sizeof(float3), cudaMemcpyHostToDevice));
+      checkCudaErrors(cudaMemcpy(traj_cuda +  + 12, &v4, sizeof(float3), cudaMemcpyHostToDevice));
+      checkCudaErrors(cudaMemcpy(traj_cuda +   + 13, &v3, sizeof(float3), cudaMemcpyHostToDevice));
+      checkCudaErrors(cudaMemcpy(traj_cuda +   + 14, &v3, sizeof(float3), cudaMemcpyHostToDevice));
+      checkCudaErrors(cudaMemcpy(traj_cuda +   + 15, &v1, sizeof(float3), cudaMemcpyHostToDevice));
+      //traj->SetData(traj_cuda,  + 16, make_float3(0, 0, 1));
+    }
+
+    prev_cam_pos = camera_pos;
+
+    timer_all.Tick();
+    map.Integrate(sensor);
 
     if (args.ray_casting) {
       ray_caster.Cast(map, cTw);
       cv::imshow("RayCasting", ray_caster.surface_image());
       cv::waitKey(1);
     }
-    double seconds = timer.Tock();
-    LOG(INFO) << "Total time: " << seconds;
-    LOG(INFO) << "Fps: " << 1.0f / seconds;
+//
+//    if (frame_count > 1) // Re-estimate the SDF field
+//      map.PlaneFitting(camera_pos);
+
+    timer_meshing.Tick();
+    map.MarchingCubes();
+
 
     if (! args.mesh_range) {
       map.CollectAllBlocks();
     }
     map.GetBoundingBoxes();
-    map.CompressMesh();
+    double meshing_period = timer_meshing.Tock();
+    meshing_seconds += meshing_period;
+
+    timer_compressing.Tick();
+    int3 stats;
+    map.CompressMesh(stats);
+    compressing_seconds += timer_compressing.Tock();
 
     if (args.bounding_box) {
       bbox->SetData(map.bbox().vertices(),
-                    map.bbox().vertex_count());
+                    map.bbox().vertex_count(), make_float3(1, 0, 0));
     }
 
+    timer_rendering.Tick();
     if (args.render_type == 0) {
       mesh.SetData(map.compact_mesh().vertices(), map.compact_mesh().vertex_count(),
                    map.compact_mesh().normals(), map.compact_mesh().vertex_count(),
@@ -146,6 +200,10 @@ int main(int argc, char** argv) {
                    map.compact_mesh().triangles(), map.compact_mesh().triangle_count());
     }
     renderer.Render(cTw);
+    rendering_seconds += timer_rendering.Tock();
+
+    all_seconds += timer_all.Tock();
+    LOG(INFO) << frame_count / all_seconds;
 
     if (args.record_video) {
       renderer.ScreenCapture(screen.data, screen.cols, screen.rows);
@@ -153,6 +211,11 @@ int main(int argc, char** argv) {
       writer << screen;
     }
 
+    time_prof << "(" << frame_count << ", " << 1000 * meshing_period << ")\n";
+
+//    out_trs << "(" << frame_count << ", " << stats.x << ")\n";
+//    out_vtx_our << "(" << frame_count << ", " << stats.y << ")\n";
+//    out_vtx_base << "(" << frame_count << ", " << stats.z << ")\n";
   }
 
 #ifdef DEBUG
@@ -165,5 +228,8 @@ int main(int argc, char** argv) {
     map.SaveMesh("../result/3dv/" + args.filename_prefix + ".obj");
   }
 
+  LOG(INFO) << (all_seconds - compressing_seconds)/ frame_count << "/" << all_seconds / frame_count;
+  LOG(INFO) << meshing_seconds / frame_count;
+  LOG(INFO) << rendering_seconds / frame_count;
   return 0;
 }

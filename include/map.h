@@ -72,7 +72,7 @@ public:
   void MarchingCubes();
   void PlaneFitting(float3 camera_pos);
 
-  void CompressMesh();
+  void CompressMesh(int3 &stats);
   void SaveMesh(std::string path);
 
 

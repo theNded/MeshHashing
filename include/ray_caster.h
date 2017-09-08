@@ -18,7 +18,7 @@ struct RayCasterSample {
   uint   weight;
 };
 
-struct RayCasterDataGPU {
+struct __ALIGN__(8) RayCasterDataGPU {
   float4 *depth_image;
   float4 *vertex_image;
   float4 *normal_image;
