@@ -23,7 +23,7 @@ struct ArgAttrib {
 class Args {
 public:
   explicit
-  Args(int argn, bool use_cuda);
+  Args(int argn, bool use_cuda = false);
 
   ~Args();
 

@@ -28,7 +28,6 @@
 #include "../opengl/camera.h"
 #include "../opengl/uniforms.h"
 #include "../opengl/args.h"
-#include "../opengl/uniform.h"
 
 
 #define DEBUG
@@ -48,8 +47,6 @@ int main(int argc, char** argv) {
   config.LoadConfig(dataset_type);
   rgbd_data.LoadDataset(dataset_type);
 
-  MeshType mesh_type = args.render_type == 0 ? kNormal : kColor;
-
   gl::Window window("Mesh", config.sensor_params.width, config.sensor_params.height);
   gl::Camera camera(window.width(), window.height());
   camera.SwitchInteraction(true);
@@ -59,6 +56,7 @@ int main(int argc, char** argv) {
   m[2][2] = -1;
 
   gl::Program program;
+  gl::Uniforms uniforms;
   if (args.render_type == 0) {
     program.Build("../shader/mesh_vn_vertex.glsl",
                   "../shader/mesh_vn_fragment.glsl");
@@ -66,14 +64,10 @@ int main(int argc, char** argv) {
     program.Build("../shader/mesh_vc_vertex.glsl",
                   "../shader/mesh_vc_fragment.glsl");
   }
-  gl::Uniform uniform_mvp(program.id(), "mvp", gl::kMatrix4f);
-
-  gl::Uniform uniform_view, uniform_model;
+  uniforms.GetLocation(program.id(), "mvp", gl::kMatrix4f);
   if (args.render_type == 0) {
-    uniform_view.GetLocation(program.id(), "view_mat");
-    uniform_view.set_type(gl::kMatrix4f);
-    uniform_model.GetLocation(program.id(), "model_mat");
-    uniform_model.set_type(gl::kMatrix4f);
+    uniforms.GetLocation(program.id(), "view_mat", gl::kMatrix4f);
+    uniforms.GetLocation(program.id(), "model_mat", gl::kMatrix4f);
   }
 
   gl::Args glargs(3, true);
@@ -84,18 +78,18 @@ int main(int argc, char** argv) {
   glargs.InitBuffer(2, {GL_ARRAY_BUFFER, sizeof(int), 3, GL_INT},
                     config.mesh_params.max_triangle_count);
 
-//  LineObject* bbox;
-//  if (args.bounding_box) {
-//    bbox = new LineObject(config.hash_params.value_capacity * 24);
-//    renderer.AddObject(bbox);
-//  }
+  gl::Program bbox_program("../shader/line_vertex.glsl",
+                           "../shader/line_fragment.glsl");
+  gl::Args bbox_args(1, true);
+  bbox_args.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+                       config.hash_params.value_capacity * 24);
+  gl::Uniforms bbox_uniforms;
+  bbox_uniforms.GetLocation(bbox_program.id(), "mvp", gl::kMatrix4f);
+  bbox_uniforms.GetLocation(bbox_program.id(), "uni_color", gl::kVector3f);
 
-//  LineObject* traj;
-//  traj = new LineObject(30000);
-//  renderer.AddObject(traj);
-//  float3* traj_cuda;
-//  checkCudaErrors(cudaMalloc(&traj_cuda, 30000 * sizeof(float3)));
-//
+  gl::Args traj_args(1);
+  traj_args.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+                       30000);
 
   SetConstantSDFParams(config.sdf_params);
   Map       map(config.hash_params, config.mesh_params,
@@ -149,39 +143,18 @@ int main(int argc, char** argv) {
     cTw = wTc.getInverse();
 
     float3 camera_pos = make_float3(wTc.m14, wTc.m24, wTc.m34);
-    LOG(INFO) << "Camera position: " << camera_pos.x << " " << camera_pos.y << " " << camera_pos.z;
+    float scale = 0.25;
+    float4 v04 = wTc * make_float4(scale, scale, 2*scale, 1);
+    float4 v14 = wTc * make_float4(scale, -scale, 2*scale, 1);
+    float4 v24 = wTc * make_float4(-scale, scale, 2*scale, 1);
+    float4 v34 = wTc * make_float4(-scale, -scale, 2*scale, 1);
+    float3 v0 = make_float3(v04.x, v04.y, v04.z);
+    float3 v1 = make_float3(v14.x, v14.y, v14.z);
+    float3 v2 = make_float3(v24.x, v24.y, v24.z);
+    float3 v3 = make_float3(v34.x, v34.y, v34.z);
 
-//    if (frame_count > 1) {
-////      checkCudaErrors(cudaMemcpy(traj_cuda + 2 * frame_count - 2, &prev_cam_pos, sizeof(float3), cudaMemcpyHostToDevice));
-////      checkCudaErrors(cudaMemcpy(traj_cuda + 2 * frame_count - 1, &camera_pos, sizeof(float3), cudaMemcpyHostToDevice));
-//
-//      float scale = 0.25;
-//      float4 v1 = wTc * make_float4(scale, scale, 2*scale, 1);
-//      checkCudaErrors(cudaMemcpy(traj_cuda +  + 0, &camera_pos, sizeof(float3), cudaMemcpyHostToDevice));
-//      checkCudaErrors(cudaMemcpy(traj_cuda +  + 1, &v1, sizeof(float3), cudaMemcpyHostToDevice));
-//
-//      float4 v2 = wTc * make_float4(scale, -scale, 2*scale, 1);
-//      checkCudaErrors(cudaMemcpy(traj_cuda +  + 2, &camera_pos, sizeof(float3), cudaMemcpyHostToDevice));
-//      checkCudaErrors(cudaMemcpy(traj_cuda +  + 3, &v2, sizeof(float3), cudaMemcpyHostToDevice));
-//
-//      float4 v3 = wTc * make_float4(-scale, scale, 2*scale, 1) ;
-//      checkCudaErrors(cudaMemcpy(traj_cuda +   + 4, &camera_pos, sizeof(float3), cudaMemcpyHostToDevice));
-//      checkCudaErrors(cudaMemcpy(traj_cuda +   + 5, &v3, sizeof(float3), cudaMemcpyHostToDevice));
-//
-//      float4 v4 = wTc * make_float4(-scale, -scale, 2*scale, 1);
-//      checkCudaErrors(cudaMemcpy(traj_cuda +   + 6, &camera_pos, sizeof(float3), cudaMemcpyHostToDevice));
-//      checkCudaErrors(cudaMemcpy(traj_cuda +   + 7, &v4, sizeof(float3), cudaMemcpyHostToDevice));
-//
-//      checkCudaErrors(cudaMemcpy(traj_cuda +   + 8, &v1, sizeof(float3), cudaMemcpyHostToDevice));
-//      checkCudaErrors(cudaMemcpy(traj_cuda +   + 9, &v2, sizeof(float3), cudaMemcpyHostToDevice));
-//      checkCudaErrors(cudaMemcpy(traj_cuda +   + 10, &v2, sizeof(float3), cudaMemcpyHostToDevice));
-//      checkCudaErrors(cudaMemcpy(traj_cuda +   + 11, &v4, sizeof(float3), cudaMemcpyHostToDevice));
-//      checkCudaErrors(cudaMemcpy(traj_cuda +  + 12, &v4, sizeof(float3), cudaMemcpyHostToDevice));
-//      checkCudaErrors(cudaMemcpy(traj_cuda +   + 13, &v3, sizeof(float3), cudaMemcpyHostToDevice));
-//      checkCudaErrors(cudaMemcpy(traj_cuda +   + 14, &v3, sizeof(float3), cudaMemcpyHostToDevice));
-//      checkCudaErrors(cudaMemcpy(traj_cuda +   + 15, &v1, sizeof(float3), cudaMemcpyHostToDevice));
-//      traj->SetData(traj_cuda,  + 16, make_float3(0, 0, 1));
-//    }
+    std::vector<float3> vs = {camera_pos, v0, camera_pos, v1, camera_pos, v2, camera_pos, v3,
+                              v0, v1, v1, v3, v3, v2, v2, v0};
 
     prev_cam_pos = camera_pos;
 
@@ -213,19 +186,12 @@ int main(int argc, char** argv) {
     map.CompressMesh(stats);
     compressing_seconds += timer_compressing.Tock();
 
-//    if (args.bounding_box) {
-//      bbox->SetData(map.bbox().vertices(),
-//                    map.bbox().vertex_count(), make_float3(1, 0, 0));
-//    }
-
     timer_rendering.Tick();
 
     glClearColor(1, 1, 1, 1);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     glUseProgram(program.id());
-
-//    renderer.Render(cTw);
 
     /// Set uniform data
     glm::mat4 view;
@@ -239,9 +205,11 @@ int main(int argc, char** argv) {
       view = camera.view();
     }
     glm::mat4 mvp = p * view * m;
-    uniform_mvp.Bind(&mvp);
-    uniform_view.Bind(&view);
-    uniform_model.Bind(&m);
+    uniforms.Bind("mvp", &mvp);
+    if (args.render_type == 0) {
+      uniforms.Bind("view_mat", &view);
+      uniforms.Bind("model_mat", &m);
+    }
 
     /// Set args data
     if (args.render_type == 0) {
@@ -268,6 +236,31 @@ int main(int argc, char** argv) {
     /// NOTE: Use GL_UNSIGNED_INT instead of GL_INT, otherwise it won't work
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     glDrawElements(GL_TRIANGLES, map.compact_mesh().triangle_count() * 3, GL_UNSIGNED_INT, 0);
+
+    if (args.bounding_box) {
+      glUseProgram(bbox_program.id());
+      glm::vec3 col = glm::vec3(1, 0, 0);
+      bbox_uniforms.Bind("mvp", &mvp);
+      bbox_uniforms.Bind("uni_color", &col);
+
+      bbox_args.BindBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+                           map.bbox().vertex_count(), map.bbox().vertices());
+
+      glEnable(GL_LINE_SMOOTH);
+      glLineWidth(5.0f);
+      glDrawArrays(GL_LINES, 0, map.bbox().vertex_count());
+    }
+
+    glUseProgram(bbox_program.id());
+    glm::vec3 col = glm::vec3(1, 0, 0);
+    bbox_uniforms.Bind("mvp", &mvp);
+    bbox_uniforms.Bind("uni_color", &col);
+    traj_args.BindBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+                         vs.size(), vs.data());
+    glEnable(GL_LINE_SMOOTH);
+    glLineWidth(5.0f);
+    glDrawArrays(GL_LINES, 0, vs.size());
+
 
     window.swap_buffer();
     glfwPollEvents();

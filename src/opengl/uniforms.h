@@ -9,9 +9,13 @@
 #include <unordered_map>
 #include <GL/glew.h>
 
-#include "uniform.h"
-
 namespace gl {
+
+enum UniformType {
+  kMatrix4f,
+  kVector3f,
+  kTexture2D
+};
 
 class Uniforms {
 public:

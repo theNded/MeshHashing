@@ -35,6 +35,11 @@
 #include "../sensor.h"
 #include "../ray_caster.h"
 #include "../renderer.h"
+#include "../opengl/args.h"
+#include "../opengl/uniforms.h"
+#include "../opengl/program.h"
+#include "../opengl/window.h"
+#include "../opengl/camera.h"
 
 static const std::string orb_configs[] = {
     "../config/ORB/ICL.yaml",
@@ -70,16 +75,49 @@ int main(int argc, char **argv) {
   DatasetType dataset_type = DatasetType(args.dataset_type);
   config.LoadConfig(dataset_type);
   rgbd_data.LoadDataset(dataset_type);
+  gl::Window window("Mesh", config.sensor_params.width, config.sensor_params.height);
+  gl::Camera camera(window.width(), window.height());
+  camera.SwitchInteraction(true);
+  glm::mat4 p = camera.projection();
+  glm::mat4 m = glm::mat4(1.0f);
+  m[1][1] = -1;
+  m[2][2] = -1;
 
-  Renderer mesh_renderer("Mesh",
-                         config.sensor_params.width,
-                         config.sensor_params.height);
+  gl::Program program;
+  gl::Uniforms uniforms;
+  if (args.render_type == 0) {
+    program.Build("../shader/mesh_vn_vertex.glsl",
+                  "../shader/mesh_vn_fragment.glsl");
+  } else {
+    program.Build("../shader/mesh_vc_vertex.glsl",
+                  "../shader/mesh_vc_fragment.glsl");
+  }
+  uniforms.GetLocation(program.id(), "mvp", gl::kMatrix4f);
+  if (args.render_type == 0) {
+    uniforms.GetLocation(program.id(), "view_mat", gl::kMatrix4f);
+    uniforms.GetLocation(program.id(), "model_mat", gl::kMatrix4f);
+  }
 
-  MeshObject mesh(config.mesh_params.max_vertex_count,
-                  config.mesh_params.max_triangle_count);
-  mesh_renderer.free_walk()     = args.free_walk;
-  mesh.ploygon_mode()     = args.ploygon_mode;
-  mesh_renderer.AddObject(&mesh);
+  gl::Args glargs(3, true);
+  glargs.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+                    config.mesh_params.max_vertex_count);
+  glargs.InitBuffer(1, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+                    config.mesh_params.max_vertex_count);
+  glargs.InitBuffer(2, {GL_ARRAY_BUFFER, sizeof(int), 3, GL_INT},
+                    config.mesh_params.max_triangle_count);
+
+  gl::Program bbox_program("../shader/line_vertex.glsl",
+                           "../shader/line_fragment.glsl");
+  gl::Args bbox_args(1, true);
+  bbox_args.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+                       config.hash_params.value_capacity * 24);
+  gl::Uniforms bbox_uniforms;
+  bbox_uniforms.GetLocation(bbox_program.id(), "mvp", gl::kMatrix4f);
+  bbox_uniforms.GetLocation(bbox_program.id(), "uni_color", gl::kVector3f);
+
+  gl::Args traj_args(1);
+  traj_args.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+                       30000);
 
   SetConstantSDFParams(config.sdf_params);
   Map       map(config.hash_params, config.mesh_params,
@@ -142,19 +180,81 @@ int main(int argc, char **argv) {
     }
     int3 stats;
     map.CompressMesh(stats);
-    mesh.SetData(map.compact_mesh().vertices(),
-                 (size_t)map.compact_mesh().vertex_count(),
-                 map.compact_mesh().normals(),
-                 (size_t)map.compact_mesh().vertex_count(),
-                 NULL, 0,
-                 map.compact_mesh().triangles(),
-                 (size_t)map.compact_mesh().triangle_count());
-    mesh_renderer.Render(cTw);
 
+
+    glClearColor(1, 1, 1, 1);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    glUseProgram(program.id());
+
+    /// Set uniform data
+    glm::mat4 view;
+    cTw = cTw.getTranspose();
+    for (int i = 0; i < 4; ++i)
+      for (int j = 0; j < 4; ++j)
+        view[i][j] = cTw.entries2[i][j];
+    view = m * view * glm::inverse(m);
+    if (args.free_walk) {
+      camera.SetView(window);
+      view = camera.view();
+    }
+    glm::mat4 mvp = p * view * m;
+    uniforms.Bind("mvp", &mvp);
+    if (args.render_type == 0) {
+      uniforms.Bind("view_mat", &view);
+      uniforms.Bind("model_mat", &m);
+    }
+
+    /// Set args data
+    if (args.render_type == 0) {
+      glargs.BindBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+                        map.compact_mesh().vertex_count(), map.compact_mesh().vertices());
+      glargs.BindBuffer(1, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+                        map.compact_mesh().vertex_count(), map.compact_mesh().normals());
+      glargs.BindBuffer(2, {GL_ELEMENT_ARRAY_BUFFER, sizeof(int), 3, GL_INT},
+                        map.compact_mesh().triangle_count(), map.compact_mesh().triangles());
+    } else {
+      glargs.BindBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+                        map.compact_mesh().vertex_count(), map.compact_mesh().vertices());
+      glargs.BindBuffer(1, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+                        map.compact_mesh().vertex_count(), map.compact_mesh().colors());
+      glargs.BindBuffer(2, {GL_ELEMENT_ARRAY_BUFFER, sizeof(int), 3, GL_INT},
+                        map.compact_mesh().triangle_count(), map.compact_mesh().triangles());
+    }
+
+    // If render mesh only:
+    if (args.ploygon_mode) {
+      glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    }
+
+    /// NOTE: Use GL_UNSIGNED_INT instead of GL_INT, otherwise it won't work
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    glDrawElements(GL_TRIANGLES, map.compact_mesh().triangle_count() * 3, GL_UNSIGNED_INT, 0);
+
+    if (args.bounding_box) {
+      glUseProgram(bbox_program.id());
+      glm::vec3 col = glm::vec3(1, 0, 0);
+      bbox_uniforms.Bind("mvp", &mvp);
+      bbox_uniforms.Bind("uni_color", &col);
+
+      bbox_args.BindBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+                           map.bbox().vertex_count(), map.bbox().vertices());
+
+      glEnable(GL_LINE_SMOOTH);
+      glLineWidth(5.0f);
+      glDrawArrays(GL_LINES, 0, map.bbox().vertex_count());
+    }
+
+    window.swap_buffer();
+    glfwPollEvents();
+
+    if (window.get_key(GLFW_KEY_ESCAPE) == GLFW_PRESS ) {
+      exit(0);
+    }
     if (args.record_video) {
-      mesh_renderer.ScreenCapture(screen.data, screen.cols, screen.rows);
-      cv::flip(screen, screen, 0);
-      writer << screen;
+      cv::Mat rgb = window.CaptureRGB();
+      cv::flip(rgb, rgb, 0);
+      writer << rgb;
     }
   }
 

@@ -90,14 +90,11 @@ INCLUDE_DIRECTORIES(
 ## Building Libraries
 ### 1. OpenGL util
 ADD_LIBRARY(gl-util
-        ${VH}/include/gl_util/context.cc
-        ${VH}/include/gl_util/control.cc
-        ${VH}/include/gl_util/shader.cc
         ${VH}/src/opengl/args.cc
         ${VH}/src/opengl/program.cc
         ${VH}/src/opengl/window.cc
         ${VH}/src/opengl/uniforms.cc
-        ${VH}/src/opengl/camera.cc src/opengl/uniform.h)
+        ${VH}/src/opengl/camera.cc)
 TARGET_LINK_LIBRARIES(gl-util
         ${OPENGL_DEPENDENCIES}
         ${GLOG_LIBRARIES})
@@ -127,8 +124,7 @@ TARGET_LINK_LIBRARIES(voxel-hashing-cuda
 ### 3. VoxelHashing C++
 ADD_LIBRARY(voxel-hashing
         ${VH}/src/dataset_manager.cc
-        ${VH}/tool/cpp/debugger.cc
-        ${VH}/src/renderer.cc)
+        ${VH}/tool/cpp/debugger.cc)
 TARGET_LINK_LIBRARIES(voxel-hashing
         voxel-hashing-cuda
         gl-util)
