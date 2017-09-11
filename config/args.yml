@@ -14,7 +14,7 @@ free_walk:       0
 
 # Polygon_mode draw triangle with only lines;
 # otherwise with entire planes
-ploygon_mode:    1
+ploygon_mode:    0
 
 # 1 - in frustum
 # 0 - in all

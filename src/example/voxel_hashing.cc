@@ -23,6 +23,13 @@
 #include "../renderer.h"
 
 #include "../dataset_manager.h"
+#include "../opengl/window.h"
+#include "../opengl/program.h"
+#include "../opengl/camera.h"
+#include "../opengl/uniforms.h"
+#include "../opengl/args.h"
+#include "../opengl/uniform.h"
+
 
 #define DEBUG
 
@@ -43,28 +50,52 @@ int main(int argc, char** argv) {
 
   MeshType mesh_type = args.render_type == 0 ? kNormal : kColor;
 
-  Renderer renderer("Mesh",
-                    config.sensor_params.width,
-                    config.sensor_params.height);
-  MeshObject mesh(config.mesh_params.max_vertex_count,
-                  config.mesh_params.max_triangle_count,
-                  mesh_type);
-  mesh.ploygon_mode() = args.ploygon_mode;
-  renderer.AddObject(&mesh);
+  gl::Window window("Mesh", config.sensor_params.width, config.sensor_params.height);
+  gl::Camera camera(window.width(), window.height());
+  camera.SwitchInteraction(true);
+  glm::mat4 p = camera.projection();
+  glm::mat4 m = glm::mat4(1.0f);
+  m[1][1] = -1;
+  m[2][2] = -1;
 
-  LineObject* bbox;
-  if (args.bounding_box) {
-    bbox = new LineObject(config.hash_params.value_capacity * 24);
-    renderer.AddObject(bbox);
+  gl::Program program;
+  if (args.render_type == 0) {
+    program.Build("../shader/mesh_vn_vertex.glsl",
+                  "../shader/mesh_vn_fragment.glsl");
+  } else {
+    program.Build("../shader/mesh_vc_vertex.glsl",
+                  "../shader/mesh_vc_fragment.glsl");
+  }
+  gl::Uniform uniform_mvp(program.id(), "mvp", gl::kMatrix4f);
+
+  gl::Uniform uniform_view, uniform_model;
+  if (args.render_type == 0) {
+    uniform_view.GetLocation(program.id(), "view_mat");
+    uniform_view.set_type(gl::kMatrix4f);
+    uniform_model.GetLocation(program.id(), "model_mat");
+    uniform_model.set_type(gl::kMatrix4f);
   }
 
-  LineObject* traj;
-  traj = new LineObject(30000);
-  renderer.AddObject(traj);
-  float3* traj_cuda;
-  checkCudaErrors(cudaMalloc(&traj_cuda, 30000 * sizeof(float3)));
+  gl::Args glargs(3, true);
+  glargs.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+                    config.mesh_params.max_vertex_count);
+  glargs.InitBuffer(1, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+                    config.mesh_params.max_vertex_count);
+  glargs.InitBuffer(2, {GL_ARRAY_BUFFER, sizeof(int), 3, GL_INT},
+                    config.mesh_params.max_triangle_count);
 
-  renderer.free_walk() = args.free_walk;
+//  LineObject* bbox;
+//  if (args.bounding_box) {
+//    bbox = new LineObject(config.hash_params.value_capacity * 24);
+//    renderer.AddObject(bbox);
+//  }
+
+//  LineObject* traj;
+//  traj = new LineObject(30000);
+//  renderer.AddObject(traj);
+//  float3* traj_cuda;
+//  checkCudaErrors(cudaMalloc(&traj_cuda, 30000 * sizeof(float3)));
+//
 
   SetConstantSDFParams(config.sdf_params);
   Map       map(config.hash_params, config.mesh_params,
@@ -120,37 +151,37 @@ int main(int argc, char** argv) {
     float3 camera_pos = make_float3(wTc.m14, wTc.m24, wTc.m34);
     LOG(INFO) << "Camera position: " << camera_pos.x << " " << camera_pos.y << " " << camera_pos.z;
 
-    if (frame_count > 1) {
-//      checkCudaErrors(cudaMemcpy(traj_cuda + 2 * frame_count - 2, &prev_cam_pos, sizeof(float3), cudaMemcpyHostToDevice));
-//      checkCudaErrors(cudaMemcpy(traj_cuda + 2 * frame_count - 1, &camera_pos, sizeof(float3), cudaMemcpyHostToDevice));
-
-      float scale = 0.25;
-      float4 v1 = wTc * make_float4(scale, scale, 2*scale, 1);
-      checkCudaErrors(cudaMemcpy(traj_cuda +  + 0, &camera_pos, sizeof(float3), cudaMemcpyHostToDevice));
-      checkCudaErrors(cudaMemcpy(traj_cuda +  + 1, &v1, sizeof(float3), cudaMemcpyHostToDevice));
-
-      float4 v2 = wTc * make_float4(scale, -scale, 2*scale, 1);
-      checkCudaErrors(cudaMemcpy(traj_cuda +  + 2, &camera_pos, sizeof(float3), cudaMemcpyHostToDevice));
-      checkCudaErrors(cudaMemcpy(traj_cuda +  + 3, &v2, sizeof(float3), cudaMemcpyHostToDevice));
-
-      float4 v3 = wTc * make_float4(-scale, scale, 2*scale, 1) ;
-      checkCudaErrors(cudaMemcpy(traj_cuda +   + 4, &camera_pos, sizeof(float3), cudaMemcpyHostToDevice));
-      checkCudaErrors(cudaMemcpy(traj_cuda +   + 5, &v3, sizeof(float3), cudaMemcpyHostToDevice));
-
-      float4 v4 = wTc * make_float4(-scale, -scale, 2*scale, 1);
-      checkCudaErrors(cudaMemcpy(traj_cuda +   + 6, &camera_pos, sizeof(float3), cudaMemcpyHostToDevice));
-      checkCudaErrors(cudaMemcpy(traj_cuda +   + 7, &v4, sizeof(float3), cudaMemcpyHostToDevice));
-
-      checkCudaErrors(cudaMemcpy(traj_cuda +   + 8, &v1, sizeof(float3), cudaMemcpyHostToDevice));
-      checkCudaErrors(cudaMemcpy(traj_cuda +   + 9, &v2, sizeof(float3), cudaMemcpyHostToDevice));
-      checkCudaErrors(cudaMemcpy(traj_cuda +   + 10, &v2, sizeof(float3), cudaMemcpyHostToDevice));
-      checkCudaErrors(cudaMemcpy(traj_cuda +   + 11, &v4, sizeof(float3), cudaMemcpyHostToDevice));
-      checkCudaErrors(cudaMemcpy(traj_cuda +  + 12, &v4, sizeof(float3), cudaMemcpyHostToDevice));
-      checkCudaErrors(cudaMemcpy(traj_cuda +   + 13, &v3, sizeof(float3), cudaMemcpyHostToDevice));
-      checkCudaErrors(cudaMemcpy(traj_cuda +   + 14, &v3, sizeof(float3), cudaMemcpyHostToDevice));
-      checkCudaErrors(cudaMemcpy(traj_cuda +   + 15, &v1, sizeof(float3), cudaMemcpyHostToDevice));
-      traj->SetData(traj_cuda,  + 16, make_float3(0, 0, 1));
-    }
+//    if (frame_count > 1) {
+////      checkCudaErrors(cudaMemcpy(traj_cuda + 2 * frame_count - 2, &prev_cam_pos, sizeof(float3), cudaMemcpyHostToDevice));
+////      checkCudaErrors(cudaMemcpy(traj_cuda + 2 * frame_count - 1, &camera_pos, sizeof(float3), cudaMemcpyHostToDevice));
+//
+//      float scale = 0.25;
+//      float4 v1 = wTc * make_float4(scale, scale, 2*scale, 1);
+//      checkCudaErrors(cudaMemcpy(traj_cuda +  + 0, &camera_pos, sizeof(float3), cudaMemcpyHostToDevice));
+//      checkCudaErrors(cudaMemcpy(traj_cuda +  + 1, &v1, sizeof(float3), cudaMemcpyHostToDevice));
+//
+//      float4 v2 = wTc * make_float4(scale, -scale, 2*scale, 1);
+//      checkCudaErrors(cudaMemcpy(traj_cuda +  + 2, &camera_pos, sizeof(float3), cudaMemcpyHostToDevice));
+//      checkCudaErrors(cudaMemcpy(traj_cuda +  + 3, &v2, sizeof(float3), cudaMemcpyHostToDevice));
+//
+//      float4 v3 = wTc * make_float4(-scale, scale, 2*scale, 1) ;
+//      checkCudaErrors(cudaMemcpy(traj_cuda +   + 4, &camera_pos, sizeof(float3), cudaMemcpyHostToDevice));
+//      checkCudaErrors(cudaMemcpy(traj_cuda +   + 5, &v3, sizeof(float3), cudaMemcpyHostToDevice));
+//
+//      float4 v4 = wTc * make_float4(-scale, -scale, 2*scale, 1);
+//      checkCudaErrors(cudaMemcpy(traj_cuda +   + 6, &camera_pos, sizeof(float3), cudaMemcpyHostToDevice));
+//      checkCudaErrors(cudaMemcpy(traj_cuda +   + 7, &v4, sizeof(float3), cudaMemcpyHostToDevice));
+//
+//      checkCudaErrors(cudaMemcpy(traj_cuda +   + 8, &v1, sizeof(float3), cudaMemcpyHostToDevice));
+//      checkCudaErrors(cudaMemcpy(traj_cuda +   + 9, &v2, sizeof(float3), cudaMemcpyHostToDevice));
+//      checkCudaErrors(cudaMemcpy(traj_cuda +   + 10, &v2, sizeof(float3), cudaMemcpyHostToDevice));
+//      checkCudaErrors(cudaMemcpy(traj_cuda +   + 11, &v4, sizeof(float3), cudaMemcpyHostToDevice));
+//      checkCudaErrors(cudaMemcpy(traj_cuda +  + 12, &v4, sizeof(float3), cudaMemcpyHostToDevice));
+//      checkCudaErrors(cudaMemcpy(traj_cuda +   + 13, &v3, sizeof(float3), cudaMemcpyHostToDevice));
+//      checkCudaErrors(cudaMemcpy(traj_cuda +   + 14, &v3, sizeof(float3), cudaMemcpyHostToDevice));
+//      checkCudaErrors(cudaMemcpy(traj_cuda +   + 15, &v1, sizeof(float3), cudaMemcpyHostToDevice));
+//      traj->SetData(traj_cuda,  + 16, make_float3(0, 0, 1));
+//    }
 
     prev_cam_pos = camera_pos;
 
@@ -182,33 +213,76 @@ int main(int argc, char** argv) {
     map.CompressMesh(stats);
     compressing_seconds += timer_compressing.Tock();
 
-    if (args.bounding_box) {
-      bbox->SetData(map.bbox().vertices(),
-                    map.bbox().vertex_count(), make_float3(1, 0, 0));
-    }
+//    if (args.bounding_box) {
+//      bbox->SetData(map.bbox().vertices(),
+//                    map.bbox().vertex_count(), make_float3(1, 0, 0));
+//    }
 
     timer_rendering.Tick();
-    if (args.render_type == 0) {
-      mesh.SetData(map.compact_mesh().vertices(), map.compact_mesh().vertex_count(),
-                   map.compact_mesh().normals(), map.compact_mesh().vertex_count(),
-                   NULL, 0,
-                   map.compact_mesh().triangles(), map.compact_mesh().triangle_count());
-    } else {
-      mesh.SetData(map.compact_mesh().vertices(), map.compact_mesh().vertex_count(),
-                   NULL, 0,
-                   map.compact_mesh().colors(), map.compact_mesh().vertex_count(),
-                   map.compact_mesh().triangles(), map.compact_mesh().triangle_count());
-    }
-    renderer.Render(cTw);
-    rendering_seconds += timer_rendering.Tock();
 
+    glClearColor(1, 1, 1, 1);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    glUseProgram(program.id());
+
+//    renderer.Render(cTw);
+
+    /// Set uniform data
+    glm::mat4 view;
+    cTw = cTw.getTranspose();
+    for (int i = 0; i < 4; ++i)
+      for (int j = 0; j < 4; ++j)
+        view[i][j] = cTw.entries2[i][j];
+    view = m * view * glm::inverse(m);
+    if (args.free_walk) {
+      camera.SetView(window);
+      view = camera.view();
+    }
+    glm::mat4 mvp = p * view * m;
+    uniform_mvp.Bind(&mvp);
+    uniform_view.Bind(&view);
+    uniform_model.Bind(&m);
+
+    /// Set args data
+    if (args.render_type == 0) {
+      glargs.BindBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+                        map.compact_mesh().vertex_count(), map.compact_mesh().vertices());
+      glargs.BindBuffer(1, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+                        map.compact_mesh().vertex_count(), map.compact_mesh().normals());
+      glargs.BindBuffer(2, {GL_ELEMENT_ARRAY_BUFFER, sizeof(int), 3, GL_INT},
+                        map.compact_mesh().triangle_count(), map.compact_mesh().triangles());
+    } else {
+      glargs.BindBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+                        map.compact_mesh().vertex_count(), map.compact_mesh().vertices());
+      glargs.BindBuffer(1, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+                        map.compact_mesh().vertex_count(), map.compact_mesh().colors());
+      glargs.BindBuffer(2, {GL_ELEMENT_ARRAY_BUFFER, sizeof(int), 3, GL_INT},
+                        map.compact_mesh().triangle_count(), map.compact_mesh().triangles());
+    }
+
+    // If render mesh only:
+    if (args.ploygon_mode) {
+      glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    }
+
+    /// NOTE: Use GL_UNSIGNED_INT instead of GL_INT, otherwise it won't work
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    glDrawElements(GL_TRIANGLES, map.compact_mesh().triangle_count() * 3, GL_UNSIGNED_INT, 0);
+
+    window.swap_buffer();
+    glfwPollEvents();
+
+    if (window.get_key(GLFW_KEY_ESCAPE) == GLFW_PRESS ) {
+      exit(0);
+    }
+
+    rendering_seconds += timer_rendering.Tock();
     all_seconds += timer_all.Tock();
     LOG(INFO) << frame_count / all_seconds;
 
     if (args.record_video) {
-      renderer.ScreenCapture(screen.data, screen.cols, screen.rows);
-      cv::flip(screen, screen, 0);
-      writer << screen;
+      cv::Mat rgb = window.CaptureRGB();
+      writer << rgb;
     }
 
     time_prof << "(" << frame_count << ", " << 1000 * meshing_period << ")\n";

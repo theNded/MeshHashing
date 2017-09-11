@@ -1,0 +1,43 @@
+//
+// Created by Neo on 15/08/2017.
+//
+
+#include "uniforms.h"
+#include <iostream>
+
+namespace gl {
+
+void Uniforms::GetLocation(GLuint program, std::string name, UniformType type) {
+  GLint uniform_id = glGetUniformLocation(program, name.c_str());
+  if (uniform_id < 0) {
+    std::cerr << "Invalid uniform name!" << std::endl;
+    exit(1);
+  }
+  uniform_ids_.emplace(name, std::make_pair(uniform_id, type));
+}
+
+/// Override specially designed for texture
+void Uniforms::Bind(std::string name, GLuint idx) {
+  switch (type_) {
+    case kTexture2D:
+      glUniform1i(id(name), idx);
+      break;
+    default:
+      break;
+  }
+}
+
+void Uniforms::Bind(std::string name, void *data) {
+  switch (type_) {
+    case kMatrix4f:
+      glUniformMatrix4fv(id(name), 1, GL_FALSE, (float*)data);
+      break;
+    case kVector3f:
+      glUniform3fv(id(name), 1, (float*)data);
+    default:
+      break;
+  }
+}
+
+
+}

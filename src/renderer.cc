@@ -26,7 +26,7 @@ Renderer::Renderer(std::string name, uint width, uint height) {
   m_[2][2] = -1;
 
   p_ = gl_context_.projection_mat();
-  InitCUDA();
+  //InitCUDA();
 }
 
 Renderer::~Renderer() {}

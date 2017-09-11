@@ -8,6 +8,8 @@
 /// VAO: arg1, arg2, ..., argn
 /// VBO: buf1, buf2, ..., bufn
 #include <GL/glew.h>
+#include <cuda_gl_interop.h>
+#include <driver_types.h>
 
 namespace gl {
 
@@ -21,7 +23,7 @@ struct ArgAttrib {
 class Args {
 public:
   explicit
-  Args(int argn);
+  Args(int argn, bool use_cuda);
 
   ~Args();
 
@@ -36,11 +38,13 @@ public:
                   ArgAttrib arg_attrib,
                   size_t size,
                   void* data);
-
 private:
+  bool use_cuda_;
+
   int argn_;
   GLuint vao_;
   GLuint *vbos_;
+  cudaGraphicsResource_t *cuda_res_;
 };
 }
 
