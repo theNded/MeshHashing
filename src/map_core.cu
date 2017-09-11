@@ -11,7 +11,7 @@
 #include <list>
 #include <glog/logging.h>
 #include <device_launch_parameters.h>
-#include <mc_tables.h>
+#include "mc_tables.h"
 
 
 #define PINF  __int_as_float(0x7f800000)

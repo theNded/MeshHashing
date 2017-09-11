@@ -1,5 +1,5 @@
 #include <matrix.h>
-#include <geometry_util.h>
+#include "geometry_util.h"
 
 #include "hash_table.h"
 #include "block.h"

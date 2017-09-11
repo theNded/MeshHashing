@@ -1,5 +1,5 @@
 #include <matrix.h>
-#include <geometry_util.h>
+#include "geometry_util.h"
 #include <glog/logging.h>
 #include "color_util.h"
 #include "gradient.h"

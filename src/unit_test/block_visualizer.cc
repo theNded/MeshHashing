@@ -2,9 +2,9 @@
 // Created by wei on 17-6-10.
 //
 
-#include "renderer.h"
-#include "block.h"
-#include "color_util.h"
+#include "../renderer.h"
+#include "../block.h"
+#include "../color_util.h"
 
 int main() {
   Renderer renderer("Block", 640, 480);

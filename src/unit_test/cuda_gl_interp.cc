@@ -6,7 +6,7 @@
 #include <glog/logging.h>
 #include <opencv2/opencv.hpp>
 
-#include "renderer.h"
+#include "../renderer.h"
 
 int main() {
   Renderer renderer("frame", 640, 480);

@@ -29,12 +29,12 @@
 #include <System.h>
 #include <glog/logging.h>
 
-#include "params.h"
-#include "dataset_manager.h"
-#include "map.h"
-#include "sensor.h"
-#include "ray_caster.h"
-#include "renderer.h"
+#include "../params.h"
+#include "../dataset_manager.h"
+#include "../map.h"
+#include "../sensor.h"
+#include "../ray_caster.h"
+#include "../renderer.h"
 
 static const std::string orb_configs[] = {
     "../config/ORB/ICL.yaml",
@@ -82,7 +82,9 @@ int main(int argc, char **argv) {
   mesh_renderer.AddObject(&mesh);
 
   SetConstantSDFParams(config.sdf_params);
-  Map       map(config.hash_params, config.mesh_params);
+  Map       map(config.hash_params, config.mesh_params,
+                "../result/3dv/" + args.time_profile + ".txt",
+                "../result/3dv/" + args.memo_profile + ".txt");
   Sensor    sensor(config.sensor_params);
   RayCaster ray_caster(config.ray_caster_params);
 
@@ -138,7 +140,8 @@ int main(int argc, char **argv) {
     if (! args.mesh_range) {
       map.CollectAllBlocks();
     }
-    map.CompressMesh();
+    int3 stats;
+    map.CompressMesh(stats);
     mesh.SetData(map.compact_mesh().vertices(),
                  (size_t)map.compact_mesh().vertex_count(),
                  map.compact_mesh().normals(),

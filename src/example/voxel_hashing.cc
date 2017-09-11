@@ -14,15 +14,15 @@
 #include <cuda_runtime.h>
 #include <glog/logging.h>
 #include <opencv2/opencv.hpp>
-#include <sensor.h>
-#include <ray_caster.h>
+#include "../sensor.h"
+#include "../ray_caster.h"
 #include <timer.h>
 #include <queue>
 #include "../tool/cpp/debugger.h"
 
-#include "renderer.h"
+#include "../renderer.h"
 
-#include "dataset_manager.h"
+#include "../dataset_manager.h"
 
 #define DEBUG
 
@@ -44,7 +44,7 @@ int main(int argc, char** argv) {
   MeshType mesh_type = args.render_type == 0 ? kNormal : kColor;
 
   Renderer renderer("Mesh",
-                    config.sensor_params.width ,
+                    config.sensor_params.width,
                     config.sensor_params.height);
   MeshObject mesh(config.mesh_params.max_vertex_count,
                   config.mesh_params.max_triangle_count,
@@ -149,7 +149,7 @@ int main(int argc, char** argv) {
       checkCudaErrors(cudaMemcpy(traj_cuda +   + 13, &v3, sizeof(float3), cudaMemcpyHostToDevice));
       checkCudaErrors(cudaMemcpy(traj_cuda +   + 14, &v3, sizeof(float3), cudaMemcpyHostToDevice));
       checkCudaErrors(cudaMemcpy(traj_cuda +   + 15, &v1, sizeof(float3), cudaMemcpyHostToDevice));
-      //traj->SetData(traj_cuda,  + 16, make_float3(0, 0, 1));
+      traj->SetData(traj_cuda,  + 16, make_float3(0, 0, 1));
     }
 
     prev_cam_pos = camera_pos;

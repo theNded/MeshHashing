@@ -2,7 +2,7 @@
 
 #include <helper_cuda.h>
 #include <device_launch_parameters.h>
-#include <params.h>
+#include "params.h"
 #include <glog/logging.h>
 
 ////////////////////

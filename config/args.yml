@@ -4,13 +4,13 @@
 # 4   - SUN3D
 # 5   - SUN3D_ORIGINAL
 # 6   - PKU
-dataset_type:    3
+dataset_type:    4
 
 # -----------
 # Render options
 # TODO: add light source(s)
 # and free walk view points
-free_walk: 1
+free_walk:       0
 
 # Polygon_mode draw triangle with only lines;
 # otherwise with entire planes
@@ -28,7 +28,7 @@ fine_gradient:   1
 
 # Additional settings
 bounding_box:    0
-ray_casting:     1
+ray_casting:     0
 
 # Result saving
 record_video:    1
