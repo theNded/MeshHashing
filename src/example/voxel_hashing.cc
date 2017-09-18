@@ -47,7 +47,7 @@ int main(int argc, char** argv) {
   config.LoadConfig(dataset_type);
   rgbd_data.LoadDataset(dataset_type);
 
-  gl::Window window("Mesh", config.sensor_params.width, config.sensor_params.height);
+  gl::Window window("Mesh", config.sensor_params.width * 2, config.sensor_params.height * 2);
   gl::Camera camera(window.width(), window.height());
   camera.SwitchInteraction(true);
   glm::mat4 p = camera.projection();
@@ -105,11 +105,8 @@ int main(int argc, char** argv) {
   if (args.record_video) {
     writer = cv::VideoWriter("../result/3dv/" + args.filename_prefix + ".avi",
                              CV_FOURCC('X','V','I','D'),
-                             30, cv::Size(config.sensor_params.width,
-                                          config.sensor_params.height ));
-    screen = cv::Mat(config.sensor_params.height ,
-                     config.sensor_params.width ,
-                     CV_8UC3);
+                             30, cv::Size(config.sensor_params.width * 2,
+                                          config.sensor_params.height * 2));
   }
 
   cv::Mat color, depth;
@@ -251,15 +248,15 @@ int main(int argc, char** argv) {
       glDrawArrays(GL_LINES, 0, map.bbox().vertex_count());
     }
 
-    glUseProgram(bbox_program.id());
-    glm::vec3 col = glm::vec3(1, 0, 0);
-    bbox_uniforms.Bind("mvp", &mvp);
-    bbox_uniforms.Bind("uni_color", &col);
-    traj_args.BindBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-                         vs.size(), vs.data());
-    glEnable(GL_LINE_SMOOTH);
-    glLineWidth(5.0f);
-    glDrawArrays(GL_LINES, 0, vs.size());
+//    glUseProgram(bbox_program.id());
+//    glm::vec3 col = glm::vec3(1, 0, 0);
+//    bbox_uniforms.Bind("mvp", &mvp);
+//    bbox_uniforms.Bind("uni_color", &col);
+//    traj_args.BindBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+//                         vs.size(), vs.data());
+//    glEnable(GL_LINE_SMOOTH);
+//    glLineWidth(5.0f);
+//    glDrawArrays(GL_LINES, 0, vs.size());
 
 
     window.swap_buffer();
@@ -275,6 +272,7 @@ int main(int argc, char** argv) {
 
     if (args.record_video) {
       cv::Mat rgb = window.CaptureRGB();
+      cv::imshow("cap", rgb);
       writer << rgb;
     }
 

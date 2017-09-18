@@ -10,7 +10,7 @@ dataset_type:    4
 # Render options
 # TODO: add light source(s)
 # and free walk view points
-free_walk:       1
+free_walk:       0
 
 # Polygon_mode draw triangle with only lines;
 # otherwise with entire planes
@@ -22,18 +22,18 @@ mesh_range:      0
 
 # 0 - shaded map,
 # 1 - color map (entropy, laplacian, duration, whatever)
-render_type:     1
+render_type:     0
 # If use shaded map, set it to 1
 fine_gradient:   1
 
 # Additional settings
 bounding_box:    0
-ray_casting:     1
+ray_casting:     0
 
 # Result saving
 record_video:    1
 save_mesh:       1
-filename_prefix: "tum-afsds"
+filename_prefix: "copyroom-not-refined"
 time_profile:    "tum3-nhm"
 memo_profile:    "tum3-nhm"
 

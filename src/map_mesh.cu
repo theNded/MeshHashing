@@ -26,9 +26,10 @@ __device__
 float3 VertexIntersection(const float3& p1, const float3 p2,
                           const float&  v1, const float& v2,
                           const float& isolevel) {
-  if (fabs(v1 - isolevel) < 0.001) return p1;
-  if (fabs(v2 - isolevel) < 0.001) return p2;
+  if (fabs(v1 - isolevel) < 0.008) return p1;
+  if (fabs(v2 - isolevel) < 0.008) return p2;
   float mu = (isolevel - v1) / (v2 - v1);
+
   float3 p = make_float3(p1.x + mu * (p2.x - p1.x),
                          p1.y + mu * (p2.y - p1.y),
                          p1.z + mu * (p2.z - p1.z));
@@ -269,7 +270,7 @@ void MarchingCubesLockFreePass2Kernel(
 }
 
 __device__
-void RefineMesh(short& prev_cube, short& curr_cube, float d[8]) {
+void RefineMesh(short& prev_cube, short& curr_cube, float d[8], int is_noise_bit[8]) {
 
   float kTr = 0.0075;
 
@@ -324,10 +325,14 @@ void RefineMesh(short& prev_cube, short& curr_cube, float d[8]) {
     }
   }
 
-  for (int j = 0; j < hamming_dist; ++j) {
-    d[noise_bit[j]] = -d[noise_bit[j]];
-    curr_cube = kRegularCubeIndices[min_idx];
+  for (int i = 0; i < 8; ++i) {
+    is_noise_bit[i] = 0;
   }
+  for (int j = 0; j < hamming_dist; ++j) {
+    //d[noise_bit[j]] = - d[noise_bit[j]];
+    is_noise_bit[noise_bit[j]] = 1;
+  }
+  curr_cube = kRegularCubeIndices[min_idx];
 }
 
 __global__
@@ -390,8 +395,10 @@ void MarchingCubesPass1Kernel(
   /// If the program reach here, the voxels holding edges must exist
   /// This operation is in 2-pass
   /// pass1: Allocate
-  //
-  RefineMesh(this_cube.prev_index, this_cube.curr_index, d);
+
+  // Get noise-bit here
+  int is_noise_bit[8];
+  RefineMesh(this_cube.prev_index, this_cube.curr_index, d, is_noise_bit);
   cube_index = this_cube.curr_index;
 
   const int kEdgeCount = 12;
@@ -403,8 +410,11 @@ void MarchingCubesPass1Kernel(
       uint4 c_idx = make_uint4(kEdgeCubeTable[i][0], kEdgeCubeTable[i][1],
                                kEdgeCubeTable[i][2], kEdgeCubeTable[i][3]);
 
-      float3 vertex_pos = VertexIntersection(p[v_idx.x], p[v_idx.y],
-                                             d[v_idx.x], d[v_idx.y], kIsoLevel);
+      // Special noise-bit interpolation here: extrapolation
+      float3 vertex_pos;
+      vertex_pos = VertexIntersection(p[v_idx.x], p[v_idx.y],
+                                      d[v_idx.x], d[v_idx.y], kIsoLevel);
+
       Cube &cube = GetCube(hash_table, blocks, entry,
                            voxel_local_pos + make_uint3(c_idx.x, c_idx.y, c_idx.z));
       AllocateVertexWithMutex(hash_table, blocks, mesh,
@@ -525,7 +535,7 @@ void RecycleVerticesKernel(
 #pragma unroll 1
   for (int i = 0; i < 3; ++i) {
     if (cube.vertex_ptrs[i] != FREE_PTR &&
-        mesh.vertices[cube.vertex_ptrs[i]].ref_count <= 0) {
+        mesh.vertices[cube.vertex_ptrs[i]].ref_count == 0) {
       mesh.vertices[cube.vertex_ptrs[i]].Clear();
       mesh.FreeVertex(cube.vertex_ptrs[i]);
       cube.vertex_ptrs[i] = FREE_PTR;
