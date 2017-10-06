@@ -1,70 +1,41 @@
-/**
-* This file is part of ORB-SLAM2.
-*
-* Copyright (C) 2014-2016 Raúl Mur-Artal <raulmur at unizar dot es> (University of Zaragoza)
-* For more information see <https://github.com/raulmur/ORB_SLAM2>
-*
-* ORB-SLAM2 is free software: you can redistribute it and/or modify
-* it under the terms of the GNU General Public License as published by
-* the Free Software Foundation, either version 3 of the License, or
-* (at your option) any later version.
-*
-* ORB-SLAM2 is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with ORB-SLAM2. If not, see <http://www.gnu.org/licenses/>.
-*/
+//
+// Created by wei on 17-3-26.
+//
+#include <string>
+#include <vector>
+#include <cuda_runtime.h>
+#include <glog/logging.h>
+#include <opencv2/opencv.hpp>
 
-
-#include <iostream>
-#include <algorithm>
-#include <fstream>
+#include <helper_cuda.h>
 #include <chrono>
 
-#include <opencv2/core/core.hpp>
-
-#include <System.h>
+#include <string>
+#include <cuda_runtime.h>
 #include <glog/logging.h>
-
-#include "../params.h"
-#include "../dataset_manager.h"
-#include "../map.h"
+#include <opencv2/opencv.hpp>
 #include "../sensor.h"
 #include "../ray_caster.h"
+#include <timer.h>
+#include <queue>
+#include "../tool/cpp/debugger.h"
+
 #include "../renderer.h"
-#include "../opengl/args.h"
-#include "../opengl/uniforms.h"
-#include "../opengl/program.h"
+
+#include "../dataset_manager.h"
 #include "../opengl/window.h"
+#include "../opengl/program.h"
 #include "../opengl/camera.h"
+#include "../opengl/uniforms.h"
+#include "../opengl/args.h"
 
-static const std::string orb_configs[] = {
-    "../config/ORB/ICL.yaml",
-    "../config/ORB/TUM1.yaml",
-    "../config/ORB/TUM2.yaml",
-    "../config/ORB/TUM3.yaml",
-    "../config/ORB/SUN3D.yaml",
-    "../config/ORB/SUN3D_ORIGINAL.yaml",
-    "../config/ORB/PKU.yaml"
-};
 
-std::string path_to_vocabulary = "../../../opensource/orb_slam2/Vocabulary/ORBvoc.bin";
+#define DEBUG
 
+/// Refer to constant.cu
 extern void SetConstantSDFParams(const SDFParams& params);
 
-float4x4 MatTofloat4x4(cv::Mat m) {
-  float4x4 T;
-  T.setIdentity();
-  for (int i = 0; i < 4; ++i)
-    for (int j = 0; j < 4; ++j)
-      T.entries2[i][j] = (float)m.at<float>(i, j);
-  return T;
-}
-
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   /// Use this to substitute tedious argv parsing
   RuntimeParams args;
   LoadRuntimeParams("../config/args.yml", args);
@@ -75,7 +46,8 @@ int main(int argc, char **argv) {
   DatasetType dataset_type = DatasetType(args.dataset_type);
   config.LoadConfig(dataset_type);
   rgbd_data.LoadDataset(dataset_type);
-  gl::Window window("Mesh", config.sensor_params.width, config.sensor_params.height);
+
+  gl::Window window("Mesh", config.sensor_params.width * 2, config.sensor_params.height * 2);
   gl::Camera camera(window.width(), window.height());
   camera.SwitchInteraction(true);
   glm::mat4 p = camera.projection();
@@ -126,61 +98,92 @@ int main(int argc, char **argv) {
   Sensor    sensor(config.sensor_params);
   RayCaster ray_caster(config.ray_caster_params);
 
-  map.use_fine_gradient()       = args.fine_gradient;
+  map.use_fine_gradient()   = args.fine_gradient;
 
   cv::VideoWriter writer;
   cv::Mat screen;
   if (args.record_video) {
-    writer = cv::VideoWriter(args.filename_prefix + ".avi",
+    writer = cv::VideoWriter("../result/3dv/" + args.filename_prefix + ".avi",
                              CV_FOURCC('X','V','I','D'),
-                             30, cv::Size(config.sensor_params.width,
-                                          config.sensor_params.height));
-    screen = cv::Mat(config.sensor_params.height,
-                     config.sensor_params.width,
-                     CV_8UC3);
+                             30, cv::Size(config.sensor_params.width * 2,
+                                          config.sensor_params.height * 2));
   }
-
-  ORB_SLAM2::System SLAM(path_to_vocabulary,
-                         orb_configs[dataset_type],
-                         ORB_SLAM2::System::RGBD,
-                         true);
 
   cv::Mat color, depth;
   float4x4 wTc, cTw;
-  double tframe;
-
   int frame_count = 0;
+
+  std::chrono::time_point<std::chrono::system_clock> start, end;
+
+#ifdef DEBUG
+  Debugger debugger(config.hash_params.entry_count,
+                    config.hash_params.value_capacity,
+                    config.mesh_params.max_vertex_count,
+                    config.mesh_params.max_triangle_count,
+                    config.sdf_params.voxel_size);
+#endif
+
+  //std::ofstream out_trs("trs.txt"), out_vtx_our("our.txt"), out_vtx_base("baseline.txt");
+  std::ofstream time_prof("reduction.txt");
+  double all_seconds = 0, meshing_seconds = 0, rendering_seconds = 0, compressing_seconds = 0;
+  float3 prev_cam_pos;
   while (rgbd_data.ProvideData(depth, color, wTc)) {
-    if (args.run_frames > 0
-        && frame_count ++ > args.run_frames)
+    Timer timer_all, timer_meshing, timer_rendering, timer_compressing;
+
+    frame_count ++;
+    if (args.run_frames > 0 &&  frame_count > args.run_frames)
       break;
 
-    sensor.Process(depth, color); // abandon wTc
 
-    cv::Mat color_slam = color.clone();
-    cv::Mat depth_slam = depth.clone();
-    cv::Mat cTw_orb = SLAM.TrackRGBD(color_slam, depth_slam, tframe);
-    if (cTw_orb.empty()) continue;
-
-    cTw = MatTofloat4x4(cTw_orb);
-    wTc = cTw.getInverse();
+    sensor.Process(depth, color);
     sensor.set_transform(wTc);
+    cTw = wTc.getInverse();
 
+    float3 camera_pos = make_float3(wTc.m14, wTc.m24, wTc.m34);
+    float scale = 0.25;
+    float4 v04 = wTc * make_float4(scale, scale, 2*scale, 1);
+    float4 v14 = wTc * make_float4(scale, -scale, 2*scale, 1);
+    float4 v24 = wTc * make_float4(-scale, scale, 2*scale, 1);
+    float4 v34 = wTc * make_float4(-scale, -scale, 2*scale, 1);
+    float3 v0 = make_float3(v04.x, v04.y, v04.z);
+    float3 v1 = make_float3(v14.x, v14.y, v14.z);
+    float3 v2 = make_float3(v24.x, v24.y, v24.z);
+    float3 v3 = make_float3(v34.x, v34.y, v34.z);
+
+    std::vector<float3> vs = {camera_pos, v0, camera_pos, v1, camera_pos, v2, camera_pos, v3,
+                              v0, v1, v1, v3, v3, v2, v2, v0};
+
+    prev_cam_pos = camera_pos;
+
+    timer_all.Tick();
     map.Integrate(sensor);
-    map.MarchingCubes();
 
     if (args.ray_casting) {
       ray_caster.Cast(map, cTw);
-      cv::imshow("RayCasting", ray_caster.normal_image());
+      cv::imshow("RayCasting", ray_caster.surface_image());
       cv::waitKey(1);
     }
+//
+//    if (frame_count > 1) // Re-estimate the SDF field
+//      map.PlaneFitting(camera_pos);
+
+    timer_meshing.Tick();
+    map.MarchingCubes();
+
 
     if (! args.mesh_range) {
       map.CollectAllBlocks();
     }
+    map.GetBoundingBoxes();
+    double meshing_period = timer_meshing.Tock();
+    meshing_seconds += meshing_period;
+
+    timer_compressing.Tick();
     int3 stats;
     map.CompressMesh(stats);
+    compressing_seconds += timer_compressing.Tock();
 
+    timer_rendering.Tick();
 
     glClearColor(1, 1, 1, 1);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -245,23 +248,53 @@ int main(int argc, char **argv) {
       glDrawArrays(GL_LINES, 0, map.bbox().vertex_count());
     }
 
+//    glUseProgram(bbox_program.id());
+//    glm::vec3 col = glm::vec3(1, 0, 0);
+//    bbox_uniforms.Bind("mvp", &mvp);
+//    bbox_uniforms.Bind("uni_color", &col);
+//    traj_args.BindBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+//                         vs.size(), vs.data());
+//    glEnable(GL_LINE_SMOOTH);
+//    glLineWidth(5.0f);
+//    glDrawArrays(GL_LINES, 0, vs.size());
+
+
     window.swap_buffer();
     glfwPollEvents();
 
     if (window.get_key(GLFW_KEY_ESCAPE) == GLFW_PRESS ) {
       exit(0);
     }
+
+    rendering_seconds += timer_rendering.Tock();
+    all_seconds += timer_all.Tock();
+    LOG(INFO) << frame_count / all_seconds;
+
     if (args.record_video) {
       cv::Mat rgb = window.CaptureRGB();
-      cv::flip(rgb, rgb, 0);
+      cv::imshow("cap", rgb);
       writer << rgb;
     }
+
+    time_prof << "(" << frame_count << ", " << 1000 * meshing_period << ")\n";
+
+//    out_trs << "(" << frame_count << ", " << stats.x << ")\n";
+//    out_vtx_our << "(" << frame_count << ", " << stats.y << ")\n";
+//    out_vtx_base << "(" << frame_count << ", " << stats.z << ")\n";
   }
 
+#ifdef DEBUG
+//  debugger.CoreDump(map.compact_hash_table().gpu_data());
+//  debugger.CoreDump(map.blocks().gpu_data());
+//  debugger.CoreDump(map.mesh().gpu_data());
+//  debugger.DebugAll();
+#endif
   if (args.save_mesh) {
-    map.SaveMesh(args.filename_prefix + ".obj");
+    map.SaveMesh("../result/3dv/" + args.filename_prefix + ".obj");
   }
 
-  SLAM.Shutdown();
+  LOG(INFO) << (all_seconds - compressing_seconds)/ frame_count << "/" << all_seconds / frame_count;
+  LOG(INFO) << meshing_seconds / frame_count;
+  LOG(INFO) << rendering_seconds / frame_count;
   return 0;
 }

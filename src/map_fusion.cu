@@ -48,6 +48,12 @@ void UpdateBlocksKernel(CompactHashTableGPU compact_hash_table,
 
   /// 4. Truncate
   float sdf = depth - camera_pos.z;
+  uchar weight = max(kSDFParams.weight_sample * 1.5f *
+                     (1.0f - NormalizeDepth(depth,
+                                            sensor_params.min_depth_range,
+                                            sensor_params.max_depth_range)),
+                     1.0f);
+
   float truncation = truncate_distance(depth);
   if (sdf <= -truncation)
     return;
@@ -60,11 +66,8 @@ void UpdateBlocksKernel(CompactHashTableGPU compact_hash_table,
   /// 5. Update
   Voxel delta;
   delta.sdf = sdf;
-  delta.weight = max(kSDFParams.weight_sample * 1.5f *
-                     (1.0f - NormalizeDepth(depth,
-                                            sensor_params.min_depth_range,
-                                            sensor_params.max_depth_range)),
-                     1.0f);
+  delta.weight = weight;
+
   if (sensor_data.color_image) {
     float4 color = tex2D(color_texture, image_pos.x, image_pos.y);
     delta.color = make_uchar3(255 * color.x, 255 * color.y, 255 * color.z);
@@ -175,8 +178,7 @@ void Map::Integrate(Sensor& sensor) {
   CollectInFrustumBlocks(sensor);
   UpdateBlocks(sensor);
 
-  //Recycle();
-
+  Recycle(integrated_frame_count_);
   integrated_frame_count_ ++;
 }
 

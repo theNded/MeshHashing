@@ -1,6 +1,7 @@
 #include <matrix.h>
-#include <geometry_util.h>
-
+#include "geometry_util.h"
+#include <glog/logging.h>
+#include "color_util.h"
 #include "gradient.h"
 #include "ray_caster.h"
 
@@ -23,8 +24,9 @@ void CastKernel(const HashTableGPU hash_table,
   if (x >= ray_caster_params.width || y >= ray_caster_params.height)
     return;
 
+
   int pixel_idx = y * ray_caster_params.width + x;
-  gpu_data.depth_image [pixel_idx] = MINF;
+  gpu_data.depth_image [pixel_idx] = make_float4(MINF, MINF, MINF, MINF);
   gpu_data.vertex_image[pixel_idx] = make_float4(MINF, MINF, MINF, MINF);
   gpu_data.normal_image[pixel_idx] = make_float4(MINF, MINF, MINF, MINF);
   gpu_data.color_image [pixel_idx] = make_float4(1, 1, 1, 1);
@@ -46,20 +48,26 @@ void CastKernel(const HashTableGPU hash_table,
                                                world_ray_dir_homo.z));
 
   RayCasterSample prev_sample;
+  prev_sample.entropy = 0;
   prev_sample.sdf = 0.0f;
   prev_sample.t = 0.0f;
   prev_sample.weight = 0;
 
   /// NOT zig-zag; just evenly sampling along the ray
+  // TODO: Check this weird case : return causes illegal address failure
+  bool return_flag = false;
+
 #pragma unroll 1
-  for (float t = t_min; t < t_max; t += ray_caster_params.raycast_step) {
+  for (float t = t_min; t < t_max & !return_flag; t += ray_caster_params.raycast_step) {
     float3 world_sample_pos = world_cam_pos + t * world_ray_dir;
     float  sdf;
     uchar3 color;
+    Stat stats;
 
     /// a voxel surrounded by valid voxels
-    if (TrilinearInterpolation(hash_table, blocks, world_sample_pos,
-                               sdf, color)) {
+    if (  TrilinearInterpolation(hash_table, blocks, world_sample_pos,
+                               sdf, stats, color)) {
+
       /// Zero crossing exist
       if (prev_sample.weight > 0 // valid previous sample
           && prev_sample.sdf > 0.0f && sdf < 0.0f) { // zero-crossing
@@ -84,7 +92,10 @@ void CastKernel(const HashTableGPU hash_table,
           if (abs(sdf) < ray_caster_params.sdf_threshold) {
             float depth = interpolated_t * camera_ray_dir.z;
 
-            gpu_data.depth_image [pixel_idx] = depth;
+            float3 rgb = ValToRGB(depth, 0.3, 5.0);
+            //printf("%f %f %f\n", rgb.x, rgb.y, rgb.z);
+            gpu_data.depth_image [pixel_idx] = make_float4(rgb.x, rgb.y, rgb.z, 1.0f);
+            //break;
             gpu_data.vertex_image[pixel_idx]
                     = make_float4(ImageReprojectToCamera(x, y, depth,
                                                          ray_caster_params.fx,
@@ -110,19 +121,24 @@ void CastKernel(const HashTableGPU hash_table,
               float3 n3 = normalize(make_float3(normal.x, normal.y, normal.z));
               float3 l3 = normalize(light_pos - world_pos_isosurface);
               float distance = length(light_pos - world_pos_isosurface);
+              // bgr
               float3 c3 = make_float3(0.62f, 0.72f, 0.88) * dot(-n3, l3)
                           * 20.0f / (distance * distance);
+
+              // Uncertainty: low -> entropy high
+              //c3 = ValToRGB(stats.entropy, 0.0f, 1.0f);
               gpu_data.surface_image[pixel_idx]
-                      = make_float4(c3, 1.0f);
+                      = make_float4(c3.x, c3.y, c3.z, 1.0f);
             }
 
-            return;
+            return_flag = true;
           }
         }
       }
 
       /// No zero crossing || not good
       prev_sample.sdf = sdf;
+      prev_sample.entropy = stats.entropy;
       prev_sample.t = t;
       prev_sample.weight = 1;
     }
@@ -133,12 +149,13 @@ void CastKernel(const HashTableGPU hash_table,
 RayCaster::RayCaster(const RayCasterParams& params) {
   ray_caster_params_ = params;
   uint image_size = params.width * params.height;
-  checkCudaErrors(cudaMalloc(&gpu_data_.depth_image, sizeof(float) * image_size));
+  checkCudaErrors(cudaMalloc(&gpu_data_.depth_image, sizeof(float4) * image_size));
   checkCudaErrors(cudaMalloc(&gpu_data_.vertex_image, sizeof(float4) * image_size));
   checkCudaErrors(cudaMalloc(&gpu_data_.normal_image, sizeof(float4) * image_size));
   checkCudaErrors(cudaMalloc(&gpu_data_.color_image, sizeof(float4) * image_size));
   checkCudaErrors(cudaMalloc(&gpu_data_.surface_image, sizeof(float4) * image_size));
 
+  depth_image_ = cv::Mat(params.height, params.width, CV_32FC4);
   normal_image_ = cv::Mat(params.height, params.width, CV_32FC4);
   color_image_  = cv::Mat(params.height, params.width, CV_32FC4);
   surface_image_ = cv::Mat(params.height, params.width, CV_32FC4);
@@ -173,6 +190,9 @@ void RayCaster::Cast(Map& map, const float4x4& c_T_w) {
   checkCudaErrors(cudaGetLastError());
 
   uint image_size = ray_caster_params_.height * ray_caster_params_.width;
+  checkCudaErrors(cudaMemcpy(depth_image_.data, gpu_data_.depth_image,
+                             sizeof(float) * 4 * image_size,
+                             cudaMemcpyDeviceToHost));
   checkCudaErrors(cudaMemcpy(normal_image_.data, gpu_data_.normal_image,
                              sizeof(float) * 4 * image_size,
                              cudaMemcpyDeviceToHost));
@@ -182,5 +202,4 @@ void RayCaster::Cast(Map& map, const float4x4& c_T_w) {
   checkCudaErrors(cudaMemcpy(surface_image_.data, gpu_data_.surface_image,
                              sizeof(float) * 4 * image_size,
                              cudaMemcpyDeviceToHost));
-
 }

@@ -80,15 +80,20 @@ struct RuntimeParams {
   int  dataset_type;
 
   bool free_walk;
-  bool line_only;
-  bool new_mesh_only;
+  bool ploygon_mode;
+  bool mesh_range;
   bool fine_gradient;
+  bool render_type;
 
+  bool bounding_box;
   bool ray_casting;
 
   bool record_video;
   bool save_mesh;
+
   std::string filename_prefix;
+  std::string time_profile;
+  std::string memo_profile;
 
   int run_frames;
 };

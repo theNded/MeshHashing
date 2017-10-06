@@ -8,9 +8,9 @@ in vec3 light_dir_c;
 out vec3 color;
 
 void main() {
-  vec3  light_w = vec3(0, 2, 3);
+  vec3  light_w = vec3(0.0, 3, -1.5);
 	vec3  light_color = vec3(1, 1, 1);
-	float light_power = 20.0f;
+	float light_power = 10.0f;
 
   /// Diffuse x light
   vec3 diffuse_color = vec3(0.88f, 0.72f, 0.62f);

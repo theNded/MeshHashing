@@ -1470,11 +1470,15 @@ inline __host__ __device__ int2 sign(float2 s) {
   return make_int2(sign(s.x), sign(s.y));
 }
 
+inline __host__ __device__ float2 make_float2(uchar2 s) {
+  return make_float2(s.x, s.y);
+}
+
 inline __host__ __device__ uint3 operator%(uint3 a, int b) {
   return make_uint3(a.x%b, a.y%b, a.z%b);
 }
 
-inline __host__ __device__ bool operator==(int3 a, int3 b) {
+inline __host__ __device__ bool operator==(const int3 &a, const int3 &b) {
   return a.x == b.x && a.y == b.y && a.z == b.z;
 }
 #endif

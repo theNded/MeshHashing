@@ -386,6 +386,18 @@ const static int kEdgeVertexTable[12][2] = {
         {7, 3}
 };
 
+__device__
+const static short kRegularCubeIndices[6] = {
+    51, 204,
+    153, 102,
+    15, 249
+};
+
+__device__
+const static short kSemiRegularCubeIndices[2] = {
+    3, 48
+};
+
 const static unsigned char kMCReductionMasks[8][3] = {
         {0, 0, 0}, {1, 1, 1},
         {0, 0, 1}, {1, 1, 0},

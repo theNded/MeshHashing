@@ -2,6 +2,7 @@
 
 #include "sensor.h"
 #include "geometry_util.h"
+#include "color_util.h"
 #include <helper_cuda.h>
 #include <helper_math.h>
 #include <glog/logging.h>

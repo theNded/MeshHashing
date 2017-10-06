@@ -18,8 +18,8 @@ struct RayCasterSample {
   uint   weight;
 };
 
-struct RayCasterDataGPU {
-  float  *depth_image;
+struct __ALIGN__(8) RayCasterDataGPU {
+  float4 *depth_image;
   float4 *vertex_image;
   float4 *normal_image;
   float4 *color_image;
@@ -31,6 +31,7 @@ private:
   RayCasterDataGPU gpu_data_;
   RayCasterParams  ray_caster_params_;
 
+  cv::Mat          depth_image_;
   cv::Mat          normal_image_;
   cv::Mat          color_image_;
   cv::Mat          surface_image_;
@@ -41,6 +42,9 @@ public:
 
   void Cast(Map& map, const float4x4& c_T_w);
 
+  const cv::Mat& depth_image() {
+    return depth_image_;
+  }
   const cv::Mat& normal_image() {
     return normal_image_;
   }

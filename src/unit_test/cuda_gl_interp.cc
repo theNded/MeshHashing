@@ -6,21 +6,23 @@
 #include <glog/logging.h>
 #include <opencv2/opencv.hpp>
 
-#include "renderer.h"
+#include "../renderer.h"
 
 int main() {
-  FrameRenderer renderer("frame", 640, 480);
+  Renderer renderer("frame", 640, 480);
   std::vector<std::string> uniform_names;
   uniform_names.push_back("texture_sampler");
-  renderer.CompileShader("../shader/frame_vertex.glsl",
-                         "../shader/frame_fragment.glsl",
-                         uniform_names);
-  renderer.InitCUDA();
+
+  FrameObject frame(640, 480);
+  frame.CompileShader("../shader/frame_vertex.glsl",
+                      "../shader/frame_fragment.glsl",
+                      uniform_names);
+  renderer.AddObject(&frame);
 
   ////////// Load data here
   float * cpu_mem;
   float4* cuda_mem;
-  cv::Mat im = cv::imread("../example/img.png");
+  cv::Mat im = cv::imread("../unit_test/img.png");
 
   cv::resize(im, im, cv::Size(640, 480));
   cpu_mem = new float[4 * sizeof(float) * 640 * 480];
@@ -42,7 +44,10 @@ int main() {
 
   LOG(INFO) << "Begin Loop";
   do {
-    renderer.Render(cuda_mem);
+    frame.SetData(cuda_mem);
+
+    float4x4 dmy;
+    renderer.Render(dmy);
   } while( glfwGetKey(renderer.window(), GLFW_KEY_ESCAPE ) != GLFW_PRESS &&
            glfwWindowShouldClose(renderer.window()) == 0);
 }
