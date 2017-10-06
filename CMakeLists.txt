@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
-PROJECT(voxel-hashing)
+PROJECT(mesh-hashing)
 cmake_policy(SET CMP0015 NEW)
 
 #----------
@@ -99,12 +99,12 @@ TARGET_LINK_LIBRARIES(gl-util
         ${OPENGL_DEPENDENCIES}
         ${GLOG_LIBRARIES})
 
-### 2. VoxelHashing CUDA
+### 2. CUDA
 SET(CUDA_SEPARABLE_COMPILATION ON)
 # sm MUST >= 50, otherwise separable compilation will be disabled...
 # compute_35, sm_50 is ok
 LIST(APPEND CUDA_NVCC_FLAGS -gencode=arch=compute_52,code=sm_61)
-CUDA_ADD_LIBRARY(voxel-hashing-cuda
+CUDA_ADD_LIBRARY(mesh-hashing-cuda
         ${VH}/src/constant.cu
         ${VH}/src/hash_table.cu
         ${VH}/src/block.cu
@@ -116,17 +116,17 @@ CUDA_ADD_LIBRARY(voxel-hashing-cuda
         #${VH}/src/map_plane.cu
         ${VH}/src/map_debug.cu
         ${VH}/src/ray_caster.cu)
-TARGET_LINK_LIBRARIES(voxel-hashing-cuda
+TARGET_LINK_LIBRARIES(mesh-hashing-cuda
         ${CUDA_DEPENDENCIES}
         -lopencv_core -lopencv_highgui -lopencv_imgproc# cv::Mat in sensor
         ${GLOG_LIBRARIES})
 
-### 3. VoxelHashing C++
-ADD_LIBRARY(voxel-hashing
+### 3. C++
+ADD_LIBRARY(mesh-hashing
         ${VH}/src/dataset_manager.cc
         ${VH}/tool/cpp/debugger.cc)
-TARGET_LINK_LIBRARIES(voxel-hashing
-        voxel-hashing-cuda
+TARGET_LINK_LIBRARIES(mesh-hashing
+        mesh-hashing-cuda
         gl-util)
 
 #----------
@@ -134,13 +134,13 @@ TARGET_LINK_LIBRARIES(voxel-hashing
 ### CUDA - OpenGL intergration
 ADD_EXECUTABLE(cuda_gl_interp src/unit_test/cuda_gl_interp.cc)
 TARGET_LINK_LIBRARIES(cuda_gl_interp
-        voxel-hashing
+        mesh-hashing
         -lopencv_core -lopencv_highgui
         ${GLOG_LIBRARIES})
 
 ADD_EXECUTABLE(block_visualizer src/unit_test/block_visualizer.cc include/timer.h src/unit_test/video_clip.cc)
 TARGET_LINK_LIBRARIES(block_visualizer
-        voxel-hashing
+        mesh-hashing
         ${OpenCV_LIBRARIES}
         ${GLOG_LIBRARIES})
 
@@ -150,15 +150,15 @@ TARGET_LINK_LIBRARIES(video_clip
 
 ### Loop over
 MESSAGE(STATUS ${GLOG_LIBRARIES})
-ADD_EXECUTABLE(voxel_hashing
-        src/example/voxel_hashing.cc)
-TARGET_LINK_LIBRARIES(voxel_hashing
-        voxel-hashing
+ADD_EXECUTABLE(mesh_hashing
+        src/example/mesh_hashing.cc)
+TARGET_LINK_LIBRARIES(mesh_hashing
+        mesh-hashing
         -lopencv_core -lopencv_highgui
         ${GLOG_LIBRARIES})
 
 ### An ORB example
-OPTION(WITH_ORBSLAM2 "Build with orb slam" ON)
+OPTION(WITH_ORBSLAM2 "Build with orb slam" OFF)
 if (WITH_ORBSLAM2)
     SET(ORB_SLAM2_PATH ../../opensource/orb_slam2)
     MESSAGE(STATUS "Build with ORB-SLAM2")
@@ -172,7 +172,7 @@ if (WITH_ORBSLAM2)
     LINK_DIRECTORIES(${ORB_SLAM2_PATH}/lib)
     ADD_EXECUTABLE(rgbd_orb src/example/rgbd_orb.cc)
     TARGET_LINK_LIBRARIES(rgbd_orb
-            voxel-hashing
+            mesh-hashing
             ORB_SLAM2
             ${Pangolin_LIBRARIES}
             -lopencv_core -lopencv_highgui
