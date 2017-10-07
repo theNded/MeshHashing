@@ -20,7 +20,6 @@
 #include <queue>
 #include "../tool/cpp/debugger.h"
 
-#include "../renderer.h"
 
 #include "../dataset_manager.h"
 #include "../opengl/window.h"

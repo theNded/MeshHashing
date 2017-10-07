@@ -81,8 +81,8 @@ MESSAGE(STATUS ${CUDA_TOOLKIT_INCLUDE})
 
 INCLUDE_DIRECTORIES(
         ${VH}/include
-        ${VH}/include/gl_util
-        ${VH}/include/cuda_util
+        ${VH}/include/opengl
+        ${VH}/include/cuda
         ${GLOG_INCLUDE_DIRS}
         ${CUDA_TOOLKIT_INCLUDE})
 
@@ -90,11 +90,11 @@ INCLUDE_DIRECTORIES(
 ## Building Libraries
 ### 1. OpenGL util
 ADD_LIBRARY(gl-util
-        ${VH}/src/opengl/args.cc
-        ${VH}/src/opengl/program.cc
-        ${VH}/src/opengl/window.cc
-        ${VH}/src/opengl/uniforms.cc
-        ${VH}/src/opengl/camera.cc)
+        ${VH}/include/opengl/args.cc
+        ${VH}/include/opengl/program.cc
+        ${VH}/include/opengl/window.cc
+        ${VH}/include/opengl/uniforms.cc
+        ${VH}/include/opengl/camera.cc)
 TARGET_LINK_LIBRARIES(gl-util
         ${OPENGL_DEPENDENCIES}
         ${GLOG_LIBRARIES})

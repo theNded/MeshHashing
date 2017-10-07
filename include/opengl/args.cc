@@ -9,7 +9,7 @@
 #include <cassert>
 #include <GL/glew.h>
 #include <cuda_runtime_api.h>
-#include <cuda_util/helper_cuda.h>
+#include <cuda/helper_cuda.h>
 #include <iostream>
 #include <glog/logging.h>
 
