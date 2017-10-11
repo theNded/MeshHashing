@@ -123,7 +123,7 @@ TARGET_LINK_LIBRARIES(mesh-hashing-cuda
 
 ### 3. C++
 ADD_LIBRARY(mesh-hashing
-        ${VH}/src/dataset_manager.cc
+        ${VH}/include/dataset_manager.cc
         ${VH}/tool/cpp/debugger.cc)
 TARGET_LINK_LIBRARIES(mesh-hashing
         mesh-hashing-cuda

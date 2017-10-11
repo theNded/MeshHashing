@@ -21,7 +21,7 @@
 #include "../tool/cpp/debugger.h"
 
 
-#include "../dataset_manager.h"
+#include "dataset_manager.h"
 #include "../opengl/window.h"
 #include "../opengl/program.h"
 #include "../opengl/camera.h"
