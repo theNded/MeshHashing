@@ -106,7 +106,7 @@ void RecycleGarbageBlocksTrianglesKernel(HashTableGPU        hash_table,
   const uint local_idx = threadIdx.x;  //inside an SDF block
   Voxel &voxel = blocks[entry.ptr].voxels[local_idx];
 
-  for (int i = 0; i < Voxel::kMaxTrianglesPerCube; ++i) {
+  for (int i = 0; i < N_TRIANGLE; ++i) {
     int triangle_ptr = voxel.triangle_ptrs[i];
     if (triangle_ptr == FREE_PTR) continue;
 

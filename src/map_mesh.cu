@@ -353,7 +353,7 @@ void RecycleTrianglesKernel(
   int i = 0;
   for (int t = 0; kTriangleTable[voxel.curr_index][t] != -1; t += 3, ++i);
 
-  for (; i < Voxel::kMaxTrianglesPerCube; ++i) {
+  for (; i < N_TRIANGLE; ++i) {
     int triangle_ptr = voxel.triangle_ptrs[i];
     if (triangle_ptr == FREE_PTR) continue;
 
@@ -539,7 +539,7 @@ void CollectVerticesAndTrianglesKernel(
   const HashEntry &entry = compact_hash_table.compacted_entries[blockIdx.x];
   Voxel &cube = blocks[entry.ptr].voxels[threadIdx.x];
 
-  for (int i = 0; i < Voxel::kMaxTrianglesPerCube; ++i) {
+  for (int i = 0; i < N_TRIANGLE; ++i) {
     int triangle_ptrs = cube.triangle_ptrs[i];
     if (triangle_ptrs != FREE_PTR) {
       int3& triangle = mesh.triangles[triangle_ptrs].vertex_ptrs;

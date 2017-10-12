@@ -37,16 +37,13 @@ struct __ALIGN__(4) Stat {
 //  }
 
 struct __ALIGN__(8) Voxel {
-  static const int kVerticesPerCube = 3;
-  static const int kMaxTrianglesPerCube = 5;
-
   float  sdf;    // signed distance function
   uchar  weight;  // accumulated sdf weight
   uchar3 color;  // color
 
-  int vertex_ptrs[kVerticesPerCube];
-  int vertex_mutexes[kVerticesPerCube];
-  int triangle_ptrs[kMaxTrianglesPerCube];
+  int vertex_ptrs[N_VERTEX];
+  int vertex_mutexes[N_VERTEX];
+  int triangle_ptrs[N_TRIANGLE];
 
 #ifdef STATS
   Stat   stats;
@@ -58,7 +55,7 @@ struct __ALIGN__(8) Voxel {
 #ifdef __CUDACC__
 #pragma unroll 1
 #endif
-    for (int i = 0; i < kVerticesPerCube; ++i) {
+    for (int i = 0; i < N_VERTEX; ++i) {
       vertex_mutexes[i] = FREE_PTR;
     }
   }
@@ -75,7 +72,7 @@ struct __ALIGN__(8) Voxel {
 #ifdef __CUDACC__
 #pragma unroll 1
 #endif
-    for (int i = 0; i < kVerticesPerCube; ++i) {
+    for (int i = 0; i < N_VERTEX; ++i) {
       vertex_ptrs[i] = FREE_PTR;
       vertex_mutexes[i] = FREE_PTR;
     }
@@ -83,7 +80,7 @@ struct __ALIGN__(8) Voxel {
 #ifdef __CUDACC__
 #pragma unroll 1
 #endif
-    for (int i = 0; i < kMaxTrianglesPerCube; ++i) {
+    for (int i = 0; i < N_TRIANGLE; ++i) {
       triangle_ptrs[i] = FREE_PTR;
     }
 

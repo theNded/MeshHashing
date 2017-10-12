@@ -52,6 +52,9 @@ typedef signed char schar;
 
 #define FREE_PTR   -2
 
+#define N_VERTEX    3
+#define N_TRIANGLE  5
+
 //#define STATS
 //#define REDUCTION
 

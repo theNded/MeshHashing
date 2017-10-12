@@ -98,93 +98,20 @@ inline bool TrilinearInterpolation(const HashTableGPU &hash_table,
   float3 colorf = make_float3(0.0f, 0.0f, 0.0f);
   float3 v_color;
 
-  /// 000
-  v = GetVoxel(hash_table, blocks, pos_corner + make_float3(0.0f, 0.0f, 0.0f));
-  if (v.weight == 0) return false;
-  v_color = make_float3(v.color.x, v.color.y, v.color.z);
-  w = (1.0f - ratio.x) * (1.0f - ratio.y) * (1.0f - ratio.z);
-  sdf += w * v.sdf;
-  //stats.entropy   += w * v.entropy();
-  //stats.laplacian += w * v.stats.laplacian;
-//  // stats.duration  += w * v.stats.duration;
-  colorf += w * v_color;
-
-  /// 001
-  v = GetVoxel(hash_table, blocks, pos_corner + make_float3(0.0f, 0.0f, offset));
-  if (v.weight == 0) return false;
-  v_color = make_float3(v.color.x, v.color.y, v.color.z);
-  w = (1.0f - ratio.x) * (1.0f - ratio.y) * ratio.z;
-  sdf += w * v.sdf;
-  //stats.entropy   += w * v.entropy();
-  //stats.laplacian += w * v.stats.laplacian;
-  // stats.duration  += w * v.stats.duration;
-  colorf += w * v_color;
-
-  /// 010
-  v = GetVoxel(hash_table, blocks, pos_corner + make_float3(0.0f, offset, 0.0f));
-  if (v.weight == 0) return false;
-  v_color = make_float3(v.color.x, v.color.y, v.color.z);
-  w = (1.0f - ratio.x) * ratio.y * (1.0f - ratio.z);
-  sdf += w * v.sdf;
-  //stats.entropy   += w * v.entropy();
-  //stats.laplacian += w * v.stats.laplacian;
-  // stats.duration  += w * v.stats.duration;
-  colorf += w * v_color;
-
-  /// 011
-  v = GetVoxel(hash_table, blocks, pos_corner + make_float3(0.0f, offset, offset));
-  if (v.weight == 0) return false;
-  v_color = make_float3(v.color.x, v.color.y, v.color.z);
-  w = (1.0f - ratio.x) * ratio.y * ratio.z;
-  sdf += w * v.sdf;
-  //stats.entropy   += w * v.entropy();
-  //stats.laplacian += w * v.stats.laplacian;
-  // stats.duration  += w * v.stats.duration;
-  colorf += w * v_color;
-
-  /// 100
-  v = GetVoxel(hash_table, blocks, pos_corner + make_float3(offset, 0.0f, 0.0f));
-  if (v.weight == 0) return false;
-  v_color = make_float3(v.color.x, v.color.y, v.color.z);
-  w = ratio.x * (1.0f - ratio.y) * (1.0f - ratio.z);
-  sdf += w * v.sdf;
-  //stats.entropy   += w * v.entropy();
-  //stats.laplacian += w * v.stats.laplacian;
-  // stats.duration  += w * v.stats.duration;
-  colorf += w * v_color;
-
-  /// 101
-  v = GetVoxel(hash_table, blocks, pos_corner + make_float3(offset, 0.0f, offset));
-  if (v.weight == 0) return false;
-  v_color = make_float3(v.color.x, v.color.y, v.color.z);
-  w = ratio.x * (1.0f - ratio.y) * ratio.z;
-  sdf += w * v.sdf;
-  //stats.entropy   += w * v.entropy();
-  //stats.laplacian += w * v.stats.laplacian;
-  // stats.duration  += w * v.stats.duration;
-  colorf += w * v_color;
-
-  /// 110
-  v = GetVoxel(hash_table, blocks, pos_corner + make_float3(offset, offset, 0.0f));
-  if (v.weight == 0) return false;
-  v_color = make_float3(v.color.x, v.color.y, v.color.z);
-  w = ratio.x * ratio.y * (1.0f - ratio.z);
-  sdf += w * v.sdf;
-  //stats.entropy   += w * v.entropy();
-  //stats.laplacian += w * v.stats.laplacian;
-  // stats.duration  += w * v.stats.duration;
-  colorf += w * v_color;
-
-  /// 111
-  v = GetVoxel(hash_table, blocks, pos_corner + make_float3(offset, offset, offset));
-  if (v.weight == 0) return false;
-  v_color = make_float3(v.color.x, v.color.y, v.color.z);
-  w = ratio.x * ratio.y * ratio.z;
-  sdf += w * v.sdf;
-  //stats.entropy   += w * v.entropy();
-  //stats.laplacian += w * v.stats.laplacian;
-  // stats.duration  += w * v.stats.duration;
-  colorf += w * v_color;
+#pragma unroll 1
+  for (int i = 0; i < 8; ++i) {
+    float3 mask = make_float3((i&4)>0, (i&2)>0, (i&1)>0);
+    // 0 --> 1 - r, 1 --> r
+    float3 r = (make_float3(1.0f) - mask) * (make_float3(1.0) - ratio)
+             + (mask) * ratio;
+    v = GetVoxel(hash_table, blocks, pos_corner + mask * offset);
+    if (v.weight == 0) return false;
+    v_color = make_float3(v.color.x, v.color.y, v.color.z);
+    w = r.x * r.y * r.z;
+    sdf += w * v.sdf;
+    colorf += w * v_color;
+    // Interpolation of stats
+  }
 
   color = make_uchar3(colorf.x, colorf.y, colorf.z);
   return true;
@@ -207,69 +134,19 @@ inline bool TrilinearInterpolation(const HashTableGPU &hash_table,
   float3 colorf = make_float3(0.0f, 0.0f, 0.0f);
   float3 v_color;
 
-  /// 000
-  v = GetVoxel(hash_table, blocks, pos_corner + make_float3(0.0f, 0.0f, 0.0f));
-  if (v.weight == 0) return false;
-  v_color = make_float3(v.color.x, v.color.y, v.color.z);
-  w = (1.0f - ratio.x) * (1.0f - ratio.y) * (1.0f - ratio.z);
-  sdf += w * v.sdf;
-  colorf += w * v_color;
-
-  /// 001
-  v = GetVoxel(hash_table, blocks, pos_corner + make_float3(0.0f, 0.0f, offset));
-  if (v.weight == 0) return false;
-  v_color = make_float3(v.color.x, v.color.y, v.color.z);
-  w = (1.0f - ratio.x) * (1.0f - ratio.y) * ratio.z;
-  sdf += w * v.sdf;
-  colorf += w * v_color;
-
-  /// 010
-  v = GetVoxel(hash_table, blocks, pos_corner + make_float3(0.0f, offset, 0.0f));
-  if (v.weight == 0) return false;
-  v_color = make_float3(v.color.x, v.color.y, v.color.z);
-  w = (1.0f - ratio.x) * ratio.y * (1.0f - ratio.z);
-  sdf += w * v.sdf;
-  colorf += w * v_color;
-
-  /// 011
-  v = GetVoxel(hash_table, blocks, pos_corner + make_float3(0.0f, offset, offset));
-  if (v.weight == 0) return false;
-  v_color = make_float3(v.color.x, v.color.y, v.color.z);
-  w = (1.0f - ratio.x) * ratio.y * ratio.z;
-  sdf += w * v.sdf;
-  colorf += w * v_color;
-
-  /// 100
-  v = GetVoxel(hash_table, blocks, pos_corner + make_float3(offset, 0.0f, 0.0f));
-  if (v.weight == 0) return false;
-  v_color = make_float3(v.color.x, v.color.y, v.color.z);
-  w = ratio.x * (1.0f - ratio.y) * (1.0f - ratio.z);
-  sdf += w * v.sdf;
-  colorf += w * v_color;
-
-  /// 101
-  v = GetVoxel(hash_table, blocks, pos_corner + make_float3(offset, 0.0f, offset));
-  if (v.weight == 0) return false;
-  v_color = make_float3(v.color.x, v.color.y, v.color.z);
-  w = ratio.x * (1.0f - ratio.y) * ratio.z;
-  sdf += w * v.sdf;
-  colorf += w * v_color;
-
-  /// 110
-  v = GetVoxel(hash_table, blocks, pos_corner + make_float3(offset, offset, 0.0f));
-  if (v.weight == 0) return false;
-  v_color = make_float3(v.color.x, v.color.y, v.color.z);
-  w = ratio.x * ratio.y * (1.0f - ratio.z);
-  sdf += w * v.sdf;
-  colorf += w * v_color;
-
-  /// 111
-  v = GetVoxel(hash_table, blocks, pos_corner + make_float3(offset, offset, offset));
-  if (v.weight == 0) return false;
-  v_color = make_float3(v.color.x, v.color.y, v.color.z);
-  w = ratio.x * ratio.y * ratio.z;
-  sdf += w * v.sdf;
-  colorf += w * v_color;
+#pragma unroll 1
+  for (int i = 0; i < 8; ++i) {
+    float3 mask = make_float3((i&4)>0, (i&2)>0, (i&1)>0);
+    // 0 --> 1 - r, 1 --> r
+    float3 r = (make_float3(1.0f) - mask) * (make_float3(1.0) - ratio)
+               + (mask) * ratio;
+    v = GetVoxel(hash_table, blocks, pos_corner + mask * offset);
+    if (v.weight == 0) return false;
+    v_color = make_float3(v.color.x, v.color.y, v.color.z);
+    w = r.x * r.y * r.z;
+    sdf += w * v.sdf;
+    colorf += w * v_color;
+  }
 
   color = make_uchar3(colorf.x, colorf.y, colorf.z);
   return true;
