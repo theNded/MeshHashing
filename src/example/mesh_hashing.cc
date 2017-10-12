@@ -229,8 +229,9 @@ int main(int argc, char** argv) {
       glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     }
 
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
     /// NOTE: Use GL_UNSIGNED_INT instead of GL_INT, otherwise it won't work
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     glDrawElements(GL_TRIANGLES, map.compact_mesh().triangle_count() * 3, GL_UNSIGNED_INT, 0);
 
     if (args.bounding_box) {
@@ -259,7 +260,6 @@ int main(int argc, char** argv) {
 
 
     window.swap_buffer();
-    glfwPollEvents();
 
     if (window.get_key(GLFW_KEY_ESCAPE) == GLFW_PRESS ) {
       exit(0);
