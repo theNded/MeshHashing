@@ -10,7 +10,7 @@ dataset_type:    4
 # Render options
 # TODO: add light source(s)
 # and free walk view points
-free_walk:       1
+free_walk:       0
 
 # Polygon_mode draw triangle with only lines;
 # otherwise with entire planes

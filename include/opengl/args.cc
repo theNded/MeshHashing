@@ -36,7 +36,7 @@ Args::~Args() {
 void Args::InitBuffer(GLuint i,
                       ArgAttrib arg_attrib,
                       size_t max_size) {
-  assert(i < argn_);
+  assert((int)i < argn_);
   /// Now we have only ELEMENT_BUFFER and ELEMENT_ARRAY_BUFFER
   if (arg_attrib.buffer != GL_ELEMENT_ARRAY_BUFFER) {
     glEnableVertexAttribArray(i);
@@ -62,7 +62,7 @@ void Args::BindBuffer(GLuint i,
                       ArgAttrib arg_attrib,
                       size_t size,
                       void *data) {
-  assert(i < argn_);
+  assert((int)i < argn_);
   /// Now we have only ELEMENT_BUFFER and ELEMENT_ARRAY_BUFFER
   if (arg_attrib.buffer != GL_ELEMENT_ARRAY_BUFFER) {
     glEnableVertexAttribArray(i);

@@ -158,7 +158,7 @@ TARGET_LINK_LIBRARIES(mesh_hashing
         ${GLOG_LIBRARIES})
 
 ### An ORB example
-OPTION(WITH_ORBSLAM2 "Build with orb slam" OFF)
+OPTION(WITH_ORBSLAM2 "Build with orb slam" ON)
 if (WITH_ORBSLAM2)
     SET(ORB_SLAM2_PATH ../../opensource/orb_slam2)
     MESSAGE(STATUS "Build with ORB-SLAM2")
