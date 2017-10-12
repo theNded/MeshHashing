@@ -20,9 +20,15 @@ Window::Window(std::string window_name, int width, int height) {
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
   // Open a window and create its OpenGL context
-  width_ = width;
-  height_ = height;
-  window_ = glfwCreateWindow(width, height, window_name.c_str(), NULL, NULL);
+  int res_factor = 1;
+#ifdef __APPLE__
+  // Retina requires 2x
+  res_factor = 2;
+#endif
+
+  width_ = width / res_factor;
+  height_ = height / res_factor;
+  window_ = glfwCreateWindow(width_, height_, window_name.c_str(), NULL, NULL);
   if (window_ == NULL) {
     std::cerr << "Failed to open GLFW window." << std::endl;
     glfwTerminate();
@@ -41,13 +47,25 @@ Window::Window(std::string window_name, int width, int height) {
     exit(1);
   }
 
+  img_width_  = width;
+  img_height_ = height;
+  rgb_   = cv::Mat(img_height_, img_width_, CV_8UC3);
+  rgba_  = cv::Mat(img_height_, img_width_, CV_8UC4);
+  depth_ = cv::Mat(img_height_, img_width_, CV_32F);
+}
+
+void Window::Resize(int width, int height) {
   int res_factor = 1;
 #ifdef __APPLE__
-  // Retina requires 2x
   res_factor = 2;
 #endif
-  img_width_  = res_factor * width_;
-  img_height_ = res_factor * height_;
+
+  width_ = width / res_factor;
+  height_ = height / res_factor;
+  glfwSetWindowSize(window_, width_, height_);
+
+  img_width_  = width;
+  img_height_ = height;
   rgb_   = cv::Mat(img_height_, img_width_, CV_8UC3);
   rgba_  = cv::Mat(img_height_, img_width_, CV_8UC4);
   depth_ = cv::Mat(img_height_, img_width_, CV_32F);
@@ -59,9 +77,6 @@ cv::Mat Window::CaptureRGB() {
   cv::Mat ret;
   cv::flip(rgb_, ret, 0);
 
-#ifdef __APPLE__
-  //cv::resize(ret, ret, cv::Size(ret.cols/2, ret.rows/2));
-#endif
   return ret;
 }
 
@@ -71,9 +86,6 @@ cv::Mat Window::CaptureRGBA() {
   cv::Mat ret;
   cv::flip(rgba_, ret, 0);
 
-#ifdef __APPLE__
-  cv::resize(ret, ret, cv::Size(ret.cols/2, ret.rows/2));
-#endif
   return ret;
 }
 
@@ -83,9 +95,7 @@ cv::Mat Window::CaptureDepth() {
                GL_DEPTH_COMPONENT, GL_FLOAT, depth_.data);
   cv::Mat ret;
   cv::flip(depth_, ret, 0);
-#ifdef __APPLE__
-  cv::resize(ret, ret, cv::Size(ret.cols/2, ret.rows/2), CV_INTER_NN);
-#endif
+
   return ret;
 }
 }

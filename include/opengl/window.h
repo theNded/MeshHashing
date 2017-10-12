@@ -39,8 +39,10 @@ public:
   const int height() const {
     return height_;
   }
+  void Resize(int width, int height);
 
   /// Screenshot utilities
+  /// For apple, it return 2x resolution
   cv::Mat CaptureRGB();
   cv::Mat CaptureRGBA();
   cv::Mat CaptureDepth();

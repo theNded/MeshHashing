@@ -12,6 +12,8 @@
 namespace gl {
 class Model {
 public:
+  /// Model m = Model(); m.LoadObj(obj_path);
+  /// or Model m = Model(obj_path);
   Model() = default;
 
   explicit

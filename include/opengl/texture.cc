@@ -5,13 +5,10 @@
 #include "texture.h"
 
 namespace gl {
-Texture::Texture(std::string texture_path){
-  Load(texture_path);
-  Init();
-}
 
 Texture::~Texture() {
-  glDeleteTextures(1, &texture_id_);
+  if (texture_gened_)
+    glDeleteTextures(1, &texture_id_);
 }
 
 void Texture::Load(std::string texture_path) {
@@ -21,7 +18,9 @@ void Texture::Load(std::string texture_path) {
   height_ = texture_.rows;
 }
 
-void Texture::Init() {
+void Texture::Init(std::string texture_path) {
+  Load(texture_path);
+
   glGenTextures(1, &texture_id_);
   glBindTexture(GL_TEXTURE_2D, texture_id_);
   // TODO: change format according to loaded texture
@@ -40,12 +39,8 @@ void Texture::Init() {
 
 void Texture::Init(GLint internal_format,
                    int width, int height) {
-  int factor = 1;
-#ifdef __APPLE__
-  factor = 2;
-#endif
-  width_ = width * factor;
-  height_ = height * factor;
+  width_ = width;
+  height_ = height;
 
   // TODO: complete the switch table
   GLenum output_format, type;
@@ -75,6 +70,6 @@ void Texture::Init(GLint internal_format,
 void Texture::Bind(int texture_idx) {
   GLenum texture_macro = GL_TEXTURE0 + texture_idx;
   glActiveTexture(texture_macro);
-  glBindTexture(texture_id_, texture_macro);
+  glBindTexture(GL_TEXTURE_2D, texture_id_);
 }
 }

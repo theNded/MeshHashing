@@ -23,7 +23,7 @@ void Camera::SwitchInteraction(bool enable_interaction) {
   }
 }
 
-void Camera::SetView(Window &window) {
+void Camera::UpdateView(Window &window) {
   if (! interaction_enabled_) return;
 
   static double last_time = glfwGetTime();

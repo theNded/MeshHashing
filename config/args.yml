@@ -10,7 +10,7 @@ dataset_type:    4
 # Render options
 # TODO: add light source(s)
 # and free walk view points
-free_walk:       0
+free_walk:       1
 
 # Polygon_mode draw triangle with only lines;
 # otherwise with entire planes
@@ -31,7 +31,7 @@ bounding_box:    0
 ray_casting:     0
 
 # Result saving
-record_video:    1
+record_video:    0
 save_mesh:       1
 filename_prefix: "copyroom-not-refined"
 time_profile:    "tum3-nhm"
