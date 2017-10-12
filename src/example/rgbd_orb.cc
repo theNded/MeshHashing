@@ -34,7 +34,6 @@
 #include "../map.h"
 #include "../sensor.h"
 #include "../ray_caster.h"
-#include "../renderer.h"
 #include "../opengl/args.h"
 #include "../opengl/uniforms.h"
 #include "../opengl/program.h"
