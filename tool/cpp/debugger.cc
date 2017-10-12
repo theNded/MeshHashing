@@ -106,7 +106,7 @@ void Debugger::DebugAll() {
 
       /// Mesh info
       for (int j = 0; j < 5; ++j) {
-        int triangle_ptr = block.cubes[i].triangle_ptrs[j];
+        int triangle_ptr = block.voxels[i].triangle_ptrs[j];
         if (triangle_ptr >= 0) {
           int3 vertex_ptrs = triangles_[triangle_ptr].vertex_ptrs;
           vertices.push_back(vertices_[vertex_ptrs.x].pos);

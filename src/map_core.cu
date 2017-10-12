@@ -104,17 +104,17 @@ void RecycleGarbageBlocksTrianglesKernel(HashTableGPU        hash_table,
 
   const HashEntry& entry = compact_hash_table.compacted_entries[idx];
   const uint local_idx = threadIdx.x;  //inside an SDF block
-  Cube &cube = blocks[entry.ptr].cubes[local_idx];
+  Voxel &voxel = blocks[entry.ptr].voxels[local_idx];
 
-  for (int i = 0; i < Cube::kMaxTrianglesPerCube; ++i) {
-    int triangle_ptr = cube.triangle_ptrs[i];
+  for (int i = 0; i < Voxel::kMaxTrianglesPerCube; ++i) {
+    int triangle_ptr = voxel.triangle_ptrs[i];
     if (triangle_ptr == FREE_PTR) continue;
 
     // Clear ref_count of its pointed vertices
     mesh.ReleaseTriangle(mesh.triangles[triangle_ptr]);
     mesh.triangles[triangle_ptr].Clear();
     mesh.FreeTriangle(triangle_ptr);
-    cube.triangle_ptrs[i] = FREE_PTR;
+    voxel.triangle_ptrs[i] = FREE_PTR;
   }
 }
 
@@ -127,7 +127,7 @@ void RecycleGarbageBlocksVerticesKernel(HashTableGPU        hash_table,
   const HashEntry &entry = compact_hash_table.compacted_entries[blockIdx.x];
   const uint local_idx = threadIdx.x;
 
-  Cube &cube = blocks[entry.ptr].cubes[local_idx];
+  Voxel &cube = blocks[entry.ptr].voxels[local_idx];
 
   __shared__ int valid_vertex_count;
   if (threadIdx.x == 0) valid_vertex_count = 0;

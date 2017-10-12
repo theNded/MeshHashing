@@ -29,77 +29,28 @@ struct __ALIGN__(4) Stat {
   }
 };
 
-struct __ALIGN__(8) Voxel {
-  float  sdf;    // signed distance function
-  uchar  weight;  // accumulated sdf weight
-  uchar3 color;  // color
 
-#ifdef STATS
-  Stat   stats;
-#endif
-
-  // TODO(wei): Notice, when the size exceeds long long, change this
+// TODO(wei): Notice, when the size exceeds long long, change this
 //  __device__
 //  void operator=(const struct Voxel& v) {
 //    ((long long*)this)[0] = ((const long long*)&v)[0];
 //  }
 
-  __device__
-  void Clear() {
-    sdf = 0.0f;
-    weight = 0;
-    color = make_uchar3(0, 0, 0);
-  }
-
-//  __device__
-//  float entropy() {
-//    float wp = sweight.x;// * exp(- ssdf.x);
-//    float wn = sweight.y;// * exp(- ssdf.y);
-//    float r = wp / (wp + wn);
-//    if (sweight.x == 0 || sweight.y == 0) return 0;
-//    return -(r * log(r) + (1 - r) * log(1 - r));
-//  }
-
-  __device__
-  void Update(const Voxel &delta) {
-    float3 c_prev  = make_float3(color.x, color.y, color.z);
-    float3 c_delta = make_float3(delta.color.x, delta.color.y, delta.color.z);
-    float3 c_curr  = 0.5f * c_prev + 0.5f * c_delta;
-    color = make_uchar3(c_curr.x + 0.5f, c_curr.y + 0.5f, c_curr.z + 0.5f);
-
-    sdf = (sdf * (float)weight + delta.sdf * (float)delta.weight)
-          / ((float)weight + (float)delta.weight);
-    weight = min(255, (uint)weight + (uint)delta.weight);
-//    float3 c_prev = make_float3(color.x, color.y, color.z);
-//    float3 c_delta = make_float3(delta.color.x, delta.color.y, delta.color.z);
-//    float3 c_curr = 0.5f * c_prev + 0.5f * c_delta;
-//    color = make_uchar3(c_curr.x + 0.5f, c_curr.y + 0.5f, c_curr.z + 0.5f);
-//
-//    ssdf = (ssdf * make_float2(sweight)
-//            + delta.ssdf * make_float2(delta.sweight))
-//           / (make_float2(sweight) + make_float2(delta.sweight));
-//    float2 sweightf = make_float2(sweight) + make_float2(delta.sweight);
-//    float factor = 255.0f / (sweightf.x + sweightf.y);
-//    factor = fminf(factor, 1.0);
-//    sweight = make_uchar2((uchar) (factor * sweightf.x),
-//                          (uchar) (factor * sweightf.y));
-//
-//    if (sweight.x == 0) ssdf.x = 0;
-//    if (sweight.y == 0) ssdf.y = 0;
-  }
-};
-
-struct __ALIGN__(4) Cube {
+struct __ALIGN__(8) Voxel {
   static const int kVerticesPerCube = 3;
   static const int kMaxTrianglesPerCube = 5;
 
-  // TODO(wei): Possible memory optimizations:
-  // 1. vertex_ptr:    a @int point to @int3 on shared memory
-  // 2. triangle_ptrs: a @int point to linked list on shared memory
-  /// Point to 3 valid vertex indices
+  float  sdf;    // signed distance function
+  uchar  weight;  // accumulated sdf weight
+  uchar3 color;  // color
+
   int vertex_ptrs[kVerticesPerCube];
   int vertex_mutexes[kVerticesPerCube];
   int triangle_ptrs[kMaxTrianglesPerCube];
+
+#ifdef STATS
+  Stat   stats;
+#endif
   short curr_index, prev_index;
 
   __device__
@@ -113,7 +64,14 @@ struct __ALIGN__(4) Cube {
   }
 
   __device__
-  void Clear() {
+  void ClearSDF() {
+    sdf = 0.0f;
+    weight = 0;
+    color = make_uchar3(0, 0, 0);
+  }
+
+  __device__
+  void ClearMesh() {
 #ifdef __CUDACC__
 #pragma unroll 1
 #endif
@@ -132,20 +90,23 @@ struct __ALIGN__(4) Cube {
     curr_index = 0;
     prev_index = 0;
   }
+
+  __device__
+  void Update(const Voxel &delta) {
+    float3 c_prev  = make_float3(color.x, color.y, color.z);
+    float3 c_delta = make_float3(delta.color.x, delta.color.y, delta.color.z);
+    float3 c_curr  = 0.5f * c_prev + 0.5f * c_delta;
+    color = make_uchar3(c_curr.x + 0.5f, c_curr.y + 0.5f, c_curr.z + 0.5f);
+
+    sdf = (sdf * (float)weight + delta.sdf * (float)delta.weight)
+          / ((float)weight + (float)delta.weight);
+    weight = min(255, (uint)weight + (uint)delta.weight);
+  }
 };
 
 /// Typically Block is a 8x8x8 voxel cluster
 struct __ALIGN__(8) Block {
   Voxel voxels[BLOCK_SIZE];
-  Cube  cubes[BLOCK_SIZE];
-
-  /// ! Temporary solution for planar fitting!
-//  float3 vertices[BLOCK_SIZE * 4];
-//  int    cube_type[BLOCK_SIZE];
-
-  //float3 n;
-//  float  d;
-//  float  ratio;
 
   __device__
   void Clear() {
@@ -153,8 +114,8 @@ struct __ALIGN__(8) Block {
 #pragma unroll 1
 #endif
     for (int i = 0; i < BLOCK_SIZE; ++i) {
-      voxels[i].Clear();
-      cubes[i].Clear();
+      voxels[i].ClearSDF();
+      voxels[i].ClearMesh();
     }
   }
 };
