@@ -33,26 +33,30 @@ inline Voxel GetVoxel(const HashTableGPU &hash_table,
 
 // TODO: put a dummy here
 __device__
-inline Voxel GetVoxel(const HashTableGPU& hash_table,
-                      BlocksGPU&          blocks,
-                      const HashEntry&    curr_entry,
-                      const uint3         voxel_local_pos) {
-  Voxel v; v.ClearSDF();
-
+inline float GetSDF(const HashTableGPU& hash_table,
+                    BlocksGPU&          blocks,
+                    const HashEntry&    curr_entry,
+                    const uint3         voxel_local_pos,
+                    int &weight) {
+  float sdf = 0.0; weight = 0;
   int3 block_offset = make_int3(voxel_local_pos) / BLOCK_SIDE_LENGTH;
 
   if (block_offset == make_int3(0)) {
     uint i = VoxelLocalPosToIdx(voxel_local_pos);
-    v = blocks[curr_entry.ptr].voxels[i];
+    Voxel& v = blocks[curr_entry.ptr].voxels[i];
+    sdf = v.sdf;
+    weight = v.weight;
   } else {
     HashEntry entry = hash_table.GetEntry(curr_entry.pos + block_offset);
-    if (entry.ptr == FREE_ENTRY) return v;
+    if (entry.ptr == FREE_ENTRY) return 0;
     uint i = VoxelLocalPosToIdx(voxel_local_pos % BLOCK_SIDE_LENGTH);
 
-    v = blocks[entry.ptr].voxels[i];
+    Voxel &v = blocks[entry.ptr].voxels[i];
+    sdf = v.sdf;
+    weight = v.weight;
   }
 
-  return v;
+  return sdf;
 }
 
 __device__

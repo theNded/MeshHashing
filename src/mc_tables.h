@@ -6,6 +6,8 @@
 #ifndef VH_MC_TABLES_H
 #define VH_MC_TABLES_H
 
+#include <vector_types.h>
+
 // Polygonising a scalar field
 // Also known as: "3D Contouring", "Marching Cubes", "Surface Reconstruction" 
 // Written by Paul Bourke
@@ -330,7 +332,7 @@ const static int kTriangleTable[256][16] = {
 // 6 -> 100
 // 7 -> 000
 __device__
-const static int kVtxOffset[8][3] = {
+const static int3 kVtxOffset[8] = {
         {0, 1, 1},
         {1, 1, 1},
         {1, 1, 0},
@@ -355,7 +357,7 @@ const static int kVtxOffset[8][3] = {
 //10 -> 100.y, (6, 2)
 //11 -> 000.y, (7, 3)
 __device__
-const static int kEdgeCubeTable[12][4] = {
+const static uint4 kEdgeCubeTable[12] = {
         {0, 1, 1, 0},
         {1, 1, 0, 2},
         {0, 1, 0, 0},
@@ -371,7 +373,7 @@ const static int kEdgeCubeTable[12][4] = {
 };
 
 __device__
-const static int kEdgeVertexTable[12][2] = {
+const static int2 kEdgeVertexTable[12] = {
         {0, 1},
         {1, 2},
         {2, 3},
@@ -396,13 +398,6 @@ const static short kRegularCubeIndices[6] = {
 __device__
 const static short kSemiRegularCubeIndices[2] = {
     3, 48
-};
-
-const static unsigned char kMCReductionMasks[8][3] = {
-        {0, 0, 0}, {1, 1, 1},
-        {0, 0, 1}, {1, 1, 0},
-        {0, 1, 0}, {1, 0, 1},
-        {1, 0, 0}, {0, 1, 1}
 };
 
 

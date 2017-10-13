@@ -1,5 +1,7 @@
+#include <device_launch_parameters.h>
 #include "map.h"
 #include "sensor.h"
+#include "gradient.h"
 
 #ifndef PINF
 #define PINF  __int_as_float(0x7f800000)
@@ -18,7 +20,8 @@ extern texture<float4, cudaTextureType2D, cudaReadModeElementType> color_texture
 ////////////////////
 __global__
 void UpdateBlocksKernel(CompactHashTableGPU compact_hash_table,
-                        BlocksGPU      blocks,
+                        BlocksGPU           blocks,
+                        MeshGPU             mesh,
                         SensorDataGPU       sensor_data,
                         SensorParams        sensor_params,
                         float4x4            c_T_w) {
@@ -30,6 +33,7 @@ void UpdateBlocksKernel(CompactHashTableGPU compact_hash_table,
   uint local_idx = threadIdx.x;  //inside of an SDF block
   int3 voxel_pos = voxel_base_pos + make_int3(IdxToVoxelLocalPos(local_idx));
 
+  Voxel& this_voxel = blocks[entry.ptr].voxels[local_idx];
   /// 2. Project to camera
   float3 world_pos = VoxelToWorld(voxel_pos);
   float3 camera_pos = c_T_w * world_pos;
@@ -46,8 +50,35 @@ void UpdateBlocksKernel(CompactHashTableGPU compact_hash_table,
   if (depth == MINF || depth == 0.0f || depth >= kSDFParams.sdf_upper_bound)
     return;
 
-  /// 4. Truncate
-  float sdf = depth - camera_pos.z;
+  /// 4. SDF computation
+  float3 dp = ImageReprojectToCamera(image_pos.x, image_pos.y, depth,
+      sensor_params.fx, sensor_params.fy, sensor_params.cx, sensor_params.cy);
+  dp = c_T_w.getInverse() * dp;
+
+  /// Solve (I + \sum \lambda nn^T + ... )x = (dp + \sum \lambda nn^Tv)
+  float3x3 A = float3x3::getIdentity();
+  float3   b = dp;
+  bool addition = false;
+  for (int i = 0; i < N_VERTEX; ++i) {
+    if (this_voxel.vertex_ptrs[i] > 0) {
+      addition = true;
+      Vertex vtx = mesh.vertices[this_voxel.vertex_ptrs[i]];
+      float3 v = vtx.pos;
+      float3 n = vtx.normal;
+
+      float3x3 nnT = float3x3(n.x*n.x, n.x*n.y, n.x*n.z,
+                              n.y*n.x, n.y*n.y, n.y*n.z,
+                              n.z*n.x, n.z*n.y, n.z*n.z);
+      A = A + nnT;
+      b = b + nnT * v;
+    }
+  }
+  if (addition) {
+    dp = A.getInverse() * b;
+  }
+  dp = c_T_w * dp;
+  float sdf = dot(normalize(dp), dp - camera_pos);
+
   uchar weight = max(kSDFParams.weight_sample * 1.5f *
                      (1.0f - NormalizeDepth(depth,
                                             sensor_params.min_depth_range,
@@ -74,8 +105,7 @@ void UpdateBlocksKernel(CompactHashTableGPU compact_hash_table,
   } else {
     delta.color = make_uchar3(0, 255, 0);
   }
-
-  blocks[entry.ptr].voxels[local_idx].Update(delta);
+  this_voxel.Update(delta);
 }
 
 __global__
@@ -214,6 +244,7 @@ void Map::UpdateBlocks(Sensor &sensor) {
   UpdateBlocksKernel <<<grid_size, block_size>>>(
           compact_hash_table_.gpu_data(),
           blocks_.gpu_data(),
+          mesh_.gpu_data(),
           sensor.gpu_data(),
           sensor.sensor_params(), sensor.c_T_w());
   checkCudaErrors(cudaDeviceSynchronize());

@@ -326,6 +326,13 @@ public:
   inline __device__ __host__ float3x3() {
 
   }
+  inline __device__ __host__ float3x3(float v11, float v12, float v13,
+                                      float v21, float v22, float v23,
+                                      float v31, float v32, float v33) {
+    m11 = v11;	m12 = v12;	m13 = v13;
+    m21 = v21;	m22 = v22;	m23 = v23;
+    m31 = v31;	m32 = v32;	m33 = v33;
+  }
   inline __device__ __host__ float3x3(const float values[9]) {
     m11 = values[0];	m12 = values[1];	m13 = values[2];
     m21 = values[3];	m22 = values[4];	m23 = values[5];

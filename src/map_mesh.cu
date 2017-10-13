@@ -71,37 +71,6 @@ inline int AllocateVertexWithMutex(const HashTableGPU &hash_table,
 }
 
 __device__
-inline int AllocateVertex(const HashTableGPU &hash_table,
-                          BlocksGPU& blocks,
-                          MeshGPU& mesh,
-                          Voxel& voxel,
-                          uint vertex_idx,
-                          const float3& vertex_pos,
-                          bool use_fine_gradient) {
-  int ptr = voxel.vertex_ptrs[vertex_idx];
-  if (ptr == FREE_PTR) {
-    ptr = mesh.AllocVertex();
-  }
-
-  if (ptr < 0) printf("Fail to allocate vertex!\n");
-
-  voxel.vertex_ptrs[vertex_idx] = ptr;
-  mesh.vertices[ptr].pos = vertex_pos;
-  if (use_fine_gradient) {
-    mesh.vertices[ptr].normal = GradientAtPoint(hash_table, blocks, vertex_pos);
-  }
-
-  float sdf;
-  Stat  stats;
-  uchar3 color;
-  TrilinearInterpolation(hash_table, blocks, vertex_pos, sdf, stats, color);
-  float3 val = ValToRGB(stats.duration, 0, 100);
-  mesh.vertices[ptr].color = make_float3(val.x, val.y, val.z);
-
-  return ptr;
-}
-
-__device__
 inline int GetVertex(Voxel& voxel, uint& vertex_idx) {
   voxel.ResetMutexes();// ???
 
@@ -192,10 +161,6 @@ void MarchingCubesPass1Kernel(
 
   Voxel &this_voxel = blocks[entry.ptr].voxels[local_idx];
 
-  bool is_border = (voxel_local_pos.x == BLOCK_SIDE_LENGTH-1
-                    || voxel_local_pos.y == BLOCK_SIDE_LENGTH-1
-                    || voxel_local_pos.z == BLOCK_SIDE_LENGTH-1);
-
   //////////
   /// 1. Read the scalar values, see mc_tables.h
   const int   kVertexCount = 8;
@@ -203,73 +168,52 @@ void MarchingCubesPass1Kernel(
   const float kThreshold   = 0.2f;
   const float kIsoLevel    = 0;
 
-  int    w[kVertexCount] = {0};
-  float  d[kVertexCount] = {0};
+  float  d[kVertexCount];
   float3 p[kVertexCount];
 
   short cube_index = 0;
   this_voxel.prev_index = this_voxel.curr_index;
   this_voxel.curr_index = 0;
 
-  this_voxel.dummy = false;
-
-  Voxel v;
   /// Check 8 corners of a cube: are they valid?
   for (int i = 0; i < kVertexCount; ++i) {
-    uint3 offset = make_uint3(kVtxOffset[i][0], kVtxOffset[i][1], kVtxOffset[i][2]);
-    v = GetVoxel(hash_table, blocks, entry, voxel_local_pos + offset);
+    uint3 offset = make_uint3(kVtxOffset[i]);
+    int weight;
 
-    w[i] = v.weight;
-    d[i] = v.sdf;
-    p[i] = world_pos + kVoxelSize * make_float3(offset);
+    d[i] = GetSDF(hash_table, blocks, entry, voxel_local_pos + offset, weight);
+    if (weight == 0)
+      return;
 
-    if (v.weight == 0) {
-      this_voxel.dummy = true;
-    }
+    if (fabs(d[i]) > kThreshold) return;
+
     if (d[i] < kIsoLevel) cube_index |= (1 << i);
+    p[i] = world_pos + kVoxelSize * make_float3(offset);
   }
   this_voxel.curr_index = cube_index;
+  if (cube_index == 0 || cube_index == 255) return;
 
-  /// not border; border but dummy
-  if ((!is_border) || this_voxel.dummy) {
-    uint2 pairs[3] = {{6, 7},
-                      {7, 4},
-                      {7, 3}};
-    uint axises[3] = {0, 2, 1};
+  //int is_noise_bit[8];
+  //RefineMesh(this_voxel.prev_index, this_voxel.curr_index, d, is_noise_bit);
+  //cube_index = this_voxel.curr_index;
+
+  const int kEdgeCount = 12;
 #pragma unroll 1
-    for (int j = 0; j < 3; ++j) {
-      uint x = pairs[j].x, y = pairs[j].y, axis = axises[j];
-      if ((d[x] - kIsoLevel) * (d[y] - kIsoLevel) <= 0 && w[x] && w[y]) {
-        float3 vertex_pos = VertexIntersection(p[x], p[y], d[x], d[y], kIsoLevel);
-        AllocateVertex(hash_table, blocks, mesh,
-                       this_voxel, axis, vertex_pos,
-                       use_fine_gradient);
-      }
+  for (int i = 0; i < kEdgeCount; ++i) {
+    if (kEdgeTable[cube_index] & (1 << i)) {
+      int2  v_idx = kEdgeVertexTable[i];
+      uint4 c_idx = kEdgeCubeTable[i];
+
+      // Special noise-bit interpolation here: extrapolation
+      float3 vertex_pos;
+      vertex_pos = VertexIntersection(p[v_idx.x], p[v_idx.y],
+                                      d[v_idx.x], d[v_idx.y], kIsoLevel);
+
+      Voxel &voxel = GetVoxelRef(hash_table, blocks, entry,
+                                voxel_local_pos + make_uint3(c_idx.x, c_idx.y, c_idx.z));
+      AllocateVertexWithMutex(hash_table, blocks, mesh,
+                              voxel, c_idx.w, vertex_pos,
+                              use_fine_gradient);
     }
-  }
-
-  else {
-    const int kEdgeCount = 12;
-#pragma unroll 1
-    for (int i = 0; i < kEdgeCount; ++i) {
-      if (kEdgeTable[cube_index] & (1 << i)) {
-        int2  v_idx = make_int2(kEdgeVertexTable[i][0], kEdgeVertexTable[i][1]);
-        uint4 c_idx = make_uint4(kEdgeCubeTable[i][0], kEdgeCubeTable[i][1],
-                                 kEdgeCubeTable[i][2], kEdgeCubeTable[i][3]);
-
-        // Special noise-bit interpolation here: extrapolation
-        float3 vertex_pos;
-        vertex_pos = VertexIntersection(p[v_idx.x], p[v_idx.y],
-                                        d[v_idx.x], d[v_idx.y], kIsoLevel);
-
-        Voxel &voxel = GetVoxelRef(hash_table, blocks, entry,
-                                  voxel_local_pos + make_uint3(c_idx.x, c_idx.y, c_idx.z));
-        AllocateVertexWithMutex(hash_table, blocks, mesh,
-                                voxel, c_idx.w, vertex_pos,
-                                use_fine_gradient);
-      }
-    }
-
   }
 }
 
@@ -299,7 +243,7 @@ void MarchingCubesPass2Kernel(
 //  }
 //  blocks[entry.ptr].voxels[local_idx].stats.duration = 0;
 
-  if (this_voxel.dummy || this_voxel.curr_index == 0 || this_voxel.curr_index == 255) {
+  if (this_voxel.curr_index == 0 || this_voxel.curr_index == 255) {
     return;
   }
 
@@ -314,8 +258,7 @@ void MarchingCubesPass2Kernel(
 #pragma unroll 1
   for (int i = 0; i < kEdgeCount; ++i) {
     if (kEdgeTable[this_voxel.curr_index] & (1 << i)) {
-      uint4 c_idx = make_uint4(kEdgeCubeTable[i][0], kEdgeCubeTable[i][1],
-                               kEdgeCubeTable[i][2], kEdgeCubeTable[i][3]);
+      uint4 c_idx = kEdgeCubeTable[i];
       uint3 voxel_p = voxel_local_pos + make_uint3(c_idx.x, c_idx.y, c_idx.z);
       Voxel &voxel = GetVoxelRef(hash_table, blocks, entry, voxel_p);
       vertex_ptr[i] = GetVertex(voxel, c_idx.w);
