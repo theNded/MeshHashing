@@ -45,6 +45,7 @@ struct __ALIGN__(8) Voxel {
   int vertex_mutexes[N_VERTEX];
   int triangle_ptrs[N_TRIANGLE];
 
+  bool dummy;
 #ifdef STATS
   Stat   stats;
 #endif
@@ -86,6 +87,7 @@ struct __ALIGN__(8) Voxel {
 
     curr_index = 0;
     prev_index = 0;
+    dummy = false;
   }
 
   __device__

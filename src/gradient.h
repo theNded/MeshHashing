@@ -69,7 +69,7 @@ inline Voxel& GetVoxelRef(const HashTableGPU& hash_table,
   } else {
     HashEntry entry = hash_table.GetEntry(curr_entry.pos + block_offset);
     if (entry.ptr == FREE_ENTRY) {
-      printf("GetCube: should never reach here!\n");
+      printf("GetVoxelRef: should never reach here!\n");
     }
     uint i = VoxelLocalPosToIdx(voxel_local_pos % BLOCK_SIDE_LENGTH);
     return blocks[entry.ptr].voxels[i];

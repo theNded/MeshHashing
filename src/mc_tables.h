@@ -330,7 +330,7 @@ const static int kTriangleTable[256][16] = {
 // 6 -> 100
 // 7 -> 000
 __device__
-const static int kVertexCubeTable[8][3] = {
+const static int kVtxOffset[8][3] = {
         {0, 1, 1},
         {1, 1, 1},
         {1, 1, 0},
