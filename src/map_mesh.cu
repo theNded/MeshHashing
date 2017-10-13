@@ -37,6 +37,40 @@ float3 VertexIntersection(const float3& p1, const float3 p2,
 }
 
 __device__
+inline int AllocateVertexWithMutex(const HashTableGPU &hash_table,
+                                   BlocksGPU &blocks,
+                                   MeshGPU& mesh,
+                                   Voxel& voxel,
+                                   uint& vertex_idx,
+                                   const float3& vertex_pos,
+                                   bool use_fine_gradient) {
+  int ptr = voxel.vertex_ptrs[vertex_idx];
+  if (ptr == FREE_PTR) {
+    int lock = atomicExch(&voxel.vertex_mutexes[vertex_idx], LOCK_ENTRY);
+    if (lock != LOCK_ENTRY) {
+      ptr = mesh.AllocVertex();
+    } /// Ensure that it is only allocated once
+  }
+
+  if (ptr >= 0) {
+    voxel.vertex_ptrs[vertex_idx] = ptr;
+    mesh.vertices[ptr].pos = vertex_pos;
+    if (use_fine_gradient) {
+      mesh.vertices[ptr].normal = GradientAtPoint(hash_table, blocks, vertex_pos);
+    }
+
+    float sdf;
+    Stat  stats;
+    uchar3 color;
+    TrilinearInterpolation(hash_table, blocks, vertex_pos, sdf, stats, color);
+    float3 val = ValToRGB(stats.duration, 0, 100);
+    mesh.vertices[ptr].color = make_float3(val.x, val.y, val.z);
+  }
+
+  return ptr;
+}
+
+__device__
 inline int AllocateVertex(const HashTableGPU &hash_table,
                           BlocksGPU& blocks,
                           MeshGPU& mesh,
@@ -69,6 +103,8 @@ inline int AllocateVertex(const HashTableGPU &hash_table,
 
 __device__
 inline int GetVertex(Voxel& voxel, uint& vertex_idx) {
+  voxel.ResetMutexes();// ???
+
   // It is guaranteed to be non-negative
   return voxel.vertex_ptrs[vertex_idx];
 }
@@ -156,6 +192,10 @@ void MarchingCubesPass1Kernel(
 
   Voxel &this_voxel = blocks[entry.ptr].voxels[local_idx];
 
+  bool is_border = (voxel_local_pos.x == BLOCK_SIDE_LENGTH-1
+                    || voxel_local_pos.y == BLOCK_SIDE_LENGTH-1
+                    || voxel_local_pos.z == BLOCK_SIDE_LENGTH-1);
+
   //////////
   /// 1. Read the scalar values, see mc_tables.h
   const int   kVertexCount = 8;
@@ -190,16 +230,46 @@ void MarchingCubesPass1Kernel(
   }
   this_voxel.curr_index = cube_index;
 
-  uint2 pairs[3] = {{6,7}, {7,4}, {7,3}};
-  uint axises[3] = {0, 2, 1};
-  for (int j = 0; j < 3; ++j) {
-    uint x = pairs[j].x, y = pairs[j].y, axis = axises[j];
-    if ((d[x] - kIsoLevel) * (d[y] - kIsoLevel) <= 0 && w[x] && w[y]) {
-      float3 vertex_pos = VertexIntersection(p[x], p[y], d[x], d[y], kIsoLevel);
-      AllocateVertex(hash_table, blocks, mesh,
-                     this_voxel, axis, vertex_pos,
-                     use_fine_gradient);
+  /// not border; border but dummy
+  if ((!is_border) || this_voxel.dummy) {
+    uint2 pairs[3] = {{6, 7},
+                      {7, 4},
+                      {7, 3}};
+    uint axises[3] = {0, 2, 1};
+#pragma unroll 1
+    for (int j = 0; j < 3; ++j) {
+      uint x = pairs[j].x, y = pairs[j].y, axis = axises[j];
+      if ((d[x] - kIsoLevel) * (d[y] - kIsoLevel) <= 0 && w[x] && w[y]) {
+        float3 vertex_pos = VertexIntersection(p[x], p[y], d[x], d[y], kIsoLevel);
+        AllocateVertex(hash_table, blocks, mesh,
+                       this_voxel, axis, vertex_pos,
+                       use_fine_gradient);
+      }
     }
+  }
+
+  else {
+    const int kEdgeCount = 12;
+#pragma unroll 1
+    for (int i = 0; i < kEdgeCount; ++i) {
+      if (kEdgeTable[cube_index] & (1 << i)) {
+        int2  v_idx = make_int2(kEdgeVertexTable[i][0], kEdgeVertexTable[i][1]);
+        uint4 c_idx = make_uint4(kEdgeCubeTable[i][0], kEdgeCubeTable[i][1],
+                                 kEdgeCubeTable[i][2], kEdgeCubeTable[i][3]);
+
+        // Special noise-bit interpolation here: extrapolation
+        float3 vertex_pos;
+        vertex_pos = VertexIntersection(p[v_idx.x], p[v_idx.y],
+                                        d[v_idx.x], d[v_idx.y], kIsoLevel);
+
+        Voxel &voxel = GetVoxelRef(hash_table, blocks, entry,
+                                  voxel_local_pos + make_uint3(c_idx.x, c_idx.y, c_idx.z));
+        AllocateVertexWithMutex(hash_table, blocks, mesh,
+                                voxel, c_idx.w, vertex_pos,
+                                use_fine_gradient);
+      }
+    }
+
   }
 }
 
@@ -249,9 +319,6 @@ void MarchingCubesPass2Kernel(
       uint3 voxel_p = voxel_local_pos + make_uint3(c_idx.x, c_idx.y, c_idx.z);
       Voxel &voxel = GetVoxelRef(hash_table, blocks, entry, voxel_p);
       vertex_ptr[i] = GetVertex(voxel, c_idx.w);
-      if (vertex_ptr[i] < 0) {
-        printf("Error!\n");
-      }
     }
   }
 
