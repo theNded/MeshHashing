@@ -190,12 +190,14 @@ int main(int argc, char** argv) {
 //      map.PlaneFitting(camera_pos);
 
     timer_meshing.Tick();
-    map.MarchingCubes();
 
 
+    // TODO: add flag to blocks to deal with boundary conditions
     if (! args.mesh_range) {
       map.CollectAllBlocks();
     }
+    map.MarchingCubes();
+
     map.GetBoundingBoxes();
     double meshing_period = timer_meshing.Tock();
     meshing_seconds += meshing_period;

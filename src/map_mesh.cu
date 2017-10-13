@@ -250,7 +250,7 @@ void MarchingCubesPass2Kernel(
       Voxel &voxel = GetVoxelRef(hash_table, blocks, entry, voxel_p);
       vertex_ptr[i] = GetVertex(voxel, c_idx.w);
       if (vertex_ptr[i] < 0) {
-        printf("%d %d %d %d\n", i, voxel_p.x, voxel_p.y, voxel_p.z);
+        printf("Error!\n");
       }
     }
   }
@@ -401,8 +401,8 @@ void Map::MarchingCubes() {
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
   double pass1_seconds = timer.Tock();
-//  LOG(INFO) << "Pass1 duration: " << pass1_seconds;
-//  time_profile_ << pass1_seconds << " ";
+  LOG(INFO) << "Pass1 duration: " << pass1_seconds;
+  time_profile_ << pass1_seconds << " ";
 
   timer.Tick();
   MarchingCubesPass2Kernel<<<grid_size, block_size>>>(
@@ -414,8 +414,8 @@ void Map::MarchingCubes() {
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
   double pass2_seconds = timer.Tock();
-//  LOG(INFO) << "Pass2 duration: " << pass2_seconds;
-//  time_profile_ << pass2_seconds << "\n";
+  LOG(INFO) << "Pass2 duration: " << pass2_seconds;
+  time_profile_ << pass2_seconds << "\n";
 
 
   RecycleTrianglesKernel<<<grid_size, block_size>>>(
