@@ -52,47 +52,12 @@ void UpdateBlocksKernel(CompactHashTableGPU compact_hash_table,
     return;
 
   /// 4. SDF computation
-  float3 dp = ImageReprojectToCamera(image_pos.x, image_pos.y, depth,
-      sensor_params.fx, sensor_params.fy, sensor_params.cx, sensor_params.cy);
-  float3 dpw = c_T_w.getInverse() * dp;
-
-  /// Solve (I + \sum \lambda nn^T + ... )x = (dp + \sum \lambda nn^Tv)
-  float3x3 A = float3x3::getIdentity();
-  float3   b = dpw;
-  float w = 1;
-  bool addition = false;
-  for (int i = 0; i < N_VERTEX; ++i) {
-    if (this_voxel.vertex_ptrs[i] > 0) {
-      addition = true;
-      Vertex vtx = mesh.vertices[this_voxel.vertex_ptrs[i]];
-      float3 v = vtx.pos;
-      float3 n = vtx.normal;
-      w += dot(c_T_w * n, normalize(-dp));
-      float3x3 nnT = float3x3(n.x*n.x, n.x*n.y, n.x*n.z,
-                              n.y*n.x, n.y*n.y, n.y*n.z,
-                              n.z*n.x, n.z*n.y, n.z*n.z);
-      A = A + nnT;
-      b = b + nnT * v;
-    }
-  }
-
-  // Best estimation for dp
-  if (addition) {
-    dpw = A.getInverse() * b;
-  }
-  dp = c_T_w * dpw;
-  float3 np = normalize(-dp);
-
-  //printf("%f %f %f\n", np.x, np.y, np.z)
-  float sdf = dot(normalize(-dp), camera_pos - dp);
-
-  uchar weight = (uchar)fmax(1.0f, kSDFParams.weight_sample * w);
-
-//  uchar weight = (uchar)fmax(kSDFParams.weight_sample * 1.5f *
-//                     (1.0f - NormalizeDepth(depth,
-//                                            sensor_params.min_depth_range,
-//                                            sensor_params.max_depth_range)),
-//                     1.0f);
+  float sdf = depth - camera_pos.z;
+  uchar weight = (uchar)fmax(kSDFParams.weight_sample * 1.5f *
+                     (1.0f - NormalizeDepth(depth,
+                                            sensor_params.min_depth_range,
+                                            sensor_params.max_depth_range)),
+                     1.0f);
   float truncation = truncate_distance(depth);
   if (sdf <= -truncation)
     return;
