@@ -31,7 +31,7 @@ bounding_box:    0
 ray_casting:     0
 
 # Result saving
-record_video:    0
+record_video:    1
 save_mesh:       1
 filename_prefix: "copyroom-not-refined"
 time_profile:    "tum3-nhm"

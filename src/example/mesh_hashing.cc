@@ -125,7 +125,7 @@ int main(int argc, char** argv) {
   cv::VideoWriter writer;
   cv::Mat screen;
   if (args.record_video) {
-    writer = cv::VideoWriter("../result/3dv/" + args.filename_prefix + ".avi",
+    writer = cv::VideoWriter("../result/" + args.filename_prefix + ".avi",
                              CV_FOURCC('X','V','I','D'),
                              30, cv::Size(config.sensor_params.width * 2,
                                           config.sensor_params.height * 2));
@@ -318,7 +318,7 @@ int main(int argc, char** argv) {
 //  debugger.DebugAll();
 #endif
   if (args.save_mesh) {
-    map.SaveMesh("../result/3dv/" + args.filename_prefix + ".obj");
+    map.SaveMesh("../result/" + args.filename_prefix + ".obj");
   }
 
   LOG(INFO) << (all_seconds - compressing_seconds)/ frame_count << "/" << all_seconds / frame_count;

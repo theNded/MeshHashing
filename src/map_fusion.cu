@@ -20,6 +20,7 @@ extern texture<float4, cudaTextureType2D, cudaReadModeElementType> color_texture
 ////////////////////
 __global__
 void UpdateBlocksKernel(CompactHashTableGPU compact_hash_table,
+                        HashTableGPU        hash_table,
                         BlocksGPU           blocks,
                         MeshGPU             mesh,
                         SensorDataGPU       sensor_data,
@@ -53,11 +54,12 @@ void UpdateBlocksKernel(CompactHashTableGPU compact_hash_table,
   /// 4. SDF computation
   float3 dp = ImageReprojectToCamera(image_pos.x, image_pos.y, depth,
       sensor_params.fx, sensor_params.fy, sensor_params.cx, sensor_params.cy);
-  dp = c_T_w.getInverse() * dp;
+  float3 dpw = c_T_w.getInverse() * dp;
 
   /// Solve (I + \sum \lambda nn^T + ... )x = (dp + \sum \lambda nn^Tv)
   float3x3 A = float3x3::getIdentity();
-  float3   b = dp;
+  float3   b = dpw;
+  float w = 1;
   bool addition = false;
   for (int i = 0; i < N_VERTEX; ++i) {
     if (this_voxel.vertex_ptrs[i] > 0) {
@@ -65,7 +67,7 @@ void UpdateBlocksKernel(CompactHashTableGPU compact_hash_table,
       Vertex vtx = mesh.vertices[this_voxel.vertex_ptrs[i]];
       float3 v = vtx.pos;
       float3 n = vtx.normal;
-
+      w += dot(c_T_w * n, normalize(-dp));
       float3x3 nnT = float3x3(n.x*n.x, n.x*n.y, n.x*n.z,
                               n.y*n.x, n.y*n.y, n.y*n.z,
                               n.z*n.x, n.z*n.y, n.z*n.z);
@@ -73,18 +75,24 @@ void UpdateBlocksKernel(CompactHashTableGPU compact_hash_table,
       b = b + nnT * v;
     }
   }
+
+  // Best estimation for dp
   if (addition) {
-    dp = A.getInverse() * b;
+    dpw = A.getInverse() * b;
   }
-  dp = c_T_w * dp;
-  float sdf = dot(normalize(dp), dp - camera_pos);
+  dp = c_T_w * dpw;
+  float3 np = normalize(-dp);
 
-  uchar weight = max(kSDFParams.weight_sample * 1.5f *
-                     (1.0f - NormalizeDepth(depth,
-                                            sensor_params.min_depth_range,
-                                            sensor_params.max_depth_range)),
-                     1.0f);
+  //printf("%f %f %f\n", np.x, np.y, np.z)
+  float sdf = dot(normalize(-dp), camera_pos - dp);
 
+  uchar weight = (uchar)fmax(1.0f, kSDFParams.weight_sample * w);
+
+//  uchar weight = (uchar)fmax(kSDFParams.weight_sample * 1.5f *
+//                     (1.0f - NormalizeDepth(depth,
+//                                            sensor_params.min_depth_range,
+//                                            sensor_params.max_depth_range)),
+//                     1.0f);
   float truncation = truncate_distance(depth);
   if (sdf <= -truncation)
     return;
@@ -243,6 +251,7 @@ void Map::UpdateBlocks(Sensor &sensor) {
   const dim3 block_size(threads_per_block, 1);
   UpdateBlocksKernel <<<grid_size, block_size>>>(
           compact_hash_table_.gpu_data(),
+          hash_table_.gpu_data(),
           blocks_.gpu_data(),
           mesh_.gpu_data(),
           sensor.gpu_data(),
