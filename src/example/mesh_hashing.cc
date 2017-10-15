@@ -318,7 +318,7 @@ int main(int argc, char** argv) {
 //  debugger.DebugAll();
 #endif
   if (args.save_mesh) {
-    map.SaveMesh("../result/" + args.filename_prefix + ".obj");
+    map.SavePly("../result/" + args.filename_prefix + ".ply");
   }
 
   LOG(INFO) << (all_seconds - compressing_seconds)/ frame_count << "/" << all_seconds / frame_count;

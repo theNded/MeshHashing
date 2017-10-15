@@ -4,7 +4,7 @@
 # 4   - SUN3D
 # 5   - SUN3D_ORIGINAL
 # 6   - PKU
-dataset_type:    4
+dataset_type:    0
 
 # -----------
 # Render options
@@ -31,9 +31,9 @@ bounding_box:    0
 ray_casting:     0
 
 # Result saving
-record_video:    1
-save_mesh:       1
-filename_prefix: "copyroom-not-refined"
+record_video:    0
+save_mesh:       0
+filename_prefix: "lounge-new"
 time_profile:    "tum3-nhm"
 memo_profile:    "tum3-nhm"
 

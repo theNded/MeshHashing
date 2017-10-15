@@ -74,6 +74,7 @@ public:
 
   void CompressMesh(int3 &stats);
   void SaveMesh(std::string path);
+  void SavePly(std::string path);
 
 
 ////////////////////
