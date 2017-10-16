@@ -81,7 +81,7 @@ MESSAGE(STATUS ${CUDA_TOOLKIT_INCLUDE})
 
 INCLUDE_DIRECTORIES(
         ${VH}/include
-        ${VH}/include/opengl
+        ${VH}/include/opengl-wrapper/include
         ${VH}/include/cuda
         ${GLOG_INCLUDE_DIRS}
         ${CUDA_TOOLKIT_INCLUDE})
@@ -89,12 +89,13 @@ INCLUDE_DIRECTORIES(
 #----------
 ## Building Libraries
 ### 1. OpenGL util
+ADD_DEFINITIONS(-DUSE_CUDA)
 ADD_LIBRARY(gl-util
-        ${VH}/include/opengl/args.cc
-        ${VH}/include/opengl/program.cc
-        ${VH}/include/opengl/window.cc
-        ${VH}/include/opengl/uniforms.cc
-        ${VH}/include/opengl/camera.cc)
+        ${VH}/include/opengl-wrapper/src/args.cc
+        ${VH}/include/opengl-wrapper/src/program.cc
+        ${VH}/include/opengl-wrapper/src/window.cc
+        ${VH}/include/opengl-wrapper/src/uniforms.cc
+        ${VH}/include/opengl-wrapper/src/camera.cc)
 TARGET_LINK_LIBRARIES(gl-util
         ${OPENGL_DEPENDENCIES}
         ${GLOG_LIBRARIES})

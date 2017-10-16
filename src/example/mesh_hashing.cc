@@ -14,23 +14,20 @@
 #include <cuda_runtime.h>
 #include <glog/logging.h>
 #include <opencv2/opencv.hpp>
-#include "../sensor.h"
-#include "../ray_caster.h"
 #include <timer.h>
 #include <queue>
+
+#include "../sensor.h"
+#include "../ray_caster.h"
 #include "../tool/cpp/debugger.h"
 
 #include "dataset_manager.h"
-
-#include "../opengl/window.h"
-#include "../opengl/program.h"
-#include "../opengl/camera.h"
-#include "../opengl/uniforms.h"
-#include "../opengl/args.h"
+#include "glwrapper.h"
 
 
 #define DEBUG
 
+const std::string kShaderPath = "../include/opengl-wrapper/shader";
 /// Refer to constant.cu
 extern void SetConstantSDFParams(const SDFParams& params);
 
@@ -70,14 +67,14 @@ int main(int argc, char** argv) {
   gl::Program program;
   gl::Uniforms uniforms;
   if (args.render_type == 0) {
-    program.Load("../shader/multi_light_model_vertex.glsl", gl::kVertexShader);
+    program.Load(kShaderPath + "/model_multi_light_vertex.glsl", gl::kVertexShader);
     program.ReplaceMacro("LIGHT_COUNT", ss.str(), gl::kVertexShader);
-    program.Load("../shader/multi_light_model_fragment.glsl", gl::kFragmentShader);
+    program.Load(kShaderPath + "/model_multi_light_fragment.glsl", gl::kFragmentShader);
     program.ReplaceMacro("LIGHT_COUNT", ss.str(), gl::kFragmentShader);
     program.Build();
   } else {
-    program.Load("../shader/mesh_vc_vertex.glsl", gl::kVertexShader);
-    program.Load("../shader/mesh_vc_fragment.glsl", gl::kFragmentShader);
+    program.Load(kShaderPath + "/mesh_vc_vertex.glsl", gl::kVertexShader);
+    program.Load(kShaderPath + "/mesh_vc_fragment.glsl", gl::kFragmentShader);
     program.Build();
   }
   uniforms.GetLocation(program.id(), "mvp", gl::kMatrix4f);
@@ -98,8 +95,8 @@ int main(int argc, char** argv) {
                     config.mesh_params.max_triangle_count);
 
   gl::Program bbox_program;
-  bbox_program.Load("../shader/line_vertex.glsl", gl::kVertexShader);
-  bbox_program.Load("../shader/line_fragment.glsl", gl::kFragmentShader);
+  bbox_program.Load(kShaderPath + "/line_vertex.glsl", gl::kVertexShader);
+  bbox_program.Load(kShaderPath + "/line_fragment.glsl", gl::kFragmentShader);
   bbox_program.Build();
 
   gl::Args bbox_args(1, true);
