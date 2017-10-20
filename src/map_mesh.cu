@@ -178,10 +178,10 @@ void MarchingCubesPass1Kernel(
   /// Check 8 corners of a cube: are they valid?
   for (int i = 0; i < kVertexCount; ++i) {
     uint3 offset = make_uint3(kVtxOffset[i]);
-    int weight;
+    float weight;
 
     d[i] = GetSDF(hash_table, blocks, entry, voxel_local_pos + offset, weight);
-    if (weight == 0)
+    if (weight < EPSILON)
       return;
 
     if (fabs(d[i]) > kThreshold) return;

@@ -37,7 +37,7 @@ inline float GetSDF(const HashTableGPU& hash_table,
                     BlocksGPU&          blocks,
                     const HashEntry&    curr_entry,
                     const uint3         voxel_local_pos,
-                    int &weight) {
+                    float &weight) {
   float sdf = 0.0; weight = 0;
   int3 block_offset = make_int3(voxel_local_pos) / BLOCK_SIDE_LENGTH;
 
@@ -109,7 +109,7 @@ inline bool TrilinearInterpolation(const HashTableGPU &hash_table,
     float3 r = (make_float3(1.0f) - mask) * (make_float3(1.0) - ratio)
              + (mask) * ratio;
     v = GetVoxel(hash_table, blocks, pos_corner + mask * offset);
-    if (v.weight == 0) return false;
+    if (v.weight < EPSILON) return false;
     v_color = make_float3(v.color.x, v.color.y, v.color.z);
     w = r.x * r.y * r.z;
     sdf += w * v.sdf;
@@ -145,7 +145,7 @@ inline bool TrilinearInterpolation(const HashTableGPU &hash_table,
     float3 r = (make_float3(1.0f) - mask) * (make_float3(1.0) - ratio)
                + (mask) * ratio;
     v = GetVoxel(hash_table, blocks, pos_corner + mask * offset);
-    if (v.weight == 0) return false;
+    if (v.weight < EPSILON) return false;
     v_color = make_float3(v.color.x, v.color.y, v.color.z);
     w = r.x * r.y * r.z;
     sdf += w * v.sdf;

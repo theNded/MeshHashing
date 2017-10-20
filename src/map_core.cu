@@ -29,14 +29,9 @@ void StarveOccupiedBlocksKernel(CompactHashTableGPU compact_hash_table,
 
   const uint idx = blockIdx.x;
   const HashEntry& entry = compact_hash_table.compacted_entries[idx];
-  uchar weight = blocks[entry.ptr].voxels[threadIdx.x].weight;
-  weight = max(0, (int)weight - 1);
+  float weight = blocks[entry.ptr].voxels[threadIdx.x].weight;
+  weight = fmaxf(0, weight - 1);
   blocks[entry.ptr].voxels[threadIdx.x].weight = weight;
-
-//  uchar2 sweight = blocks[entry.ptr].voxels[threadIdx.x].sweight;
-//  sweight.x = max(0, (int)sweight.x-1);
-//  sweight.y = max(0, (int)sweight.y-1);
-//  blocks[entry.ptr].voxels[threadIdx.x].sweight = sweight;
 }
 
 /// Collect dead voxels
@@ -53,15 +48,15 @@ void CollectGarbageBlocksKernel(CompactHashTableGPU compact_hash_table,
   //short c1 = blocks[entry.ptr].cubes[2*threadIdx.x+1].curr_index;
 
   float sdf0 = v0.sdf, sdf1 = v1.sdf;
-  if (v0.weight == 0)	sdf0 = PINF;
-  if (v1.weight == 0)	sdf1 = PINF;
+  if (v0.weight < EPSILON)	sdf0 = PINF;
+  if (v1.weight < EPSILON)	sdf1 = PINF;
 
   // __shared__ int    shared_valid_triangle[BLOCK_SIZE / 2];
   __shared__ float	shared_min_sdf   [BLOCK_SIZE / 2];
-  __shared__ uint		shared_max_weight[BLOCK_SIZE / 2];
+  __shared__ float	shared_max_weight[BLOCK_SIZE / 2];
   // shared_valid_triangle[threadIdx.x] = (c0 != 0) + (c1 != 0);
   shared_min_sdf[threadIdx.x] = fminf(fabsf(sdf0), fabsf(sdf1));
-  shared_max_weight[threadIdx.x] = max(v0.weight, v1.weight);
+  shared_max_weight[threadIdx.x] = fmaxf(v0.weight, v1.weight);
 
   /// reducing operation
 #pragma unroll 1
@@ -72,8 +67,8 @@ void CollectGarbageBlocksKernel(CompactHashTableGPU compact_hash_table,
       // shared_valid_triangle[threadIdx.x] += shared_valid_triangle[threadIdx.x-stride/2];
       shared_min_sdf[threadIdx.x] = fminf(shared_min_sdf[threadIdx.x-stride/2],
                                           shared_min_sdf[threadIdx.x]);
-      shared_max_weight[threadIdx.x] = max(shared_max_weight[threadIdx.x-stride/2],
-                                           shared_max_weight[threadIdx.x]);
+      shared_max_weight[threadIdx.x] = fmaxf(shared_max_weight[threadIdx.x-stride/2],
+                                             shared_max_weight[threadIdx.x]);
     }
   }
   __syncthreads();
@@ -81,14 +76,14 @@ void CollectGarbageBlocksKernel(CompactHashTableGPU compact_hash_table,
   if (threadIdx.x == blockDim.x - 1) {
     //int valid_triangles = shared_valid_triangle[threadIdx.x];
     float min_sdf = shared_min_sdf[threadIdx.x];
-    uint max_weight = shared_max_weight[threadIdx.x];
+    float max_weight = shared_max_weight[threadIdx.x];
 
     // TODO(wei): check this weird reference
     float t = truncate_distance(5.0f);
 
     // TODO(wei): add || valid_triangles == 0 when memory leak is dealt with
     compact_hash_table.entry_recycle_flags[idx] =
-            (min_sdf >= t || max_weight == 0) ? 1 : 0;
+            (min_sdf >= t || max_weight < EPSILON) ? 1 : 0;
 
   }
 }

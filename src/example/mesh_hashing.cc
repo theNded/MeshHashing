@@ -57,7 +57,7 @@ int main(int argc, char** argv) {
   rgbd_data.LoadDataset(dataset_type);
 
   gl::Window window("Mesh", config.sensor_params.width * 2, config.sensor_params.height * 2);
-  gl::Camera camera(window.width(), window.height());
+  gl::Camera camera(window.visual_width(), window.visual_height());
   camera.SwitchInteraction(true);
   glm::mat4 p = camera.projection();
   glm::mat4 m = glm::mat4(1.0f);

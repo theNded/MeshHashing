@@ -464,6 +464,9 @@ static const char *_cudaGetErrorEnum(CUresult error)
         case CUDA_ERROR_NOT_SUPPORTED:
             return "CUDA_ERROR_NOT_SUPPORTED";
 
+        case CUDA_ERROR_NVLINK_UNCORRECTABLE:
+            return "CUDA_ERROR_NVLINK_UNCORRECTABLE";
+
         case CUDA_ERROR_UNKNOWN:
             return "CUDA_ERROR_UNKNOWN";
     }

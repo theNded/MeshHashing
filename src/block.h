@@ -38,14 +38,13 @@ struct __ALIGN__(4) Stat {
 
 struct __ALIGN__(8) Voxel {
   float  sdf;    // signed distance function
-  uchar  weight;  // accumulated sdf weight
+  float  weight;
   uchar3 color;  // color
 
   int vertex_ptrs[N_VERTEX];
   int vertex_mutexes[N_VERTEX];
   int triangle_ptrs[N_TRIANGLE];
 
-  bool dummy;
 #ifdef STATS
   Stat   stats;
 #endif
@@ -87,7 +86,6 @@ struct __ALIGN__(8) Voxel {
 
     curr_index = 0;
     prev_index = 0;
-    dummy = false;
   }
 
   __device__
@@ -99,7 +97,7 @@ struct __ALIGN__(8) Voxel {
 
     sdf = (sdf * (float)weight + delta.sdf * (float)delta.weight)
           / ((float)weight + (float)delta.weight);
-    weight = min(255, (uint)weight + (uint)delta.weight);
+    weight = weight + delta.weight;
   }
 };
 

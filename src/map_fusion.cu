@@ -92,11 +92,11 @@ void UpdateBlocksKernel(CompactHashTableGPU compact_hash_table,
 
   //printf("%f %f %f\n", np.x, np.y, np.z)
   //
-  float sdf = dot(normalize(-dp), camera_pos - dp);
-  //float sdf = depth - camera_pos.z;
+  //float sdf = dot(normalize(-dp), camera_pos - dp);
+  float sdf = depth - camera_pos.z;
   //uchar weight = (uchar)fmax(1.0f, kSDFParams.weight_sample * wn * wd);
 
-  uchar weight = (uchar)fmax(kSDFParams.weight_sample * 1.5f *
+  float weight = (uchar)fmax(kSDFParams.weight_sample * 1.5f *
                      (1.0f - NormalizeDepth(depth,
                                             sensor_params.min_depth_range,
                                             sensor_params.max_depth_range)),
