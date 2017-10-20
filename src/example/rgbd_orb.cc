@@ -30,7 +30,7 @@
 #include <glog/logging.h>
 
 #include "../params.h"
-#include "dataset_manager.h"
+#include "../dataset_manager.h"
 #include "../map.h"
 #include "../sensor.h"
 #include "../ray_caster.h"

@@ -9,9 +9,9 @@
 
 #include <vector>
 #include <unordered_map>
-#include "../../src/hash_table.h"
-#include "../../src/block.h"
-#include "../../src/mesh.h"
+#include "hash_table.h"
+#include "block.h"
+#include "mesh.h"
 
 
 struct Hash3D {

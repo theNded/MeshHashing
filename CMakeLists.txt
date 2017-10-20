@@ -80,9 +80,8 @@ SET(VH ${PROJECT_SOURCE_DIR})
 MESSAGE(STATUS ${CUDA_TOOLKIT_INCLUDE})
 
 INCLUDE_DIRECTORIES(
-        ${VH}/include
-        ${VH}/include/opengl-wrapper/include
-        ${VH}/include/cuda
+        ${VH}/src/opengl-wrapper/include
+        ${VH}/src/cuda
         ${GLOG_INCLUDE_DIRS}
         ${CUDA_TOOLKIT_INCLUDE})
 
@@ -90,11 +89,11 @@ INCLUDE_DIRECTORIES(
 ## Building Libraries
 ### 1. OpenGL util
 ADD_LIBRARY(gl-util
-        ${VH}/include/opengl-wrapper/src/args.cc
-        ${VH}/include/opengl-wrapper/src/program.cc
-        ${VH}/include/opengl-wrapper/src/window.cc
-        ${VH}/include/opengl-wrapper/src/uniforms.cc
-        ${VH}/include/opengl-wrapper/src/camera.cc)
+        ${VH}/src/opengl-wrapper/src/args.cc
+        ${VH}/src/opengl-wrapper/src/program.cc
+        ${VH}/src/opengl-wrapper/src/window.cc
+        ${VH}/src/opengl-wrapper/src/uniforms.cc
+        ${VH}/src/opengl-wrapper/src/camera.cc)
 SET_TARGET_PROPERTIES(gl-util PROPERTIES COMPILE_DEFINITIONS USE_CUDA)
 TARGET_LINK_LIBRARIES(gl-util
         ${OPENGL_DEPENDENCIES}
@@ -121,7 +120,7 @@ TARGET_LINK_LIBRARIES(mesh-hashing-cuda
 
 ### 3. C++
 ADD_LIBRARY(mesh-hashing
-        ${VH}/include/dataset_manager.cc)
+        ${VH}/src/dataset_manager.cc)
         #${VH}/tool/cpp/debugger.cc)
 TARGET_LINK_LIBRARIES(mesh-hashing
         mesh-hashing-cuda
@@ -137,7 +136,7 @@ TARGET_LINK_LIBRARIES(cuda_gl_interp
         ${GLOG_LIBRARIES})
 
 ADD_EXECUTABLE(block_visualizer src/unit_test/block_visualizer.cc
-        include/timer.h
+        src/timer.h
         src/unit_test/video_clip.cc
         src/projection_utils.h)
 TARGET_LINK_LIBRARIES(block_visualizer

@@ -14,20 +14,19 @@
 #include <cuda_runtime.h>
 #include <glog/logging.h>
 #include <opencv2/opencv.hpp>
-#include <timer.h>
+#include "../timer.h"
 #include <queue>
 
 #include "../sensor.h"
 #include "../ray_caster.h"
-#include "../tool/cpp/debugger.h"
 
-#include "dataset_manager.h"
+#include "../dataset_manager.h"
 #include "glwrapper.h"
 
 
 #define DEBUG_
 
-const std::string kShaderPath = "../include/opengl-wrapper/shader";
+const std::string kShaderPath = "../src/opengl-wrapper/shader";
 /// Refer to constant.cu
 
 int main(int argc, char** argv) {

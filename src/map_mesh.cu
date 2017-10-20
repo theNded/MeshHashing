@@ -2,7 +2,7 @@
 #include <unordered_map>
 #include "color_util.h"
 #include <chrono>
-#include <timer.h>
+#include "timer.h"
 #include <ctime>
 #include <curand_kernel.h>
 #include <device_launch_parameters.h>

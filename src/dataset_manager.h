@@ -10,7 +10,7 @@
 #include <opencv2/opencv.hpp>
 
 #include "matrix.h"
-#include "../src/params.h"
+#include "params.h"
 
 enum DatasetType {
   ICL = 0,
