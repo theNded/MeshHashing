@@ -6,24 +6,9 @@
 #include <helper_cuda.h>
 #include <helper_math.h>
 #include <glog/logging.h>
+#include <driver_types.h>
 
 #define MINF __int_as_float(0xff800000)
-
-////////////////////
-/// Texture
-////////////////////
-texture<float, cudaTextureType2D, cudaReadModeElementType> depth_texture;
-texture<float4, cudaTextureType2D, cudaReadModeElementType> color_texture;
-void Sensor::BindGPUTexture() {
-  checkCudaErrors(cudaBindTextureToArray(depth_texture,
-                                         gpu_data_.depth_array,
-                                         gpu_data_.depth_channel_desc));
-  checkCudaErrors(cudaBindTextureToArray(color_texture,
-                                         gpu_data_.color_array,
-                                         gpu_data_.color_channel_desc));
-  depth_texture.filterMode = cudaFilterModePoint;
-  color_texture.filterMode = cudaFilterModePoint;
-}
 
 ////////////////////
 /// Device code
@@ -110,15 +95,19 @@ Sensor::Sensor(SensorParams &sensor_params) {
   checkCudaErrors(cudaMalloc(&gpu_data_.color_image, sizeof(float4) * image_size));
 
   gpu_data_.depth_channel_desc
-          = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
+      = cudaCreateChannelDesc(32, 0, 0, 0, cudaChannelFormatKindFloat);
   checkCudaErrors(cudaMallocArray(&gpu_data_.depth_array,
                                   &gpu_data_.depth_channel_desc,
                                   sensor_params_.width, sensor_params_.height));
   gpu_data_.color_channel_desc
-          = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
+      = cudaCreateChannelDesc(32, 32, 32, 32, cudaChannelFormatKindFloat);
   checkCudaErrors(cudaMallocArray(&gpu_data_.color_array,
                                   &gpu_data_.color_channel_desc,
                                   sensor_params_.width, sensor_params_.height));
+
+  gpu_data_.depth_texture = 0;
+  gpu_data_.color_texture = 0;
+
   BindGPUTexture();
 }
 
@@ -131,6 +120,34 @@ Sensor::~Sensor() {
   checkCudaErrors(cudaFree(gpu_data_.color_image));
   checkCudaErrors(cudaFreeArray(gpu_data_.depth_array));
   checkCudaErrors(cudaFreeArray(gpu_data_.color_array));
+}
+
+void Sensor::BindGPUTexture() {
+  cudaResourceDesc depth_resource;
+  memset(&depth_resource, 0, sizeof(depth_resource));
+  depth_resource.resType = cudaResourceTypeArray;
+  depth_resource.res.array.array = gpu_data_.depth_array;
+
+  cudaTextureDesc depth_tex_desc;
+  memset(&depth_tex_desc, 0, sizeof(depth_tex_desc));
+  depth_tex_desc.readMode = cudaReadModeElementType;
+
+  if (gpu_data_.depth_texture != 0)
+    checkCudaErrors(cudaDestroyTextureObject(gpu_data_.depth_texture));
+  checkCudaErrors(cudaCreateTextureObject(&gpu_data_.depth_texture, &depth_resource, &depth_tex_desc, NULL));
+
+  cudaResourceDesc color_resource;
+  memset(&color_resource, 0, sizeof(color_resource));
+  color_resource.resType = cudaResourceTypeArray;
+  color_resource.res.array.array = gpu_data_.color_array;
+
+  cudaTextureDesc color_tex_desc;
+  memset(&color_tex_desc, 0, sizeof(color_tex_desc));
+  color_tex_desc.readMode = cudaReadModeElementType;
+
+  if (gpu_data_.color_texture != 0)
+    checkCudaErrors(cudaDestroyTextureObject(gpu_data_.color_texture));
+  checkCudaErrors(cudaCreateTextureObject(&gpu_data_.color_texture, &color_resource, &color_tex_desc, NULL));
 }
 
 int Sensor::Process(cv::Mat &depth, cv::Mat &color) {
@@ -152,6 +169,7 @@ int Sensor::Process(cv::Mat &depth, cv::Mat &color) {
   checkCudaErrors(cudaMemcpyToArray(gpu_data_.color_array, 0, 0, gpu_data_.color_image,
                                     sizeof(float4)*sensor_params_.height*sensor_params_.width,
                                     cudaMemcpyDeviceToDevice));
+  BindGPUTexture();
   return 0;
 }
 

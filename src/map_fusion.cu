@@ -7,10 +7,6 @@
 #define PINF  __int_as_float(0x7f800000)
 #endif
 
-/// Refer to sensor.cu
-extern texture<float,  cudaTextureType2D, cudaReadModeElementType> depth_texture;
-extern texture<float4, cudaTextureType2D, cudaReadModeElementType> color_texture;
-
 ////////////////////
 /// class Map - integrate sensor data
 ////////////////////
@@ -48,7 +44,7 @@ void UpdateBlocksKernel(CandidateEntryPoolGPU candidate_entries,
     return;
 
   /// 3. Find correspondent depth observation
-  float depth = tex2D(depth_texture, image_pos.x, image_pos.y);
+  float depth = tex2D<float>(sensor_data.depth_texture, image_pos.x, image_pos.y);
   if (depth == MINF || depth == 0.0f || depth >= converter.sdf_upper_bound)
     return;
 
@@ -117,7 +113,7 @@ void UpdateBlocksKernel(CandidateEntryPoolGPU candidate_entries,
   delta.weight = weight;
 
   if (sensor_data.color_image) {
-    float4 color = tex2D(color_texture, image_pos.x, image_pos.y);
+    float4 color = tex2D<float4>(sensor_data.color_texture, image_pos.x, image_pos.y);
     delta.color = make_uchar3(255 * color.x, 255 * color.y, 255 * color.z);
   } else {
     delta.color = make_uchar3(0, 255, 0);
@@ -141,7 +137,7 @@ void AllocBlocksKernel(HashTableGPU   hash_table,
 
   /// TODO(wei): change it here
   /// 1. Get observed data
-  float depth = tex2D(depth_texture, x, y);
+  float depth = tex2D<float>(sensor_data.depth_texture, x, y);
   if (depth == MINF || depth == 0.0f
       || depth >= converter.sdf_upper_bound)
     return;

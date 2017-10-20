@@ -18,6 +18,10 @@ struct SensorDataGPU {
   /// Texture-binded data
   cudaArray*	depth_array;
   cudaArray*	color_array;
+
+  cudaTextureObject_t depth_texture;
+  cudaTextureObject_t color_texture;
+
   cudaChannelFormatDesc depth_channel_desc;
   cudaChannelFormatDesc color_channel_desc;
 };

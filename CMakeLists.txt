@@ -89,22 +89,20 @@ INCLUDE_DIRECTORIES(
 #----------
 ## Building Libraries
 ### 1. OpenGL util
-ADD_DEFINITIONS(-DUSE_CUDA)
 ADD_LIBRARY(gl-util
         ${VH}/include/opengl-wrapper/src/args.cc
         ${VH}/include/opengl-wrapper/src/program.cc
         ${VH}/include/opengl-wrapper/src/window.cc
         ${VH}/include/opengl-wrapper/src/uniforms.cc
         ${VH}/include/opengl-wrapper/src/camera.cc)
+SET_TARGET_PROPERTIES(gl-util PROPERTIES COMPILE_DEFINITIONS USE_CUDA)
 TARGET_LINK_LIBRARIES(gl-util
         ${OPENGL_DEPENDENCIES}
         ${GLOG_LIBRARIES})
 
 ### 2. CUDA
-SET(CUDA_SEPARABLE_COMPILATION ON)
-# sm MUST >= 50, otherwise separable compilation will be disabled...
-# compute_35, sm_50 is ok
-LIST(APPEND CUDA_NVCC_FLAGS -gencode=arch=compute_52,code=sm_61)
+# Don't know exactly how it should be configured
+LIST(APPEND CUDA_NVCC_FLAGS -gencode=arch=compute_50,code=sm_60)
 CUDA_ADD_LIBRARY(mesh-hashing-cuda
         ${VH}/src/hash_table.cu
         ${VH}/src/block.cu
@@ -118,7 +116,7 @@ CUDA_ADD_LIBRARY(mesh-hashing-cuda
         ${VH}/src/ray_caster.cu)
 TARGET_LINK_LIBRARIES(mesh-hashing-cuda
         ${CUDA_DEPENDENCIES}
-        -lopencv_core -lopencv_highgui -lopencv_imgproc# cv::Mat in sensor
+        -lopencv_core -lopencv_highgui -lopencv_imgproc
         ${GLOG_LIBRARIES})
 
 ### 3. C++
@@ -138,7 +136,10 @@ TARGET_LINK_LIBRARIES(cuda_gl_interp
         -lopencv_core -lopencv_highgui
         ${GLOG_LIBRARIES})
 
-ADD_EXECUTABLE(block_visualizer src/unit_test/block_visualizer.cc include/timer.h src/unit_test/video_clip.cc src/projection_utils.h)
+ADD_EXECUTABLE(block_visualizer src/unit_test/block_visualizer.cc
+        include/timer.h
+        src/unit_test/video_clip.cc
+        src/projection_utils.h)
 TARGET_LINK_LIBRARIES(block_visualizer
         mesh-hashing
         ${OpenCV_LIBRARIES}
