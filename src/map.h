@@ -18,6 +18,7 @@ private:
   Blocks           blocks_;
   Mesh             mesh_;
 
+  CoordinateConverter coordinate_converter_;
   CandidateEntryPool candidate_entries_;
   CompactMesh      compact_mesh_;
 
@@ -47,6 +48,7 @@ public:
   /// Life cycle
   Map(const HashParams& hash_params,
       const MeshParams& mesh_params,
+      const SDFParams&  sdf_params,
       const std::string& time_profile,
       const std::string& memo_profile);
   ~Map();
@@ -108,6 +110,9 @@ public:
 
   BBox& bbox() {
     return bbox_;
+  }
+  CoordinateConverter& converter() {
+    return coordinate_converter_;
   }
 
 public:

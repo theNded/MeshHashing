@@ -25,11 +25,10 @@
 #include "glwrapper.h"
 
 
-#define DEBUG
+#define DEBUG_
 
 const std::string kShaderPath = "../include/opengl-wrapper/shader";
 /// Refer to constant.cu
-extern void SetConstantSDFParams(const SDFParams& params);
 
 int main(int argc, char** argv) {
   std::vector<glm::vec3> light_src_positions = {
@@ -110,8 +109,7 @@ int main(int argc, char** argv) {
   traj_args.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
                        30000);
 
-  SetConstantSDFParams(config.sdf_params);
-  Map       map(config.hash_params, config.mesh_params,
+  Map       map(config.hash_params, config.mesh_params, config.sdf_params,
                 "../result/3dv/" + args.time_profile + ".txt",
                 "../result/3dv/" + args.memo_profile + ".txt");
   Sensor    sensor(config.sensor_params);

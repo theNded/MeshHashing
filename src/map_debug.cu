@@ -28,15 +28,16 @@ const static int3 kEdgeOffsets[24] = {
 __global__
 void GetBoundingBoxKernel(
         CandidateEntryPoolGPU candidate_entries,
-        BBoxGPU             bboxes) {
+        BBoxGPU             bboxes,
+        CoordinateConverter converter) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
   HashEntry& entry = candidate_entries.entries[idx];
 
-  int3 voxel_base_pos   = BlockToVoxel(entry.pos);
-  float3 world_base_pos = VoxelToWorld(voxel_base_pos)
-                          - make_float3(0.5f) * kSDFParams.voxel_size;
+  int3 voxel_base_pos   = converter.BlockToVoxel(entry.pos);
+  float3 world_base_pos = converter.VoxelToWorld(voxel_base_pos)
+                          - make_float3(0.5f) * converter.voxel_size;
 
-  float s = kSDFParams.voxel_size * BLOCK_SIDE_LENGTH;
+  float s = converter.voxel_size * BLOCK_SIDE_LENGTH;
   int addr = atomicAdd(bboxes.vertex_counter, 24);
   for (int i = 0; i < 24; i ++) {
     bboxes.vertices[addr + i] = world_base_pos + s * make_float3(kEdgeOffsets[i]);
@@ -58,7 +59,8 @@ void Map::GetBoundingBoxes() {
 
     GetBoundingBoxKernel <<< grid_size, block_size >>> (
             candidate_entries_.gpu_data(),
-                    bbox_.gpu_data());
+                    bbox_.gpu_data(),
+                coordinate_converter_);
     checkCudaErrors(cudaDeviceSynchronize());
     checkCudaErrors(cudaGetLastError());
   }

@@ -25,41 +25,42 @@ void UpdateBlocksKernel(CandidateEntryPoolGPU candidate_entries,
                         MeshGPU             mesh,
                         SensorDataGPU       sensor_data,
                         SensorParams        sensor_params,
-                        float4x4            c_T_w) {
+                        float4x4            c_T_w,
+                        CoordinateConverter converter) {
 
   //TODO check if we should load this in shared memory (entries)
   /// 1. Select voxel
   const HashEntry &entry = candidate_entries.entries[blockIdx.x];
-  int3 voxel_base_pos = BlockToVoxel(entry.pos);
+  int3 voxel_base_pos = converter.BlockToVoxel(entry.pos);
   uint local_idx = threadIdx.x;  //inside of an SDF block
-  int3 voxel_pos = voxel_base_pos + make_int3(IdxToVoxelLocalPos(local_idx));
+  int3 voxel_pos = voxel_base_pos + make_int3(converter.IdxToVoxelLocalPos(local_idx));
 
   Voxel& this_voxel = blocks[entry.ptr].voxels[local_idx];
   /// 2. Project to camera
-  float3 world_pos = VoxelToWorld(voxel_pos);
+  float3 world_pos = converter.VoxelToWorld(voxel_pos);
   float3 camera_pos = c_T_w * world_pos;
   uint2 image_pos = make_uint2(
-          CameraProjectToImagei(camera_pos,
-                                sensor_params.fx, sensor_params.fy,
-                                sensor_params.cx, sensor_params.cy));
+          converter.CameraProjectToImagei(camera_pos,
+                                          sensor_params.fx, sensor_params.fy,
+                                          sensor_params.cx, sensor_params.cy));
   if (image_pos.x >= sensor_params.width
       || image_pos.y >= sensor_params.height)
     return;
 
   /// 3. Find correspondent depth observation
   float depth = tex2D(depth_texture, image_pos.x, image_pos.y);
-  if (depth == MINF || depth == 0.0f || depth >= kSDFParams.sdf_upper_bound)
+  if (depth == MINF || depth == 0.0f || depth >= converter.sdf_upper_bound)
     return;
 
   /// 4. SDF computation
-  float3 dp = ImageReprojectToCamera(image_pos.x, image_pos.y, depth,
+  float3 dp = converter.ImageReprojectToCamera(image_pos.x, image_pos.y, depth,
       sensor_params.fx, sensor_params.fy, sensor_params.cx, sensor_params.cy);
   float3 dpw = c_T_w.getInverse() * dp;
 
   /// Solve (I + \sum \lambda nn^T + ... )x = (dp + \sum \lambda nn^Tv)
   float3x3 A = float3x3::getIdentity();
   float3   b = dpw;
-  float wd = (1.0f - NormalizeDepth(depth,
+  float wd = (1.0f - converter.NormalizeDepth(depth,
                                    sensor_params.min_depth_range,
                                    sensor_params.max_depth_range));
   float wn = 0.5f;
@@ -76,7 +77,7 @@ void UpdateBlocksKernel(CandidateEntryPoolGPU candidate_entries,
                               n.z*n.x, n.z*n.y, n.z*n.z);
 
       float dist = length(dpw - v);
-      float wdist = dist / kSDFParams.voxel_size;
+      float wdist = dist / converter.voxel_size;
       float ww = expf(- wdist*wdist);
       A = A + nnT * ww;
       b = b + nnT * v * ww;
@@ -91,17 +92,17 @@ void UpdateBlocksKernel(CandidateEntryPoolGPU candidate_entries,
   //float3 np = normalize(-dp);
 
   //printf("%f %f %f\n", np.x, np.y, np.z)
-  //
+
   //float sdf = dot(normalize(-dp), camera_pos - dp);
   float sdf = depth - camera_pos.z;
   //uchar weight = (uchar)fmax(1.0f, kSDFParams.weight_sample * wn * wd);
 
-  float weight = (uchar)fmax(kSDFParams.weight_sample * 1.5f *
-                     (1.0f - NormalizeDepth(depth,
+  float weight = (uchar)fmax(converter.weight_sample * 1.5f *
+                     (1.0f - converter.NormalizeDepth(depth,
                                             sensor_params.min_depth_range,
                                             sensor_params.max_depth_range)),
                      1.0f);
-  float truncation = truncate_distance(depth);
+  float truncation = converter.truncate_distance(depth);
   if (sdf <= -truncation)
     return;
   if (sdf >= 0.0f) {
@@ -129,7 +130,8 @@ void AllocBlocksKernel(HashTableGPU   hash_table,
                        SensorDataGPU  sensor_data,
                        SensorParams   sensor_params,
                        float4x4       w_T_c,
-                       const uint* is_streamed_mask) {
+                       const uint* is_streamed_mask,
+                       CoordinateConverter converter) {
 
   const uint x = blockIdx.x * blockDim.x + threadIdx.x;
   const uint y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -141,18 +143,18 @@ void AllocBlocksKernel(HashTableGPU   hash_table,
   /// 1. Get observed data
   float depth = tex2D(depth_texture, x, y);
   if (depth == MINF || depth == 0.0f
-      || depth >= kSDFParams.sdf_upper_bound)
+      || depth >= converter.sdf_upper_bound)
     return;
 
-  float truncation = truncate_distance(depth);
-  float near_depth = fminf(kSDFParams.sdf_upper_bound, depth - truncation);
-  float far_depth = fminf(kSDFParams.sdf_upper_bound, depth + truncation);
+  float truncation = converter.truncate_distance(depth);
+  float near_depth = fminf(converter.sdf_upper_bound, depth - truncation);
+  float far_depth = fminf(converter.sdf_upper_bound, depth + truncation);
   if (near_depth >= far_depth) return;
 
-  float3 camera_pos_near = ImageReprojectToCamera(x, y, near_depth,
+  float3 camera_pos_near = converter.ImageReprojectToCamera(x, y, near_depth,
                                                   sensor_params.fx, sensor_params.fy,
                                                   sensor_params.cx, sensor_params.cy);
-  float3 camera_pos_far  = ImageReprojectToCamera(x, y, far_depth,
+  float3 camera_pos_far  = converter.ImageReprojectToCamera(x, y, far_depth,
                                                   sensor_params.fx, sensor_params.fy,
                                                   sensor_params.cx, sensor_params.cy);
 
@@ -161,16 +163,16 @@ void AllocBlocksKernel(HashTableGPU   hash_table,
   float3 world_pos_far   = w_T_c * camera_pos_far;
   float3 world_ray_dir = normalize(world_pos_far - world_pos_near);
 
-  int3 block_pos_near = WorldToBlock(world_pos_near);
-  int3 block_pos_far  = WorldToBlock(world_pos_far);
+  int3 block_pos_near = converter.WorldToBlock(world_pos_near);
+  int3 block_pos_far  = converter.WorldToBlock(world_pos_far);
   float3 block_step = make_float3(sign(world_ray_dir));
 
   /// 3. Init zig-zag steps
   float3 world_pos_nearest_voxel_center
-          = BlockToWorld(block_pos_near + make_int3(clamp(block_step, 0.0, 1.0f)))
-            - 0.5f * kSDFParams.voxel_size;
+          = converter.BlockToWorld(block_pos_near + make_int3(clamp(block_step, 0.0, 1.0f)))
+            - 0.5f * converter.voxel_size;
   float3 t = (world_pos_nearest_voxel_center - world_pos_near) / world_ray_dir;
-  float3 dt = (block_step * BLOCK_SIDE_LENGTH * kSDFParams.voxel_size) / world_ray_dir;
+  float3 dt = (block_step * BLOCK_SIDE_LENGTH * converter.voxel_size) / world_ray_dir;
   int3 block_pos_bound = make_int3(make_float3(block_pos_far) + block_step);
 
   if (world_ray_dir.x == 0.0f) {
@@ -191,7 +193,7 @@ void AllocBlocksKernel(HashTableGPU   hash_table,
   const uint kMaxIterTime = 1024;
 #pragma unroll 1
   for (uint iter = 0; iter < kMaxIterTime; ++iter) {
-    if (IsBlockInCameraFrustum(w_T_c.getInverse(), block_pos_curr, sensor_params)) {
+    if (converter.IsBlockInCameraFrustum(w_T_c.getInverse(), block_pos_curr, sensor_params)) {
       /// Disable streaming at current
       // && !isSDFBlockStreamedOut(idCurrentVoxel, hash_table, is_streamed_mask)) {
       hash_table.AllocEntry(block_pos_curr);
@@ -242,8 +244,8 @@ void Map::AllocBlocks(Sensor& sensor) {
           hash_table_.gpu_data(),
           sensor.gpu_data(),
           sensor.sensor_params(), sensor.w_T_c(),
-          NULL);
-
+          NULL,
+              coordinate_converter_);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }
@@ -263,7 +265,8 @@ void Map::UpdateBlocks(Sensor &sensor) {
           blocks_.gpu_data(),
           mesh_.gpu_data(),
           sensor.gpu_data(),
-          sensor.sensor_params(), sensor.c_T_w());
+          sensor.sensor_params(), sensor.c_T_w(),
+              coordinate_converter_);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }

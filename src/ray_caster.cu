@@ -1,5 +1,5 @@
 #include <matrix.h>
-#include "geometry_util.h"
+#include "coordinate_utils.h"
 #include <glog/logging.h>
 #include "color_util.h"
 #include "gradient.h"
@@ -17,7 +17,8 @@ void CastKernel(const HashTableGPU hash_table,
                 RayCasterDataGPU gpu_data,
                 const RayCasterParams ray_caster_params,
                 const float4x4 c_T_w,
-                const float4x4 w_T_c) {
+                const float4x4 w_T_c,
+                CoordinateConverter converter) {
   const uint x = blockIdx.x * blockDim.x + threadIdx.x;
   const uint y = blockIdx.y * blockDim.y + threadIdx.y;
 
@@ -34,7 +35,7 @@ void CastKernel(const HashTableGPU hash_table,
 
   /// 1. Determine ray direction
   float3 camera_ray_dir = normalize(
-          ImageReprojectToCamera(x, y, 1.0f,
+          converter.ImageReprojectToCamera(x, y, 1.0f,
                                  ray_caster_params.fx, ray_caster_params.fy,
                                  ray_caster_params.cx, ray_caster_params.cy));
 
@@ -66,7 +67,7 @@ void CastKernel(const HashTableGPU hash_table,
 
     /// a voxel surrounded by valid voxels
     if (  TrilinearInterpolation(hash_table, blocks, world_sample_pos,
-                               sdf, stats, color)) {
+                               sdf, stats, color, converter)) {
 
       /// Zero crossing exist
       if (prev_sample.weight > 0 // valid previous sample
@@ -80,7 +81,7 @@ void CastKernel(const HashTableGPU hash_table,
                 world_cam_pos, world_ray_dir,
                 prev_sample.sdf, prev_sample.t,
                 sdf, t,
-                interpolated_t, interpolated_color);
+                interpolated_t, interpolated_color, converter);
 
         float3 world_pos_isosurface =
                 world_cam_pos + interpolated_t * world_ray_dir;
@@ -97,7 +98,7 @@ void CastKernel(const HashTableGPU hash_table,
             gpu_data.depth_image [pixel_idx] = make_float4(rgb.x, rgb.y, rgb.z, 1.0f);
             //break;
             gpu_data.vertex_image[pixel_idx]
-                    = make_float4(ImageReprojectToCamera(x, y, depth,
+                    = make_float4(converter.ImageReprojectToCamera(x, y, depth,
                                                          ray_caster_params.fx,
                                                          ray_caster_params.fy,
                                                          ray_caster_params.cx,
@@ -109,7 +110,7 @@ void CastKernel(const HashTableGPU hash_table,
                                   interpolated_color.z / 255.f, 1.0f);
 
             if (ray_caster_params.enable_gradients) {
-              float3 normal = GradientAtPoint(hash_table, blocks, world_pos_isosurface);
+              float3 normal = GradientAtPoint(hash_table, blocks, world_pos_isosurface, converter);
               normal = -normal;
               float4 n = c_T_w * make_float4(normal, 0.0f);
               gpu_data.normal_image[pixel_idx]
@@ -185,7 +186,7 @@ void RayCaster::Cast(Map& map, const float4x4& c_T_w) {
   CastKernel<<<grid_size, block_size>>>(
           map.hash_table().gpu_data(),
                   map.blocks().gpu_data(),
-                  gpu_data_, ray_caster_params_, c_T_w, w_T_c);
+                  gpu_data_, ray_caster_params_, c_T_w, w_T_c, map.converter());
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 

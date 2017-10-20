@@ -106,7 +106,6 @@ SET(CUDA_SEPARABLE_COMPILATION ON)
 # compute_35, sm_50 is ok
 LIST(APPEND CUDA_NVCC_FLAGS -gencode=arch=compute_52,code=sm_61)
 CUDA_ADD_LIBRARY(mesh-hashing-cuda
-        ${VH}/src/constant.cu
         ${VH}/src/hash_table.cu
         ${VH}/src/block.cu
         ${VH}/src/mesh.cu
@@ -124,8 +123,8 @@ TARGET_LINK_LIBRARIES(mesh-hashing-cuda
 
 ### 3. C++
 ADD_LIBRARY(mesh-hashing
-        ${VH}/include/dataset_manager.cc
-        ${VH}/tool/cpp/debugger.cc)
+        ${VH}/include/dataset_manager.cc)
+        #${VH}/tool/cpp/debugger.cc)
 TARGET_LINK_LIBRARIES(mesh-hashing
         mesh-hashing-cuda
         gl-util)
@@ -139,7 +138,7 @@ TARGET_LINK_LIBRARIES(cuda_gl_interp
         -lopencv_core -lopencv_highgui
         ${GLOG_LIBRARIES})
 
-ADD_EXECUTABLE(block_visualizer src/unit_test/block_visualizer.cc include/timer.h src/unit_test/video_clip.cc)
+ADD_EXECUTABLE(block_visualizer src/unit_test/block_visualizer.cc include/timer.h src/unit_test/video_clip.cc src/projection_utils.h)
 TARGET_LINK_LIBRARIES(block_visualizer
         mesh-hashing
         ${OpenCV_LIBRARIES}

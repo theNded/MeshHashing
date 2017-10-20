@@ -37,24 +37,21 @@ void StarveOccupiedBlocksKernel(CandidateEntryPoolGPU candidate_entries,
 /// Collect dead voxels
 __global__
 void CollectGarbageBlocksKernel(CandidateEntryPoolGPU candidate_entries,
-                                BlocksGPU      blocks) {
+                                BlocksGPU      blocks,
+                                CoordinateConverter converter) {
 
   const uint idx = blockIdx.x;
   const HashEntry& entry = candidate_entries.entries[idx];
 
   Voxel v0 = blocks[entry.ptr].voxels[2*threadIdx.x+0];
   Voxel v1 = blocks[entry.ptr].voxels[2*threadIdx.x+1];
-  //short c0 = blocks[entry.ptr].cubes[2*threadIdx.x+0].curr_index;
-  //short c1 = blocks[entry.ptr].cubes[2*threadIdx.x+1].curr_index;
 
   float sdf0 = v0.sdf, sdf1 = v1.sdf;
   if (v0.weight < EPSILON)	sdf0 = PINF;
   if (v1.weight < EPSILON)	sdf1 = PINF;
 
-  // __shared__ int    shared_valid_triangle[BLOCK_SIZE / 2];
   __shared__ float	shared_min_sdf   [BLOCK_SIZE / 2];
   __shared__ float	shared_max_weight[BLOCK_SIZE / 2];
-  // shared_valid_triangle[threadIdx.x] = (c0 != 0) + (c1 != 0);
   shared_min_sdf[threadIdx.x] = fminf(fabsf(sdf0), fabsf(sdf1));
   shared_max_weight[threadIdx.x] = fmaxf(v0.weight, v1.weight);
 
@@ -64,7 +61,6 @@ void CollectGarbageBlocksKernel(CandidateEntryPoolGPU candidate_entries,
 
     __syncthreads();
     if ((threadIdx.x  & (stride-1)) == (stride-1)) {
-      // shared_valid_triangle[threadIdx.x] += shared_valid_triangle[threadIdx.x-stride/2];
       shared_min_sdf[threadIdx.x] = fminf(shared_min_sdf[threadIdx.x-stride/2],
                                           shared_min_sdf[threadIdx.x]);
       shared_max_weight[threadIdx.x] = fmaxf(shared_max_weight[threadIdx.x-stride/2],
@@ -74,12 +70,11 @@ void CollectGarbageBlocksKernel(CandidateEntryPoolGPU candidate_entries,
   __syncthreads();
 
   if (threadIdx.x == blockDim.x - 1) {
-    //int valid_triangles = shared_valid_triangle[threadIdx.x];
     float min_sdf = shared_min_sdf[threadIdx.x];
     float max_weight = shared_max_weight[threadIdx.x];
 
     // TODO(wei): check this weird reference
-    float t = truncate_distance(5.0f);
+    float t = converter.truncate_distance(5.0f);
 
     // TODO(wei): add || valid_triangles == 0 when memory leak is dealt with
     candidate_entries.entry_recycle_flags[idx] =
@@ -155,7 +150,8 @@ __global__
 void CollectInFrustumBlocksKernel(HashTableGPU        hash_table,
                                   CandidateEntryPoolGPU candidate_entries,
                                   SensorParams        sensor_params,
-                                  float4x4            c_T_w) {
+                                  float4x4            c_T_w,
+                                  CoordinateConverter converter) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
 
   __shared__ int local_counter;
@@ -165,8 +161,8 @@ void CollectInFrustumBlocksKernel(HashTableGPU        hash_table,
   int addr_local = -1;
   if (idx < *hash_table.entry_count
     && hash_table.entries[idx].ptr != FREE_ENTRY
-    && IsBlockInCameraFrustum(c_T_w, hash_table.entries[idx].pos,
-                              sensor_params)) {
+    && converter.IsBlockInCameraFrustum(c_T_w, hash_table.entries[idx].pos,
+                                        sensor_params)) {
     addr_local = atomicAdd(&local_counter, 1);
   }
   __syncthreads();
@@ -221,6 +217,7 @@ void CollectAllBlocksKernel(HashTableGPU        hash_table,
 /// Life cycle
 Map::Map(const HashParams &hash_params,
          const MeshParams &mesh_params,
+         const SDFParams &sdf_params,
          const std::string& time_profile,
          const std::string& memo_profile) {
   hash_table_.Resize(hash_params);
@@ -233,6 +230,14 @@ Map::Map(const HashParams &hash_params,
 
   time_profile_.open(time_profile, std::ios::out);
   memo_profile_.open(memo_profile, std::ios::out);
+
+  coordinate_converter_.voxel_size = sdf_params.voxel_size;
+  coordinate_converter_.truncation_distance_scale =
+      sdf_params.truncation_distance_scale;
+  coordinate_converter_.truncation_distance =
+      sdf_params.truncation_distance;
+  coordinate_converter_.sdf_upper_bound = sdf_params.sdf_upper_bound;
+  coordinate_converter_.weight_sample = sdf_params.weight_sample;
 }
 
 Map::~Map() {
@@ -296,7 +301,8 @@ void Map::CollectGarbageBlocks() {
 
   CollectGarbageBlocksKernel <<<grid_size, block_size >>>(
           candidate_entries_.gpu_data(),
-          blocks_.gpu_data());
+          blocks_.gpu_data(),
+              coordinate_converter_);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }
@@ -366,9 +372,11 @@ void Map::CollectInFrustumBlocks(Sensor &sensor){
 
   candidate_entries_.reset_entry_count();
   CollectInFrustumBlocksKernel<<<grid_size, block_size >>>(
-          hash_table_.gpu_data(),
+      hash_table_.gpu_data(),
           candidate_entries_.gpu_data(),
-          sensor.sensor_params(), sensor.c_T_w());
+          sensor.sensor_params(),
+          sensor.c_T_w(),
+          coordinate_converter_);
 
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());

@@ -10,7 +10,7 @@
 #include "helper_cuda.h"
 #include "helper_math.h"
 
-#include "geometry_util.h"
+#include "coordinate_utils.h"
 #include "params.h"
 
 struct __ALIGN__(8) HashEntry {

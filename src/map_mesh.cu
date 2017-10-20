@@ -43,7 +43,8 @@ inline int AllocateVertexWithMutex(const HashTableGPU &hash_table,
                                    Voxel& voxel,
                                    uint& vertex_idx,
                                    const float3& vertex_pos,
-                                   bool use_fine_gradient) {
+                                   bool use_fine_gradient,
+                                   CoordinateConverter& converter) {
   int ptr = voxel.vertex_ptrs[vertex_idx];
   if (ptr == FREE_PTR) {
     int lock = atomicExch(&voxel.vertex_mutexes[vertex_idx], LOCK_ENTRY);
@@ -56,13 +57,13 @@ inline int AllocateVertexWithMutex(const HashTableGPU &hash_table,
     voxel.vertex_ptrs[vertex_idx] = ptr;
     mesh.vertices[ptr].pos = vertex_pos;
     if (use_fine_gradient) {
-      mesh.vertices[ptr].normal = GradientAtPoint(hash_table, blocks, vertex_pos);
+      mesh.vertices[ptr].normal = GradientAtPoint(hash_table, blocks, vertex_pos, converter);
     }
 
     float sdf;
     Stat  stats;
     uchar3 color;
-    TrilinearInterpolation(hash_table, blocks, vertex_pos, sdf, stats, color);
+    TrilinearInterpolation(hash_table, blocks, vertex_pos, sdf, stats, color, converter);
     float3 val = ValToRGB(stats.duration, 0, 100);
     mesh.vertices[ptr].color = make_float3(val.x, val.y, val.z);
   }
@@ -149,22 +150,23 @@ void MarchingCubesPass1Kernel(
     CandidateEntryPoolGPU candidate_entries,
     BlocksGPU           blocks,
     MeshGPU             mesh,
-    bool                use_fine_gradient) {
+    bool                use_fine_gradient,
+    CoordinateConverter converter) {
 
   const HashEntry &entry = candidate_entries[blockIdx.x];
   const uint local_idx   = threadIdx.x;
 
-  int3  voxel_base_pos  = BlockToVoxel(entry.pos);
-  uint3 voxel_local_pos = IdxToVoxelLocalPos(local_idx);
+  int3  voxel_base_pos  = converter.BlockToVoxel(entry.pos);
+  uint3 voxel_local_pos = converter.IdxToVoxelLocalPos(local_idx);
   int3 voxel_pos        = voxel_base_pos + make_int3(voxel_local_pos);
-  float3 world_pos      = VoxelToWorld(voxel_pos);
+  float3 world_pos      = converter.VoxelToWorld(voxel_pos);
 
   Voxel &this_voxel = blocks[entry.ptr].voxels[local_idx];
 
   //////////
   /// 1. Read the scalar values, see mc_tables.h
   const int   kVertexCount = 8;
-  const float kVoxelSize   = kSDFParams.voxel_size;
+  const float kVoxelSize   = converter.voxel_size;
   const float kThreshold   = 0.2f;
   const float kIsoLevel    = 0;
 
@@ -180,7 +182,7 @@ void MarchingCubesPass1Kernel(
     uint3 offset = make_uint3(kVtxOffset[i]);
     float weight;
 
-    d[i] = GetSDF(hash_table, blocks, entry, voxel_local_pos + offset, weight);
+    d[i] = GetSDF(hash_table, blocks, entry, voxel_local_pos + offset, weight, converter);
     if (weight < EPSILON)
       return;
 
@@ -209,10 +211,10 @@ void MarchingCubesPass1Kernel(
                                       d[v_idx.x], d[v_idx.y], kIsoLevel);
 
       Voxel &voxel = GetVoxelRef(hash_table, blocks, entry,
-                                voxel_local_pos + make_uint3(c_idx.x, c_idx.y, c_idx.z));
+                                voxel_local_pos + make_uint3(c_idx.x, c_idx.y, c_idx.z), converter);
       AllocateVertexWithMutex(hash_table, blocks, mesh,
                               voxel, c_idx.w, vertex_pos,
-                              use_fine_gradient);
+                              use_fine_gradient, converter);
     }
   }
 }
@@ -223,16 +225,17 @@ void MarchingCubesPass2Kernel(
     CandidateEntryPoolGPU candidate_entries,
     BlocksGPU           blocks,
     MeshGPU             mesh,
-    bool                use_fine_gradient) {
+    bool                use_fine_gradient,
+    CoordinateConverter converter) {
 
 
   const HashEntry &entry = candidate_entries[blockIdx.x];
   const uint local_idx   = threadIdx.x;
 
-  int3  voxel_base_pos  = BlockToVoxel(entry.pos);
-  uint3 voxel_local_pos = IdxToVoxelLocalPos(local_idx);
+  int3  voxel_base_pos  = converter.BlockToVoxel(entry.pos);
+  uint3 voxel_local_pos = converter.IdxToVoxelLocalPos(local_idx);
   int3 voxel_pos        = voxel_base_pos + make_int3(voxel_local_pos);
-  float3 world_pos      = VoxelToWorld(voxel_pos);
+  float3 world_pos      = converter.VoxelToWorld(voxel_pos);
 
   Voxel &this_voxel = blocks[entry.ptr].voxels[local_idx];
 
@@ -260,7 +263,7 @@ void MarchingCubesPass2Kernel(
     if (kEdgeTable[this_voxel.curr_index] & (1 << i)) {
       uint4 c_idx = kEdgeCubeTable[i];
       uint3 voxel_p = voxel_local_pos + make_uint3(c_idx.x, c_idx.y, c_idx.z);
-      Voxel &voxel = GetVoxelRef(hash_table, blocks, entry, voxel_p);
+      Voxel &voxel = GetVoxelRef(hash_table, blocks, entry, voxel_p, converter);
       vertex_ptr[i] = GetVertex(voxel, c_idx.w);
     }
   }
@@ -407,7 +410,8 @@ void Map::MarchingCubes() {
           candidate_entries_.gpu_data(),
           blocks_.gpu_data(),
           mesh_.gpu_data(),
-          use_fine_gradient_);
+          use_fine_gradient_,
+          coordinate_converter_);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
   double pass1_seconds = timer.Tock();
@@ -420,7 +424,8 @@ void Map::MarchingCubes() {
           candidate_entries_.gpu_data(),
           blocks_.gpu_data(),
           mesh_.gpu_data(),
-          use_fine_gradient_);
+          use_fine_gradient_,
+          coordinate_converter_);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
   double pass2_seconds = timer.Tock();
