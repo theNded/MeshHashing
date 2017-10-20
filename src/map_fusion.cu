@@ -19,7 +19,7 @@ extern texture<float4, cudaTextureType2D, cudaReadModeElementType> color_texture
 /// Device code
 ////////////////////
 __global__
-void UpdateBlocksKernel(CompactHashTableGPU compact_hash_table,
+void UpdateBlocksKernel(CandidateEntryPoolGPU candidate_entries,
                         HashTableGPU        hash_table,
                         BlocksGPU           blocks,
                         MeshGPU             mesh,
@@ -27,9 +27,9 @@ void UpdateBlocksKernel(CompactHashTableGPU compact_hash_table,
                         SensorParams        sensor_params,
                         float4x4            c_T_w) {
 
-  //TODO check if we should load this in shared memory (compacted_entries)
+  //TODO check if we should load this in shared memory (entries)
   /// 1. Select voxel
-  const HashEntry &entry = compact_hash_table.compacted_entries[blockIdx.x];
+  const HashEntry &entry = candidate_entries.entries[blockIdx.x];
   int3 voxel_base_pos = BlockToVoxel(entry.pos);
   uint local_idx = threadIdx.x;  //inside of an SDF block
   int3 voxel_pos = voxel_base_pos + make_int3(IdxToVoxelLocalPos(local_idx));
@@ -251,14 +251,14 @@ void Map::AllocBlocks(Sensor& sensor) {
 void Map::UpdateBlocks(Sensor &sensor) {
   const uint threads_per_block = BLOCK_SIZE;
 
-  uint compacted_entry_count = compact_hash_table_.entry_count();
+  uint compacted_entry_count = candidate_entries_.entry_count();
   if (compacted_entry_count <= 0)
     return;
 
   const dim3 grid_size(compacted_entry_count, 1);
   const dim3 block_size(threads_per_block, 1);
   UpdateBlocksKernel <<<grid_size, block_size>>>(
-          compact_hash_table_.gpu_data(),
+          candidate_entries_.gpu_data(),
           hash_table_.gpu_data(),
           blocks_.gpu_data(),
           mesh_.gpu_data(),

@@ -1,6 +1,6 @@
 %YAML:1.0
 
-dataset_path:      "/home/wei/Work/data/SUN3D/lounge/"
+dataset_path:      "/home/wei/Work/data/SUN3D/copyroom/"
 
 # Hash params
 bucket_count:      200000

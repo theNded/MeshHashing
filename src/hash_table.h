@@ -322,23 +322,28 @@ public:
   }
 };
 
-struct CompactHashTableGPU {
+struct CandidateEntryPoolGPU {
   int       *entry_recycle_flags;     /// used in garbage collection
-  HashEntry *compacted_entries;       /// allocated for parallel computation
-  int       *compacted_entry_counter; /// atomic counter to add compacted entries atomically
+  int       *candidate_entry_counter; /// atomic counter to add compacted entries atomically
+  HashEntry *entries;       /// allocated for parallel computation
+
+  __host__ __device__
+  HashEntry& operator [] (int i) {
+    return entries[i];
+  }
 };
 
-class CompactHashTable {
+class CandidateEntryPool {
 private:
-  CompactHashTableGPU gpu_data_;
+  CandidateEntryPoolGPU gpu_data_;
   uint                entry_count_;
 
   void Alloc(uint entry_count);
   void Free();
 
 public:
-  CompactHashTable();
-  ~CompactHashTable();
+  CandidateEntryPool();
+  ~CandidateEntryPool();
 
   uint entry_count();
   void reset_entry_count();
@@ -346,7 +351,7 @@ public:
   void Resize(uint entry_count);
   void Reset();
 
-  CompactHashTableGPU& gpu_data() {
+  CandidateEntryPoolGPU& gpu_data() {
     return gpu_data_;
   }
 };

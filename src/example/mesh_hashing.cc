@@ -309,7 +309,7 @@ int main(int argc, char** argv) {
   }
 
 #ifdef DEBUG
-//  debugger.CoreDump(map.compact_hash_table().gpu_data());
+//  debugger.CoreDump(map.candidate_entries().gpu_data());
 //  debugger.CoreDump(map.blocks().gpu_data());
 //  debugger.CoreDump(map.mesh().gpu_data());
 //  debugger.DebugAll();

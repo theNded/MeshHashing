@@ -146,12 +146,12 @@ void RefineMesh(short& prev_cube, short& curr_cube, float d[8], int is_noise_bit
 __global__
 void MarchingCubesPass1Kernel(
     HashTableGPU        hash_table,
-    CompactHashTableGPU compact_hash_table,
+    CandidateEntryPoolGPU candidate_entries,
     BlocksGPU           blocks,
     MeshGPU             mesh,
     bool                use_fine_gradient) {
 
-  const HashEntry &entry = compact_hash_table.compacted_entries[blockIdx.x];
+  const HashEntry &entry = candidate_entries[blockIdx.x];
   const uint local_idx   = threadIdx.x;
 
   int3  voxel_base_pos  = BlockToVoxel(entry.pos);
@@ -220,13 +220,13 @@ void MarchingCubesPass1Kernel(
 __global__
 void MarchingCubesPass2Kernel(
     HashTableGPU        hash_table,
-    CompactHashTableGPU compact_hash_table,
+    CandidateEntryPoolGPU candidate_entries,
     BlocksGPU           blocks,
     MeshGPU             mesh,
     bool                use_fine_gradient) {
 
 
-  const HashEntry &entry = compact_hash_table.compacted_entries[blockIdx.x];
+  const HashEntry &entry = candidate_entries[blockIdx.x];
   const uint local_idx   = threadIdx.x;
 
   int3  voxel_base_pos  = BlockToVoxel(entry.pos);
@@ -292,10 +292,10 @@ void MarchingCubesPass2Kernel(
 /// Garbage collection (ref count)
 __global__
 void RecycleTrianglesKernel(
-    CompactHashTableGPU compact_hash_table,
+    CandidateEntryPoolGPU candidate_entries,
     BlocksGPU           blocks,
     MeshGPU             mesh) {
-  const HashEntry &entry = compact_hash_table.compacted_entries[blockIdx.x];
+  const HashEntry &entry = candidate_entries[blockIdx.x];
 
   const uint local_idx = threadIdx.x;  //inside an SDF block
   Voxel &voxel = blocks[entry.ptr].voxels[local_idx];
@@ -317,10 +317,10 @@ void RecycleTrianglesKernel(
 
 __global__
 void RecycleVerticesKernel(
-    CompactHashTableGPU compact_hash_table,
+    CandidateEntryPoolGPU candidate_entries,
     BlocksGPU           blocks,
     MeshGPU             mesh) {
-  const HashEntry &entry = compact_hash_table.compacted_entries[blockIdx.x];
+  const HashEntry &entry = candidate_entries[blockIdx.x];
   const uint local_idx = threadIdx.x;
 
   Voxel &voxel = blocks[entry.ptr].voxels[local_idx];
@@ -340,10 +340,10 @@ void RecycleVerticesKernel(
 #ifdef STATS
 __global__
 void UpdateStatisticsKernel(HashTableGPU        hash_table,
-                            CompactHashTableGPU compact_hash_table,
+                            CandidateEntryPoolGPU candidate_entries,
                             BlocksGPU           blocks) {
 
-  const HashEntry &entry = compact_hash_table.compacted_entries[blockIdx.x];
+  const HashEntry &entry = candidate_entries.entries[blockIdx.x];
   const uint local_idx   = threadIdx.x;
 
   int3  voxel_base_pos  = BlockToVoxel(entry.pos);
@@ -380,7 +380,7 @@ void UpdateStatisticsKernel(HashTableGPU        hash_table,
 /// Host code
 ////////////////////
 void Map::MarchingCubes() {
-  uint occupied_block_count = compact_hash_table_.entry_count();
+  uint occupied_block_count = candidate_entries_.entry_count();
   LOG(INFO) << "Marching cubes block count: " << occupied_block_count;
   if (occupied_block_count <= 0)
     return;
@@ -393,7 +393,7 @@ void Map::MarchingCubes() {
 #ifdef STATS
   UpdateStatisticsKernel<<<grid_size, block_size>>>(
       hash_table_.gpu_data(),
-          compact_hash_table_.gpu_data(),
+          candidate_entries_.gpu_data(),
           blocks_.gpu_data());
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
@@ -404,7 +404,7 @@ void Map::MarchingCubes() {
   timer.Tick();
   MarchingCubesPass1Kernel<<<grid_size, block_size>>>(
       hash_table_.gpu_data(),
-          compact_hash_table_.gpu_data(),
+          candidate_entries_.gpu_data(),
           blocks_.gpu_data(),
           mesh_.gpu_data(),
           use_fine_gradient_);
@@ -417,7 +417,7 @@ void Map::MarchingCubes() {
   timer.Tick();
   MarchingCubesPass2Kernel<<<grid_size, block_size>>>(
       hash_table_.gpu_data(),
-          compact_hash_table_.gpu_data(),
+          candidate_entries_.gpu_data(),
           blocks_.gpu_data(),
           mesh_.gpu_data(),
           use_fine_gradient_);
@@ -429,14 +429,14 @@ void Map::MarchingCubes() {
 
 
   RecycleTrianglesKernel<<<grid_size, block_size>>>(
-      compact_hash_table_.gpu_data(),
+      candidate_entries_.gpu_data(),
           blocks_.gpu_data(),
           mesh_.gpu_data());
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 
   RecycleVerticesKernel<<<grid_size, block_size>>>(
-      compact_hash_table_.gpu_data(),
+      candidate_entries_.gpu_data(),
           blocks_.gpu_data(),
           mesh_.gpu_data());
   checkCudaErrors(cudaDeviceSynchronize());
@@ -447,11 +447,11 @@ void Map::MarchingCubes() {
 /// Compress discrete vertices and triangles
 __global__
 void CollectVerticesAndTrianglesKernel(
-    CompactHashTableGPU compact_hash_table,
+    CandidateEntryPoolGPU candidate_entries,
     BlocksGPU           blocks,
     MeshGPU             mesh,
     CompactMeshGPU      compact_mesh) {
-  const HashEntry &entry = compact_hash_table.compacted_entries[blockIdx.x];
+  const HashEntry &entry = candidate_entries[blockIdx.x];
   Voxel &cube = blocks[entry.ptr].voxels[threadIdx.x];
 
   for (int i = 0; i < N_TRIANGLE; ++i) {
@@ -537,7 +537,7 @@ void CompressTrianglesKernel(MeshGPU        mesh,
 void Map::CompressMesh(int3& stats) {
   compact_mesh_.Reset();
 
-  int occupied_block_count = compact_hash_table_.entry_count();
+  int occupied_block_count = candidate_entries_.entry_count();
   if (occupied_block_count <= 0) return;
 
   {
@@ -547,7 +547,7 @@ void Map::CompressMesh(int3& stats) {
 
     LOG(INFO) << "Before: " << compact_mesh_.vertex_count() << " " << compact_mesh_.triangle_count();
     CollectVerticesAndTrianglesKernel <<< grid_size, block_size >>> (
-        compact_hash_table_.gpu_data(),
+        candidate_entries_.gpu_data(),
             blocks_.gpu_data(),
             mesh_.gpu_data(),
             compact_mesh_.gpu_data());

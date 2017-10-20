@@ -27,10 +27,10 @@ const static int3 kEdgeOffsets[24] = {
 
 __global__
 void GetBoundingBoxKernel(
-        CompactHashTableGPU compact_hash_table,
+        CandidateEntryPoolGPU candidate_entries,
         BBoxGPU             bboxes) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
-  HashEntry& entry = compact_hash_table.compacted_entries[idx];
+  HashEntry& entry = candidate_entries.entries[idx];
 
   int3 voxel_base_pos   = BlockToVoxel(entry.pos);
   float3 world_base_pos = VoxelToWorld(voxel_base_pos)
@@ -47,7 +47,7 @@ void GetBoundingBoxKernel(
 void Map::GetBoundingBoxes() {
   bbox_.Reset();
 
-  int occupied_block_count = compact_hash_table_.entry_count();
+  int occupied_block_count = candidate_entries_.entry_count();
   if (occupied_block_count <= 0) return;
 
   {
@@ -57,7 +57,7 @@ void Map::GetBoundingBoxes() {
     const dim3 block_size(threads_per_block, 1);
 
     GetBoundingBoxKernel <<< grid_size, block_size >>> (
-            compact_hash_table_.gpu_data(),
+            candidate_entries_.gpu_data(),
                     bbox_.gpu_data());
     checkCudaErrors(cudaDeviceSynchronize());
     checkCudaErrors(cudaGetLastError());

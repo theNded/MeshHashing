@@ -36,12 +36,12 @@ Debugger::~Debugger() {
   delete[] blocks_;
 }
 
-void Debugger::CoreDump(CompactHashTableGPU &hash_table) {
-  checkCudaErrors(cudaMemcpy(heap_counter_, hash_table.compacted_entry_counter,
+void Debugger::CoreDump(CandidateEntryPoolGPU &hash_table) {
+  checkCudaErrors(cudaMemcpy(heap_counter_, hash_table.candidate_entry_counter,
                              sizeof(int),
                              cudaMemcpyDeviceToHost));
   LOG(INFO) << *heap_counter_;
-  checkCudaErrors(cudaMemcpy(entries_, hash_table.compacted_entries,
+  checkCudaErrors(cudaMemcpy(entries_, hash_table.entries,
                              sizeof(HashEntry) * (*heap_counter_),
                              cudaMemcpyDeviceToHost));
 }

@@ -160,17 +160,17 @@ void HashTable::ResetMutexes() {
 }
 
 ////////////////////
-/// class CompactHashTable
+/// class CandidateEntryPool
 ////////////////////
 
 ////////////////////
 /// Device code
 ////////////////////
 __global__
-void ResetCompactEntriesKernel(CompactHashTableGPU hash_table, uint entry_count) {
+void ResetCompactEntriesKernel(CandidateEntryPoolGPU hash_table, uint entry_count) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (idx < entry_count) {
-    hash_table.compacted_entries[idx].Clear();
+    hash_table.entries[idx].Clear();
   }
 }
 
@@ -179,34 +179,34 @@ void ResetCompactEntriesKernel(CompactHashTableGPU hash_table, uint entry_count)
 ////////////////////
 
 /// Life cycle
-CompactHashTable::CompactHashTable() {}
-CompactHashTable::~CompactHashTable() {
+CandidateEntryPool::CandidateEntryPool() {}
+CandidateEntryPool::~CandidateEntryPool() {
   Free();
 }
 
-void CompactHashTable::Alloc(uint entry_count) {
-  checkCudaErrors(cudaMalloc(&gpu_data_.compacted_entries,
+void CandidateEntryPool::Alloc(uint entry_count) {
+  checkCudaErrors(cudaMalloc(&gpu_data_.entries,
                              sizeof(HashEntry) * entry_count));
-  checkCudaErrors(cudaMalloc(&gpu_data_.compacted_entry_counter,
+  checkCudaErrors(cudaMalloc(&gpu_data_.candidate_entry_counter,
                              sizeof(int)));
   checkCudaErrors(cudaMalloc(&gpu_data_.entry_recycle_flags,
                              sizeof(int) * entry_count));
 }
 
-void CompactHashTable::Free() {
-  checkCudaErrors(cudaFree(gpu_data_.compacted_entries));
-  checkCudaErrors(cudaFree(gpu_data_.compacted_entry_counter));
+void CandidateEntryPool::Free() {
+  checkCudaErrors(cudaFree(gpu_data_.entries));
+  checkCudaErrors(cudaFree(gpu_data_.candidate_entry_counter));
   checkCudaErrors(cudaFree(gpu_data_.entry_recycle_flags));
 }
 
-void CompactHashTable::Resize(uint entry_count) {
+void CandidateEntryPool::Resize(uint entry_count) {
   entry_count_ = entry_count;
   Alloc(entry_count);
   Reset();
 }
 
 /// Reset
-void CompactHashTable::Reset() {
+void CandidateEntryPool::Reset() {
   const int threads_per_block = 64;
   const dim3 grid_size((entry_count_ + threads_per_block - 1)
                        / threads_per_block, 1);
@@ -217,15 +217,15 @@ void CompactHashTable::Reset() {
   checkCudaErrors(cudaGetLastError());
 }
 
-uint CompactHashTable::entry_count(){
+uint CandidateEntryPool::entry_count(){
   uint count;
-  checkCudaErrors(cudaMemcpy(&count, gpu_data_.compacted_entry_counter,
+  checkCudaErrors(cudaMemcpy(&count, gpu_data_.candidate_entry_counter,
                              sizeof(uint), cudaMemcpyDeviceToHost));
   return count;
 }
 
-void CompactHashTable::reset_entry_count() {
-  checkCudaErrors(cudaMemset(gpu_data_.compacted_entry_counter,
+void CandidateEntryPool::reset_entry_count() {
+  checkCudaErrors(cudaMemset(gpu_data_.candidate_entry_counter,
                              0, sizeof(uint)));
 }
 

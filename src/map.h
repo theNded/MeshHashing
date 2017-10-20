@@ -18,7 +18,7 @@ private:
   Blocks           blocks_;
   Mesh             mesh_;
 
-  CompactHashTable compact_hash_table_;
+  CandidateEntryPool candidate_entries_;
   CompactMesh      compact_mesh_;
 
   uint             integrated_frame_count_;
@@ -93,8 +93,8 @@ public:
   HashTable& hash_table() {
     return hash_table_;
   }
-  CompactHashTable& compact_hash_table() {
-    return compact_hash_table_;
+  CandidateEntryPool& candidate_entries() {
+    return candidate_entries_;
   }
   Blocks& blocks() {
     return blocks_;
