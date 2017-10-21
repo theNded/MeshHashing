@@ -27,29 +27,4 @@ struct __ALIGN__(8) Block {
   }
 };
 
-typedef Block* BlockGPUMemory;
-typedef Block* BlockCPUMemory;
-
-// TODO: enable CPU version
-class Blocks {
-public:
-  Blocks();
-  Blocks(uint block_count);
-  ~Blocks();
-
-  void Reset();
-  void Resize(uint block_count);
-
-  BlockGPUMemory &gpu_memory() {
-    return gpu_memory_;
-  }
-
-private:
-  BlockGPUMemory gpu_memory_;
-  uint           block_count_;
-
-  void Alloc(uint block_count);
-  void Free();
-};
-
 #endif // CORE_BLOCK_H

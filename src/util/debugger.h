@@ -62,7 +62,7 @@ public:
            float voxel_size);
   ~Debugger();
 
-  void CoreDump(CandidateEntryPoolGPU &hash_table);
+  void CoreDump(EntryArrayGPU &hash_table);
 
   void CoreDump(BlockGPUMemory &blocks);
 

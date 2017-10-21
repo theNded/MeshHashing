@@ -1,5 +1,6 @@
 #include <device_launch_parameters.h>
 
+#include "core/block_array.h"
 #include "engine/map.h"
 #include "engine/sensor.h"
 #include "geometry/gradient.h"
@@ -16,9 +17,9 @@
 /// Device code
 ////////////////////
 __global__
-void UpdateBlocksKernel(CandidateEntryPoolGPU candidate_entries,
-                        HashTableGPU        hash_table,
-                        BlockGPUMemory           blocks,
+void UpdateBlockArrayKernel(EntryArray candidate_entries,
+                        HashTable        hash_table,
+                        BlockArray          blocks,
                         MeshGPU             mesh,
                         SensorDataGPU       sensor_data,
                         SensorParams        sensor_params,
@@ -27,7 +28,7 @@ void UpdateBlocksKernel(CandidateEntryPoolGPU candidate_entries,
 
   //TODO check if we should load this in shared memory (entries)
   /// 1. Select voxel
-  const HashEntry &entry = candidate_entries.entries[blockIdx.x];
+  const HashEntry &entry = candidate_entries[blockIdx.x];
   int3 voxel_base_pos = converter.BlockToVoxel(entry.pos);
   uint local_idx = threadIdx.x;  //inside of an SDF block
   int3 voxel_pos = voxel_base_pos + make_int3(converter.IdxToVoxelLocalPos(local_idx));
@@ -123,7 +124,7 @@ void UpdateBlocksKernel(CandidateEntryPoolGPU candidate_entries,
 }
 
 __global__
-void AllocBlocksKernel(HashTableGPU   hash_table,
+void AllocBlockArrayKernel(HashTable   hash_table,
                        SensorDataGPU  sensor_data,
                        SensorParams   sensor_params,
                        float4x4       w_T_c,
@@ -218,16 +219,16 @@ void AllocBlocksKernel(HashTableGPU   hash_table,
 /// Host code
 ////////////////////
 void Map::Integrate(Sensor& sensor) {
-  AllocBlocks(sensor);
+  AllocBlockArray(sensor);
 
-  CollectInFrustumBlocks(sensor);
-  UpdateBlocks(sensor);
+  CollectInFrustumBlockArray(sensor);
+  UpdateBlockArray(sensor);
 
   Recycle(integrated_frame_count_);
   integrated_frame_count_ ++;
 }
 
-void Map::AllocBlocks(Sensor& sensor) {
+void Map::AllocBlockArray(Sensor& sensor) {
   hash_table_.ResetMutexes();
 
   const uint threads_per_block = 8;
@@ -237,8 +238,8 @@ void Map::AllocBlocks(Sensor& sensor) {
                        /threads_per_block);
   const dim3 block_size(threads_per_block, threads_per_block);
 
-  AllocBlocksKernel<<<grid_size, block_size>>>(
-          hash_table_.gpu_memory(),
+  AllocBlockArrayKernel<<<grid_size, block_size>>>(
+          hash_table_,
           sensor.gpu_memory(),
           sensor.sensor_params(), sensor.w_T_c(),
           NULL,
@@ -247,7 +248,7 @@ void Map::AllocBlocks(Sensor& sensor) {
   checkCudaErrors(cudaGetLastError());
 }
 
-void Map::UpdateBlocks(Sensor &sensor) {
+void Map::UpdateBlockArray(Sensor &sensor) {
   const uint threads_per_block = BLOCK_SIZE;
 
   uint compacted_entry_count = candidate_entries_.entry_count();
@@ -256,10 +257,10 @@ void Map::UpdateBlocks(Sensor &sensor) {
 
   const dim3 grid_size(compacted_entry_count, 1);
   const dim3 block_size(threads_per_block, 1);
-  UpdateBlocksKernel <<<grid_size, block_size>>>(
-          candidate_entries_.gpu_memory(),
-          hash_table_.gpu_memory(),
-          blocks_.gpu_memory(),
+  UpdateBlockArrayKernel <<<grid_size, block_size>>>(
+          candidate_entries_,
+          hash_table_,
+          blocks_,
           mesh_.gpu_memory(),
           sensor.gpu_memory(),
           sensor.sensor_params(), sensor.c_T_w(),

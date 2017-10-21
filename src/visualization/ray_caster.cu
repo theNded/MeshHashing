@@ -13,8 +13,8 @@
 //////////
 /// Kernel function
 __global__
-void CastKernel(const HashTableGPU hash_table,
-                const BlockGPUMemory    blocks,
+void CastKernel(const HashTable hash_table,
+                const BlockArray    blocks,
                 RayCasterDataGPU gpu_memory,
                 const RayCasterParams ray_caster_params,
                 const float4x4 c_T_w,
@@ -185,8 +185,8 @@ void RayCaster::Cast(Map& map, const float4x4& c_T_w) {
   const dim3 block_size(threads_per_block, threads_per_block);
 
   CastKernel<<<grid_size, block_size>>>(
-          map.hash_table().gpu_memory(),
-                  map.blocks().gpu_memory(),
+          map.hash_table(),
+                  map.blocks(),
                   gpu_memory_, ray_caster_params_, c_T_w, w_T_c, map.converter());
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());

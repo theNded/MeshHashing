@@ -6,20 +6,21 @@
 #ifndef VH_MAP_H
 #define VH_MAP_H
 
-#include "../core/hash_table.h"
-#include "../core/block.h"
-#include "../core/mesh.h"
+#include "core/hash_table.h"
+#include "core/block_array.h"
+#include "core/entry_array.h"
+#include "core/mesh.h"
 
 #include "sensor.h"
 
 class Map {
 private:
   HashTable        hash_table_;
-  Blocks           blocks_;
+  BlockArray       blocks_;
   Mesh             mesh_;
 
   CoordinateConverter coordinate_converter_;
-  CandidateEntryPool candidate_entries_;
+  EntryArray candidate_entries_;
   CompactMesh      compact_mesh_;
 
   uint             integrated_frame_count_;
@@ -36,14 +37,14 @@ private:
 ////////////////////
 private:
   /// Garbage collection
-  void StarveOccupiedBlocks();
-  void CollectGarbageBlocks();
-  void RecycleGarbageBlocks();
+  void StarveOccupiedBlockArray();
+  void CollectGarbageBlockArray();
+  void RecycleGarbageBlockArray();
 
 public:
   /// Compress entries
-  void CollectInFrustumBlocks(Sensor& sensor);
-  void CollectAllBlocks();
+  void CollectInFrustumBlockArray(Sensor& sensor);
+  void CollectAllBlockArray();
 
   /// Life cycle
   Map(const HashParams& hash_params,
@@ -61,8 +62,8 @@ public:
 /// Fusion
 ////////////////////
 private:
-  void UpdateBlocks(Sensor& sensor);
-  void AllocBlocks(Sensor& sensor);
+  void UpdateBlockArray(Sensor& sensor);
+  void AllocBlockArray(Sensor& sensor);
 
 public:
   void Integrate(Sensor &sensor);
@@ -95,10 +96,10 @@ public:
   HashTable& hash_table() {
     return hash_table_;
   }
-  CandidateEntryPool& candidate_entries() {
+  EntryArray& candidate_entries() {
     return candidate_entries_;
   }
-  Blocks& blocks() {
+  BlockArray& blocks() {
     return blocks_;
   }
   Mesh& mesh() {

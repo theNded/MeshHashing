@@ -190,7 +190,7 @@ int main(int argc, char** argv) {
 
     // TODO: add flag to blocks to deal with boundary conditions
     if (! args.mesh_range) {
-      map.CollectAllBlocks();
+      map.CollectAllBlockArray();
     }
 
     map.GetBoundingBoxes();

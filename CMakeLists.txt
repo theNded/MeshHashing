@@ -105,7 +105,8 @@ TARGET_LINK_LIBRARIES(gl-util
 LIST(APPEND CUDA_NVCC_FLAGS -gencode=arch=compute_50,code=sm_60)
 CUDA_ADD_LIBRARY(mesh-hashing-cuda
         ${VH}/core/hash_table.cu
-        ${VH}/core/block.cu
+        ${VH}/core/entry_array.cu
+        ${VH}/core/block_array.cu
         ${VH}/core/mesh.cu
         ${VH}/engine/sensor.cu
         ${VH}/engine/map_core.cu
@@ -139,7 +140,7 @@ TARGET_LINK_LIBRARIES(cuda_gl_interp
 ADD_EXECUTABLE(block_visualizer src/util/block_visualizer.cc
         src/util/timer.h
         src/util/video_clip.cc
-        )
+        src/core/block_array.h src/core/hash_entry.h src/core/entry_array.cu src/core/entry_array.h)
 TARGET_LINK_LIBRARIES(block_visualizer
         mesh-hashing
         ${OpenCV_LIBRARIES}

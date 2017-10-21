@@ -1,8 +1,8 @@
 #include <matrix.h>
 #include "coordinate_utils.h"
 
-#include "../core/hash_table.h"
-#include "../core/block.h"
+#include "core/hash_table.h"
+#include "core/block_array.h"
 
 __device__
 inline float frac(float val) {
@@ -16,8 +16,8 @@ inline float3 frac(const float3 &val) {
 
 // TODO(wei): refine it
 __device__
-inline Voxel GetVoxel(const HashTableGPU &hash_table,
-                      const BlockGPUMemory &blocks,
+inline Voxel GetVoxel(const HashTable &hash_table,
+                      const BlockArray &blocks,
                       const float3 world_pos,
                       CoordinateConverter& converter) {
   HashEntry hash_entry = hash_table.GetEntry(converter.WorldToBlock(world_pos));
@@ -34,8 +34,8 @@ inline Voxel GetVoxel(const HashTableGPU &hash_table,
 
 // TODO: put a dummy here
 __device__
-inline float GetSDF(const HashTableGPU& hash_table,
-                    BlockGPUMemory&          blocks,
+inline float GetSDF(const HashTable& hash_table,
+                    const BlockArray&          blocks,
                     const HashEntry&    curr_entry,
                     const uint3         voxel_local_pos,
                     float &weight,
@@ -45,7 +45,7 @@ inline float GetSDF(const HashTableGPU& hash_table,
 
   if (block_offset == make_int3(0)) {
     uint i = converter.VoxelLocalPosToIdx(voxel_local_pos);
-    Voxel& v = blocks[curr_entry.ptr].voxels[i];
+    const Voxel& v = blocks[curr_entry.ptr].voxels[i];
     sdf = v.sdf;
     weight = v.weight;
   } else {
@@ -53,7 +53,7 @@ inline float GetSDF(const HashTableGPU& hash_table,
     if (entry.ptr == FREE_ENTRY) return 0;
     uint i = converter.VoxelLocalPosToIdx(voxel_local_pos % BLOCK_SIDE_LENGTH);
 
-    Voxel &v = blocks[entry.ptr].voxels[i];
+    const Voxel &v = blocks[entry.ptr].voxels[i];
     sdf = v.sdf;
     weight = v.weight;
   }
@@ -62,8 +62,8 @@ inline float GetSDF(const HashTableGPU& hash_table,
 }
 
 __device__
-inline Voxel& GetVoxelRef(const HashTableGPU& hash_table,
-                     BlockGPUMemory&          blocks,
+inline Voxel& GetVoxelRef(const HashTable& hash_table,
+                     BlockArray&          blocks,
                      const HashEntry&    curr_entry,
                      const uint3         voxel_local_pos,
                           CoordinateConverter& converter) {
@@ -86,8 +86,8 @@ inline Voxel& GetVoxelRef(const HashTableGPU& hash_table,
 // TODO: simplify this code
 /// Interpolation of statistics involved
 __device__
-inline bool TrilinearInterpolation(const HashTableGPU &hash_table,
-                                   const BlockGPUMemory &blocks,
+inline bool TrilinearInterpolation(const HashTable &hash_table,
+                                   const BlockArray &blocks,
                                    const float3 &pos,
                                    float &sdf,
                                    Stat  &stats,
@@ -126,8 +126,8 @@ inline bool TrilinearInterpolation(const HashTableGPU &hash_table,
 }
 
 __device__
-inline bool TrilinearInterpolation(const HashTableGPU &hash_table,
-                                   const BlockGPUMemory &blocks,
+inline bool TrilinearInterpolation(const HashTable &hash_table,
+                                   const BlockArray &blocks,
                                    const float3 &pos,
                                    float &sdf,
                                    uchar3 &color,
@@ -171,8 +171,8 @@ inline float LinearIntersection(float t_near, float t_far,
 // d0 near, d1 far
 __device__
 /// Iteratively
-inline bool BisectionIntersection(const HashTableGPU &hash_table,
-                                  const BlockGPUMemory &blocks,
+inline bool BisectionIntersection(const HashTable &hash_table,
+                                  const BlockArray &blocks,
                                   const float3 &world_cam_pos,
                                   const float3 &world_cam_dir,
                                   float sdf_near, float t_near,
@@ -204,8 +204,8 @@ inline bool BisectionIntersection(const HashTableGPU &hash_table,
 }
 
 __device__
-inline float3 GradientAtPoint(const HashTableGPU &hash_table,
-                              const BlockGPUMemory &blocks,
+inline float3 GradientAtPoint(const HashTable &hash_table,
+                              const BlockArray &blocks,
                               const float3 &pos,
                               CoordinateConverter& converter) {
   const float voxelSize = converter.voxel_size;

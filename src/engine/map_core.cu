@@ -24,11 +24,11 @@
 /// Device code
 ////////////////////
 __global__
-void StarveOccupiedBlocksKernel(CandidateEntryPoolGPU candidate_entries,
-                                BlockGPUMemory      blocks) {
+void StarveOccupiedBlockArrayKernel(EntryArray candidate_entries,
+                                BlockArray      blocks) {
 
   const uint idx = blockIdx.x;
-  const HashEntry& entry = candidate_entries.entries[idx];
+  const HashEntry& entry = candidate_entries[idx];
   float weight = blocks[entry.ptr].voxels[threadIdx.x].weight;
   weight = fmaxf(0, weight - 1);
   blocks[entry.ptr].voxels[threadIdx.x].weight = weight;
@@ -36,12 +36,12 @@ void StarveOccupiedBlocksKernel(CandidateEntryPoolGPU candidate_entries,
 
 /// Collect dead voxels
 __global__
-void CollectGarbageBlocksKernel(CandidateEntryPoolGPU candidate_entries,
-                                BlockGPUMemory      blocks,
+void CollectGarbageBlockArrayKernel(EntryArray candidate_entries,
+                                BlockArray      blocks,
                                 CoordinateConverter converter) {
 
   const uint idx = blockIdx.x;
-  const HashEntry& entry = candidate_entries.entries[idx];
+  const HashEntry& entry = candidate_entries[idx];
 
   Voxel v0 = blocks[entry.ptr].voxels[2*threadIdx.x+0];
   Voxel v1 = blocks[entry.ptr].voxels[2*threadIdx.x+1];
@@ -85,14 +85,14 @@ void CollectGarbageBlocksKernel(CandidateEntryPoolGPU candidate_entries,
 
 /// !!! Their mesh not recycled
 __global__
-void RecycleGarbageBlocksTrianglesKernel(HashTableGPU        hash_table,
-                                CandidateEntryPoolGPU candidate_entries,
-                                BlockGPUMemory           blocks,
+void RecycleGarbageBlockArrayTrianglesKernel(HashTable        hash_table,
+                                EntryArray candidate_entries,
+                                BlockArray           blocks,
                                 MeshGPU             mesh) {
   const uint idx = blockIdx.x;
   if (candidate_entries.entry_recycle_flags[idx] == 0) return;
 
-  const HashEntry& entry = candidate_entries.entries[idx];
+  const HashEntry& entry = candidate_entries[idx];
   const uint local_idx = threadIdx.x;  //inside an SDF block
   Voxel &voxel = blocks[entry.ptr].voxels[local_idx];
 
@@ -109,12 +109,12 @@ void RecycleGarbageBlocksTrianglesKernel(HashTableGPU        hash_table,
 }
 
 __global__
-void RecycleGarbageBlocksVerticesKernel(HashTableGPU        hash_table,
-                                         CandidateEntryPoolGPU candidate_entries,
-                                         BlockGPUMemory           blocks,
+void RecycleGarbageBlockArrayVerticesKernel(HashTable        hash_table,
+                                         EntryArray candidate_entries,
+                                         BlockArray           blocks,
                                          MeshGPU             mesh) {
   if (candidate_entries.entry_recycle_flags[blockIdx.x] == 0) return;
-  const HashEntry &entry = candidate_entries.entries[blockIdx.x];
+  const HashEntry &entry = candidate_entries[blockIdx.x];
   const uint local_idx = threadIdx.x;
 
   Voxel &cube = blocks[entry.ptr].voxels[local_idx];
@@ -147,8 +147,8 @@ void RecycleGarbageBlocksVerticesKernel(HashTableGPU        hash_table,
 
 /// Condition: IsBlockInCameraFrustum
 __global__
-void CollectInFrustumBlocksKernel(HashTableGPU        hash_table,
-                                  CandidateEntryPoolGPU candidate_entries,
+void CollectInFrustumBlockArrayKernel(HashTable        hash_table,
+                                  EntryArray candidate_entries,
                                   SensorParams        sensor_params,
                                   float4x4            c_T_w,
                                   CoordinateConverter converter) {
@@ -159,7 +159,7 @@ void CollectInFrustumBlocksKernel(HashTableGPU        hash_table,
   __syncthreads();
 
   int addr_local = -1;
-  if (idx < *hash_table.entry_count
+  if (idx < hash_table.entry_count
     && hash_table.entries[idx].ptr != FREE_ENTRY
     && converter.IsBlockInCameraFrustum(c_T_w, hash_table.entries[idx].pos,
                                         sensor_params)) {
@@ -176,13 +176,13 @@ void CollectInFrustumBlocksKernel(HashTableGPU        hash_table,
 
   if (addr_local != -1) {
     const uint addr = addr_global + addr_local;
-    candidate_entries.entries[addr] = hash_table.entries[idx];
+    candidate_entries[addr] = hash_table.entries[idx];
   }
 }
 
 __global__
-void CollectAllBlocksKernel(HashTableGPU        hash_table,
-                            CandidateEntryPoolGPU candidate_entries) {
+void CollectAllBlockArrayKernel(HashTable        hash_table,
+                            EntryArray candidate_entries) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
 
   __shared__ int local_counter;
@@ -190,7 +190,7 @@ void CollectAllBlocksKernel(HashTableGPU        hash_table,
   __syncthreads();
 
   int addr_local = -1;
-  if (idx < *hash_table.entry_count
+  if (idx < hash_table.entry_count
       && hash_table.entries[idx].ptr != FREE_ENTRY) {
     addr_local = atomicAdd(&local_counter, 1);
   }
@@ -206,7 +206,7 @@ void CollectAllBlocksKernel(HashTableGPU        hash_table,
 
   if (addr_local != -1) {
     const uint addr = addr_global + addr_local;
-    candidate_entries.entries[addr] = hash_table.entries[idx];
+    candidate_entries[addr] = hash_table.entries[idx];
   }
 }
 
@@ -264,15 +264,15 @@ void Map::Recycle(int frame_count) {
 
   int kRecycleGap = 15;
   if (frame_count % kRecycleGap == kRecycleGap - 1) {
-    StarveOccupiedBlocks();
+    StarveOccupiedBlockArray();
 
-    CollectGarbageBlocks();
+    CollectGarbageBlockArray();
     hash_table_.ResetMutexes();
-    RecycleGarbageBlocks();
+    RecycleGarbageBlockArray();
   }
 }
 
-void Map::StarveOccupiedBlocks() {
+void Map::StarveOccupiedBlockArray() {
   const uint threads_per_block = BLOCK_SIZE;
 
   uint processing_block_count = candidate_entries_.entry_count();
@@ -282,14 +282,14 @@ void Map::StarveOccupiedBlocks() {
   const dim3 grid_size(processing_block_count, 1);
   const dim3 block_size(threads_per_block, 1);
 
-  StarveOccupiedBlocksKernel<<<grid_size, block_size >>>(
-          candidate_entries_.gpu_memory(),
-          blocks_.gpu_memory());
+  StarveOccupiedBlockArrayKernel<<<grid_size, block_size >>>(
+          candidate_entries_,
+          blocks_);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }
 
-void Map::CollectGarbageBlocks() {
+void Map::CollectGarbageBlockArray() {
   const uint threads_per_block = BLOCK_SIZE / 2;
 
   uint processing_block_count = candidate_entries_.entry_count();
@@ -299,9 +299,9 @@ void Map::CollectGarbageBlocks() {
   const dim3 grid_size(processing_block_count, 1);
   const dim3 block_size(threads_per_block, 1);
 
-  CollectGarbageBlocksKernel <<<grid_size, block_size >>>(
-          candidate_entries_.gpu_memory(),
-          blocks_.gpu_memory(),
+  CollectGarbageBlockArrayKernel <<<grid_size, block_size >>>(
+          candidate_entries_,
+          blocks_,
               coordinate_converter_);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
@@ -309,7 +309,7 @@ void Map::CollectGarbageBlocks() {
 
 // TODO(wei): Check vertex / triangles in detail
 // including garbage collection
-void Map::RecycleGarbageBlocks() {
+void Map::RecycleGarbageBlockArray() {
   const uint threads_per_block = BLOCK_SIZE;
 
   uint processing_block_count = candidate_entries_.entry_count();
@@ -319,39 +319,36 @@ void Map::RecycleGarbageBlocks() {
   const dim3 grid_size(processing_block_count, 1);
   const dim3 block_size(threads_per_block, 1);
 
-  RecycleGarbageBlocksTrianglesKernel <<<grid_size, block_size >>>(
-          hash_table_.gpu_memory(),
-          candidate_entries_.gpu_memory(),
-          blocks_.gpu_memory(),
+  RecycleGarbageBlockArrayTrianglesKernel <<<grid_size, block_size >>>(
+          hash_table_,
+          candidate_entries_,
+          blocks_,
           mesh_.gpu_memory());
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 
-  RecycleGarbageBlocksVerticesKernel <<<grid_size, block_size >>>(
-      hash_table_.gpu_memory(),
-          candidate_entries_.gpu_memory(),
-          blocks_.gpu_memory(),
+  RecycleGarbageBlockArrayVerticesKernel <<<grid_size, block_size >>>(
+      hash_table_,
+          candidate_entries_,
+          blocks_,
           mesh_.gpu_memory());
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }
 
 /// Compress discrete hash table entries
-void Map::CollectAllBlocks(){
+void Map::CollectAllBlockArray(){
   const uint threads_per_block = 256;
 
-  uint entry_count;
-  checkCudaErrors(cudaMemcpy(&entry_count, hash_table_.gpu_memory().entry_count,
-                             sizeof(uint), cudaMemcpyDeviceToHost));
-
+  uint entry_count = hash_table_.entry_count;
   const dim3 grid_size((entry_count + threads_per_block - 1)
                        / threads_per_block, 1);
   const dim3 block_size(threads_per_block, 1);
 
   candidate_entries_.reset_entry_count();
-  CollectAllBlocksKernel<<<grid_size, block_size >>>(
-          hash_table_.gpu_memory(),
-          candidate_entries_.gpu_memory());
+  CollectAllBlockArrayKernel<<<grid_size, block_size >>>(
+          hash_table_,
+          candidate_entries_);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 
@@ -359,21 +356,19 @@ void Map::CollectAllBlocks(){
             << candidate_entries_.entry_count();
 }
 
-void Map::CollectInFrustumBlocks(Sensor &sensor){
+void Map::CollectInFrustumBlockArray(Sensor &sensor){
   const uint threads_per_block = 256;
 
-  uint entry_count;
-  checkCudaErrors(cudaMemcpy(&entry_count, hash_table_.gpu_memory().entry_count,
-                             sizeof(uint), cudaMemcpyDeviceToHost));
+  uint entry_count = hash_table_.entry_count;
 
   const dim3 grid_size((entry_count + threads_per_block - 1)
                        / threads_per_block, 1);
   const dim3 block_size(threads_per_block, 1);
 
   candidate_entries_.reset_entry_count();
-  CollectInFrustumBlocksKernel<<<grid_size, block_size >>>(
-      hash_table_.gpu_memory(),
-          candidate_entries_.gpu_memory(),
+  CollectInFrustumBlockArrayKernel<<<grid_size, block_size >>>(
+      hash_table_,
+          candidate_entries_,
           sensor.sensor_params(),
           sensor.c_T_w(),
           coordinate_converter_);

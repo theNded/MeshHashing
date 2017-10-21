@@ -36,7 +36,7 @@ Debugger::~Debugger() {
   delete[] blocks_;
 }
 
-void Debugger::CoreDump(CandidateEntryPoolGPU &hash_table) {
+void Debugger::CoreDump(EntryArrayGPU &hash_table) {
   checkCudaErrors(cudaMemcpy(heap_counter_, hash_table.candidate_entry_counter,
                              sizeof(int),
                              cudaMemcpyDeviceToHost));
@@ -46,7 +46,7 @@ void Debugger::CoreDump(CandidateEntryPoolGPU &hash_table) {
                              cudaMemcpyDeviceToHost));
 }
 
-/// Blocks are not compactified, so we have to dump all of them
+/// BlockArray are not compactified, so we have to dump all of them
 void Debugger::CoreDump(BlockGPUMemory &blocks) {
   LOG(INFO) << block_count_;
   checkCudaErrors(cudaMemcpy(blocks_, blocks,

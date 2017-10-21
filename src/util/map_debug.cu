@@ -5,8 +5,8 @@
 /// Get bounding boxes
 //////////
 /// Assume this operation is following
-/// CollectInFrustumBlocks or
-/// CollectAllBlocks
+/// CollectInFrustumBlockArray or
+/// CollectAllBlockArray
 __device__
 const static int3 kEdgeOffsets[24] = {
         {0, 0, 0}, {0, 0, 1},
@@ -27,11 +27,11 @@ const static int3 kEdgeOffsets[24] = {
 
 __global__
 void GetBoundingBoxKernel(
-        CandidateEntryPoolGPU candidate_entries,
+        EntryArray candidate_entries,
         BBoxGPU             bboxes,
         CoordinateConverter converter) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
-  HashEntry& entry = candidate_entries.entries[idx];
+  HashEntry& entry = candidate_entries[idx];
 
   int3 voxel_base_pos   = converter.BlockToVoxel(entry.pos);
   float3 world_base_pos = converter.VoxelToWorld(voxel_base_pos)
@@ -58,7 +58,7 @@ void Map::GetBoundingBoxes() {
     const dim3 block_size(threads_per_block, 1);
 
     GetBoundingBoxKernel <<< grid_size, block_size >>> (
-            candidate_entries_.gpu_memory(),
+            candidate_entries_,
                     bbox_.gpu_memory(),
                 coordinate_converter_);
     checkCudaErrors(cudaDeviceSynchronize());

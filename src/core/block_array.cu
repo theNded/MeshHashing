@@ -1,4 +1,4 @@
-#include "core/block.h"
+#include "core/block_array.h"
 #include "helper_cuda.h"
 
 #include <device_launch_parameters.h>
@@ -7,7 +7,7 @@
 /// Device code
 ////////////////////
 __global__
-void BlocksResetKernel(BlockGPUMemory blocks, int block_count) {
+void BlockArrayResetKernel(Block* blocks, int block_count) {
   const uint block_idx = blockIdx.x * blockDim.x + threadIdx.x;
 
   if (block_idx < block_count) {
@@ -17,39 +17,47 @@ void BlocksResetKernel(BlockGPUMemory blocks, int block_count) {
 
 ////////////////////
 /// Host code
-////////////////////
-Blocks::Blocks() {
+//////////////////////
+__host__
+BlockArray::BlockArray() {
   block_count_ = 0;
-  gpu_memory_ = NULL;
+  blocks_ = NULL;
 }
 
-Blocks::Blocks(uint block_count) {
+__host__
+BlockArray::BlockArray(uint block_count) {
   Resize(block_count);
 }
 
-Blocks::~Blocks() {
-  Free();
+//
+//BlockArray::~BlockArray() {
+//  Free();
+//}
+
+__host__
+void BlockArray::Alloc(uint block_count) {
+  block_count_ = block_count;
+  checkCudaErrors(cudaMalloc(&blocks_, sizeof(Block) * block_count));
 }
 
-void Blocks::Alloc(uint block_count) {
-  checkCudaErrors(cudaMalloc(&gpu_memory_, sizeof(Block) * block_count));
+__host__
+void BlockArray::Free() {
+  block_count_ = 0;
+  checkCudaErrors(cudaFree(blocks_));
+  blocks_ = NULL;
 }
 
-void Blocks::Free() {
-  checkCudaErrors(cudaFree(gpu_memory_));
-  gpu_memory_ = NULL;
-}
-
-void Blocks::Resize(uint block_count) {
-  if (gpu_memory_) {
+__host__
+void BlockArray::Resize(uint block_count) {
+  if (blocks_) {
     Free();
   }
-  block_count_ = block_count;
   Alloc(block_count);
   Reset();
 }
 
-void Blocks::Reset() {
+__host__
+void BlockArray::Reset() {
   const uint threads_per_block = 64;
 
   if (block_count_ == 0) return;
@@ -60,7 +68,7 @@ void Blocks::Reset() {
   const dim3 grid_size(blocks, 1);
   const dim3 block_size(threads_per_block, 1);
 
-  BlocksResetKernel<<<grid_size, block_size>>>(gpu_memory_, block_count_);
+  BlockArrayResetKernel<<<grid_size, block_size>>>(blocks_, block_count_);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }

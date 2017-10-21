@@ -11,6 +11,26 @@ Basic data structures, including
 - **block**, holding its minimum unit, **voxel**
 - **mesh**, holding **vertices** and **triangles**
 
+These structs are designed to be usable on both CPU and GPU. The protocols for a `struct` are:
+- Mass data should be stored by *ptr, so that it can be correctly hold on memory either on CPU or GPU;
+- Non-const units should behave the same as mass data, so that when changed on GPU, they can be accesed by CPU via memcpy;
+- Const small units such as `int` should be stored as they are, so that they can be directly passed from device to host, vice versa.
+
+```cpp
+struct DSMemory {
+  const int value;
+  int* value;
+  T* array;
+}
+
+class DS {
+  DSMemory ds_;
+  /// Manage memory accordingly (CPU or GPU)
+  DS() { ... }
+  void Resize() { ... }
+}
+``` 
+
 ### engine
 Higher level wrappers for the data structures in `core`, basically
 - **map_engine**, managing **hash_table**, **blocks**, and **mesh**

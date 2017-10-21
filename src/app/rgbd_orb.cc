@@ -175,7 +175,7 @@ int main(int argc, char **argv) {
     }
 
     if (! args.mesh_range) {
-      map.CollectAllBlocks();
+      map.CollectAllBlockArray();
     }
     int3 stats;
     map.CompressMesh(stats);

@@ -38,8 +38,8 @@ float3 VertexIntersection(const float3& p1, const float3 p2,
 }
 
 __device__
-inline int AllocateVertexWithMutex(const HashTableGPU &hash_table,
-                                   BlockGPUMemory &blocks,
+inline int AllocateVertexWithMutex(const HashTable &hash_table,
+                                   BlockArray &blocks,
                                    MeshGPU& mesh,
                                    Voxel& voxel,
                                    uint& vertex_idx,
@@ -147,9 +147,9 @@ void RefineMesh(short& prev_cube, short& curr_cube, float d[8], int is_noise_bit
 
 __global__
 void MarchingCubesPass1Kernel(
-    HashTableGPU        hash_table,
-    CandidateEntryPoolGPU candidate_entries,
-    BlockGPUMemory           blocks,
+    HashTable        hash_table,
+    EntryArray candidate_entries,
+    BlockArray           blocks,
     MeshGPU             mesh,
     bool                use_fine_gradient,
     CoordinateConverter converter) {
@@ -222,9 +222,9 @@ void MarchingCubesPass1Kernel(
 
 __global__
 void MarchingCubesPass2Kernel(
-    HashTableGPU        hash_table,
-    CandidateEntryPoolGPU candidate_entries,
-    BlockGPUMemory           blocks,
+    HashTable        hash_table,
+    EntryArray candidate_entries,
+    BlockArray          blocks,
     MeshGPU             mesh,
     bool                use_fine_gradient,
     CoordinateConverter converter) {
@@ -296,8 +296,8 @@ void MarchingCubesPass2Kernel(
 /// Garbage collection (ref count)
 __global__
 void RecycleTrianglesKernel(
-    CandidateEntryPoolGPU candidate_entries,
-    BlockGPUMemory           blocks,
+    EntryArray candidate_entries,
+    BlockArray           blocks,
     MeshGPU             mesh) {
   const HashEntry &entry = candidate_entries[blockIdx.x];
 
@@ -321,8 +321,8 @@ void RecycleTrianglesKernel(
 
 __global__
 void RecycleVerticesKernel(
-    CandidateEntryPoolGPU candidate_entries,
-    BlockGPUMemory           blocks,
+    EntryArray candidate_entries,
+    BlockArray           blocks,
     MeshGPU             mesh) {
   const HashEntry &entry = candidate_entries[blockIdx.x];
   const uint local_idx = threadIdx.x;
@@ -343,9 +343,9 @@ void RecycleVerticesKernel(
 /// Only update Laplacian at current
 #ifdef STATS
 __global__
-void UpdateStatisticsKernel(HashTableGPU        hash_table,
-                            CandidateEntryPoolGPU candidate_entries,
-                            BlockGPUMemory           blocks) {
+void UpdateStatisticsKernel(HashTable        hash_table,
+                            EntryArray candidate_entries,
+                            BlockArray           blocks) {
 
   const HashEntry &entry = candidate_entries.entries[blockIdx.x];
   const uint local_idx   = threadIdx.x;
@@ -397,7 +397,7 @@ void Map::MarchingCubes() {
 #ifdef STATS
   UpdateStatisticsKernel<<<grid_size, block_size>>>(
       hash_table_.gpu_memory(),
-          candidate_entries_.gpu_memory(),
+          candidate_entries_,
           blocks_.gpu_memory());
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
@@ -407,9 +407,9 @@ void Map::MarchingCubes() {
   Timer timer;
   timer.Tick();
   MarchingCubesPass1Kernel<<<grid_size, block_size>>>(
-      hash_table_.gpu_memory(),
-          candidate_entries_.gpu_memory(),
-          blocks_.gpu_memory(),
+      hash_table_,
+          candidate_entries_,
+          blocks_,
           mesh_.gpu_memory(),
           use_fine_gradient_,
           coordinate_converter_);
@@ -421,9 +421,9 @@ void Map::MarchingCubes() {
 
   timer.Tick();
   MarchingCubesPass2Kernel<<<grid_size, block_size>>>(
-      hash_table_.gpu_memory(),
-          candidate_entries_.gpu_memory(),
-          blocks_.gpu_memory(),
+      hash_table_,
+          candidate_entries_,
+          blocks_,
           mesh_.gpu_memory(),
           use_fine_gradient_,
           coordinate_converter_);
@@ -435,15 +435,15 @@ void Map::MarchingCubes() {
 
 
   RecycleTrianglesKernel<<<grid_size, block_size>>>(
-      candidate_entries_.gpu_memory(),
-          blocks_.gpu_memory(),
+      candidate_entries_,
+          blocks_,
           mesh_.gpu_memory());
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 
   RecycleVerticesKernel<<<grid_size, block_size>>>(
-      candidate_entries_.gpu_memory(),
-          blocks_.gpu_memory(),
+      candidate_entries_,
+          blocks_,
           mesh_.gpu_memory());
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
@@ -453,8 +453,8 @@ void Map::MarchingCubes() {
 /// Compress discrete vertices and triangles
 __global__
 void CollectVerticesAndTrianglesKernel(
-    CandidateEntryPoolGPU candidate_entries,
-    BlockGPUMemory           blocks,
+    EntryArray candidate_entries,
+    BlockArray           blocks,
     MeshGPU             mesh,
     CompactMeshGPU      compact_mesh) {
   const HashEntry &entry = candidate_entries[blockIdx.x];
@@ -538,8 +538,8 @@ void CompressTrianglesKernel(MeshGPU        mesh,
 }
 
 /// Assume this operation is following
-/// CollectInFrustumBlocks or
-/// CollectAllBlocks
+/// CollectInFrustumBlockArray or
+/// CollectAllBlockArray
 void Map::CompressMesh(int3& stats) {
   compact_mesh_.Reset();
 
@@ -553,8 +553,8 @@ void Map::CompressMesh(int3& stats) {
 
     LOG(INFO) << "Before: " << compact_mesh_.vertex_count() << " " << compact_mesh_.triangle_count();
     CollectVerticesAndTrianglesKernel <<< grid_size, block_size >>> (
-        candidate_entries_.gpu_memory(),
-            blocks_.gpu_memory(),
+        candidate_entries_,
+            blocks_,
             mesh_.gpu_memory(),
             compact_mesh_.gpu_memory());
     checkCudaErrors(cudaDeviceSynchronize());
@@ -617,7 +617,7 @@ void Map::CompressMesh(int3& stats) {
 void Map::SaveMesh(std::string path) {
   LOG(INFO) << "Copying data from GPU";
 
-  CollectAllBlocks();
+  CollectAllBlockArray();
   int3 stats;
   CompressMesh(stats);
 
@@ -687,7 +687,7 @@ void Map::SaveMesh(std::string path) {
 void Map::SavePly(std::string path) {
   LOG(INFO) << "Copying data from GPU";
 
-  CollectAllBlocks();
+  CollectAllBlockArray();
   int3 stats;
   CompressMesh(stats);
 

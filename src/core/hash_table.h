@@ -10,139 +10,86 @@
 
 #include "core/common.h"
 #include "core/params.h"
+#include "core/hash_entry.h"
 #include "geometry/coordinate_utils.h"
 
-struct __ALIGN__(8) HashEntry {
-  int3	pos;		   // block position (lower left corner of SDFBlock))
-  int		ptr;	     // pointer into heap to SDFBlock
-  uint	offset;		 // offset for linked lists
-
-  __device__
-  void operator=(const struct HashEntry& e) {
-    ((long long*)this)[0] = ((const long long*)&e)[0];
-    ((long long*)this)[1] = ((const long long*)&e)[1];
-    ((int*)this)[4]       = ((const int*)&e)[4];
-  }
-
-  __device__
-  void Clear() {
-    pos    = make_int3(0);
-    ptr    = FREE_ENTRY;
-    offset = 0;
-  }
-};
-
-struct HashTableGPU {
-  /// Hash VALUE part
-  uint      *heap;             /// index to free values
-  uint      *heap_counter;     /// single element; used as an atomic counter (points to the next free block)
-
-  /// Hash KEY part
+class HashTable {
+public:
+  // TEMPORARY!
   HashEntry *entries;          /// hash entries that stores pointers to sdf values
-  /// == occupied_block_count
-  /// Misc
-  int       *bucket_mutexes;   /// binary flag per hash bucket; used for allocation to atomically lock a bucket
 
   /// Parameters
-  uint      *bucket_count;
-  uint      *bucket_size;
-  uint      *entry_count;
-  uint      *value_capacity;
-  uint      *linked_list_size;
+  uint      bucket_count;
+  uint      bucket_size;
+  uint      entry_count;
+  uint      value_capacity;
+  uint      linked_list_size;
+
+  __host__ HashTable();
+  __host__ HashTable(const HashParams &params);
+  // ~HashTable();
+  __host__ void Alloc(const HashParams &params);
+  __host__ void Free();
+
+  __host__ void Resize(const HashParams &params);
+  __host__ void Reset();
+  __host__ void ResetMutexes();
+
+  //__host__ void Debug();
 
   /////////////////
   // Device part //
-  /////////////////
 #ifdef __CUDACC__
-  //! see Teschner et al. (but with correct prime values)
   __device__
-  uint HashBucketForBlockPos(const int3& block_pos) const {
-    const int p0 = 73856093;
-    const int p1 = 19349669;
-    const int p2 = 83492791;
-
-    int res = ((block_pos.x * p0) ^ (block_pos.y * p1) ^ (block_pos.z * p2))
-            % (*bucket_count);
-    if (res < 0) res += (*bucket_count);
-    return (uint) res;
-  }
-
-
-  ////////////////////////////////////////
-  /// Access
-  __device__
-  bool IsBlockAllocated(const int3& block_pos, const HashEntry& hash_entry) const {
-    return block_pos.x == hash_entry.pos.x
-        && block_pos.y == hash_entry.pos.y
-        && block_pos.z == hash_entry.pos.z
-        && hash_entry.ptr != FREE_ENTRY;
-  }
-
-
-  __device__
-  HashEntry GetEntry(const int3& block_pos) const {
-    uint bucket_idx             = HashBucketForBlockPos(block_pos);
-    uint bucket_first_entry_idx = bucket_idx * (*bucket_size);
+  HashEntry GetEntry(const int3& pos) const {
+    uint bucket_idx             = HashBucketForBlockPos(pos);
+    uint bucket_first_entry_idx = bucket_idx * bucket_size;
 
     HashEntry entry;
-    entry.pos    = block_pos;
+    entry.pos    = pos;
     entry.offset = 0;
     entry.ptr    = FREE_ENTRY;
 
-    for (uint i = 0; i < (*bucket_size); ++i) {
+    for (uint i = 0; i < bucket_size; ++i) {
       HashEntry curr_entry = entries[i + bucket_first_entry_idx];
-      if (IsBlockAllocated(block_pos, curr_entry)) {
+      if (IsPosAllocated(pos, curr_entry)) {
         return curr_entry;
       }
     }
 
     /// The last entry is visted twice, but it's OK
 #ifdef HANDLE_COLLISIONS
-    const uint bucket_last_entry_idx = bucket_first_entry_idx + (*bucket_size) - 1;
+    const uint bucket_last_entry_idx = bucket_first_entry_idx + bucket_size - 1;
     int i = bucket_last_entry_idx;
 
     #pragma unroll 1
-    for (uint iter = 0; iter < *linked_list_size; ++iter) {
+    for (uint iter = 0; iter < linked_list_size; ++iter) {
       HashEntry curr_entry = entries[i];
 
-      if (IsBlockAllocated(block_pos, curr_entry)) {
+      if (IsPosAllocated(pos, curr_entry)) {
         return curr_entry;
       }
       if (curr_entry.offset == 0) {
         break;
       }
-      i = (bucket_last_entry_idx + curr_entry.offset) % (*entry_count);
+      i = (bucket_last_entry_idx + curr_entry.offset) % (entry_count);
     }
 #endif
     return entry;
-  }
-
-  __device__
-  uint Alloc() {
-    uint addr = atomicSub(&heap_counter[0], 1);
-    if (addr < MEMORY_LIMIT) {
-      printf("Memory nearly exhausted! %d -> %d\n", addr, heap[addr]);
-    }
-    return heap[addr];
-  }
-  __device__
-  void Free(uint ptr) {
-    uint addr = atomicAdd(&heap_counter[0], 1);
-    heap[addr + 1] = ptr;
   }
 
   //pos in SDF block coordinates
   __device__
   void AllocEntry(const int3& pos) {
     uint bucket_idx             = HashBucketForBlockPos(pos);		//hash bucket
-    uint bucket_first_entry_idx = bucket_idx * (*bucket_size);	//hash position
+    uint bucket_first_entry_idx = bucket_idx * bucket_size;	//hash position
 
     /// 1. Try GetEntry, meanwhile collect an empty entry potentially suitable
     int empty_entry_idx = -1;
-    for (uint j = 0; j < (*bucket_size); j++) {
+    for (uint j = 0; j < bucket_size; j++) {
       uint i = j + bucket_first_entry_idx;
       const HashEntry& curr_entry = entries[i];
-      if (IsBlockAllocated(pos, curr_entry)) {
+      if (IsPosAllocated(pos, curr_entry)) {
         return;
       }
 
@@ -153,18 +100,18 @@ struct HashTableGPU {
     }
 
 #ifdef HANDLE_COLLISIONS
-    const uint bucket_last_entry_idx = bucket_first_entry_idx + (*bucket_size) - 1;
+    const uint bucket_last_entry_idx = bucket_first_entry_idx + bucket_size - 1;
     uint i = bucket_last_entry_idx;
-    for (uint iter = 0; iter < *linked_list_size; ++iter) {
+    for (uint iter = 0; iter < linked_list_size; ++iter) {
       HashEntry curr_entry = entries[i];
 
-      if (IsBlockAllocated(pos, curr_entry)) {
+      if (IsPosAllocated(pos, curr_entry)) {
         return;
       }
       if (curr_entry.offset == 0) {
         break;
       }
-      i = (bucket_last_entry_idx + curr_entry.offset) % (*entry_count);
+      i = (bucket_last_entry_idx + curr_entry.offset) % (entry_count);
     }
 #endif
 
@@ -185,11 +132,11 @@ struct HashTableGPU {
     int offset = 0;
 
     #pragma  unroll 1
-    for (uint iter = 0; iter < *linked_list_size; ++iter) {
+    for (uint iter = 0; iter < linked_list_size; ++iter) {
       offset ++;
-      if ((offset % (*bucket_size)) == 0) continue;
+      if ((offset % bucket_size) == 0) continue;
 
-      i = (bucket_last_entry_idx + offset) % (*entry_count);
+      i = (bucket_last_entry_idx + offset) % (entry_count);
 
       HashEntry& curr_entry = entries[i];
 
@@ -197,7 +144,7 @@ struct HashTableGPU {
         int lock = atomicExch(&bucket_mutexes[bucket_idx], LOCK_ENTRY);
         if (lock != LOCK_ENTRY) {
           HashEntry& bucket_last_entry = entries[bucket_last_entry_idx];
-          uint alloc_bucket_idx = i / (*bucket_size);
+          uint alloc_bucket_idx = i / bucket_size;
 
           lock = atomicExch(&bucket_mutexes[alloc_bucket_idx], LOCK_ENTRY);
           if (lock != LOCK_ENTRY) {
@@ -217,18 +164,17 @@ struct HashTableGPU {
 #endif
   }
 
-
-  //! deletes a hash entry position for a given block_pos index
+  //! deletes a hash entry position for a given pos index
   // returns true uppon successful deletion; otherwise returns false
   __device__
-  bool FreeEntry(const int3& block_pos) {
-    uint bucket_idx = HashBucketForBlockPos(block_pos);	//hash bucket
-    uint bucket_first_entry_idx = bucket_idx * (*bucket_size);		//hash position
+  bool FreeEntry(const int3& pos) {
+    uint bucket_idx = HashBucketForBlockPos(pos);	//hash bucket
+    uint bucket_first_entry_idx = bucket_idx * bucket_size;		//hash position
 
-    for (uint j = 0; j < (*bucket_size); j++) {
+    for (uint j = 0; j < bucket_size; j++) {
       uint i = j + bucket_first_entry_idx;
       const HashEntry& curr = entries[i];
-      if (IsBlockAllocated(block_pos, curr)) {
+      if (IsPosAllocated(pos, curr)) {
 
 #ifndef HANDLE_COLLISIONS
         Free(curr.ptr);
@@ -240,7 +186,7 @@ struct HashTableGPU {
           int lock = atomicExch(&bucket_mutexes[bucket_idx], LOCK_ENTRY);
           if (lock != LOCK_ENTRY) {
             Free(curr.ptr);
-            int next_idx = (i + curr.offset) % (*entry_count);
+            int next_idx = (i + curr.offset) % (entry_count);
             entries[i] = entries[next_idx];
             entries[next_idx].Clear();
             return true;
@@ -258,18 +204,18 @@ struct HashTableGPU {
 
 #ifdef HANDLE_COLLISIONS
     // Init with linked list traverse
-    const uint bucket_last_entry_idx = bucket_first_entry_idx + (*bucket_size) - 1;
+    const uint bucket_last_entry_idx = bucket_first_entry_idx + bucket_size - 1;
     int i = bucket_last_entry_idx;
     HashEntry& curr = entries[i];
 
     int prev_idx = i;
-    i = (bucket_last_entry_idx + curr.offset) % (*entry_count);
+    i = (bucket_last_entry_idx + curr.offset) % (entry_count);
 
     #pragma unroll 1
-    for (uint iter = 0; iter < *linked_list_size; ++iter) {
+    for (uint iter = 0; iter < linked_list_size; ++iter) {
       curr = entries[i];
 
-      if (IsBlockAllocated(block_pos, curr)) {
+      if (IsPosAllocated(pos, curr)) {
         int lock = atomicExch(&bucket_mutexes[bucket_idx], LOCK_ENTRY);
         if (lock != LOCK_ENTRY) {
           Free(curr.ptr);
@@ -288,70 +234,62 @@ struct HashTableGPU {
       }
 
       prev_idx = i;
-      i = (bucket_last_entry_idx + curr.offset) % (*entry_count);
+      i = (bucket_last_entry_idx + curr.offset) % (entry_count);
     }
 #endif	// HANDLE_COLLSISION
     return false;
   }
 #endif	//CUDACC
 
-};
-
-class HashTable {
 private:
-  HashTableGPU gpu_memory_;
+  /// Hash VALUE part
+  uint      *heap;             /// index to free values
+  uint      *heap_counter;     /// single element; used as an atomic counter (points to the next free block)
+
+  /// Hash KEY part
+  /// == occupied_block_count
+  /// Misc
+  int       *bucket_mutexes;   /// binary flag per hash bucket; used for allocation to atomically lock a bucket
+
   HashParams hash_params_;
 
-  void Alloc(const HashParams &params);
-  void Free();
+#ifdef __CUDACC__
+  //! see Teschner et al. (but with correct prime values)
+  __device__
+  uint HashBucketForBlockPos(const int3& pos) const {
+    const int p0 = 73856093;
+    const int p1 = 19349669;
+    const int p2 = 83492791;
 
-public:
-  HashTable();
-  HashTable(const HashParams &params);
-  ~HashTable();
-
-  void Resize(const HashParams &params);
-  void Reset();
-  void ResetMutexes();
-
-  void Debug();
-
-  HashTableGPU& gpu_memory() {
-    return gpu_memory_;
+    int res = ((pos.x * p0) ^ (pos.y * p1) ^ (pos.z * p2))
+              % bucket_count;
+    if (res < 0) res += bucket_count;
+    return (uint) res;
   }
+
+  __device__
+  bool IsPosAllocated(const int3& pos, const HashEntry& hash_entry) const {
+    return pos.x == hash_entry.pos.x
+        && pos.y == hash_entry.pos.y
+        && pos.z == hash_entry.pos.z
+        && hash_entry.ptr != FREE_ENTRY;
+  }
+
+  __device__
+  uint Alloc() {
+    uint addr = atomicSub(&heap_counter[0], 1);
+    if (addr < MEMORY_LIMIT) {
+      printf("Memory nearly exhausted! %d -> %d\n", addr, heap[addr]);
+    }
+    return heap[addr];
+  }
+
+  __device__
+  void Free(uint ptr) {
+    uint addr = atomicAdd(&heap_counter[0], 1);
+    heap[addr + 1] = ptr;
+  }
+#endif
 };
 
-struct CandidateEntryPoolGPU {
-  int       *entry_recycle_flags;     /// used in garbage collection
-  int       *candidate_entry_counter; /// atomic counter to add compacted entries atomically
-  HashEntry *entries;       /// allocated for parallel computation
-
-  __host__ __device__
-  HashEntry& operator [] (int i) {
-    return entries[i];
-  }
-};
-
-class CandidateEntryPool {
-private:
-  CandidateEntryPoolGPU gpu_memory_;
-  uint                entry_count_;
-
-  void Alloc(uint entry_count);
-  void Free();
-
-public:
-  CandidateEntryPool();
-  ~CandidateEntryPool();
-
-  uint entry_count();
-  void reset_entry_count();
-
-  void Resize(uint entry_count);
-  void Reset();
-
-  CandidateEntryPoolGPU& gpu_memory() {
-    return gpu_memory_;
-  }
-};
 #endif //VH_HASH_TABLE_H
