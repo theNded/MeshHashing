@@ -18,12 +18,12 @@ Debugger::Debugger(int entry_count, int block_count,
 
   vertex_count_ = vertex_count;
   vertices_ = new Vertex[vertex_count];
-  vertex_heap_ = new uint[vertex_count];
+  vertex_heap__ = new uint[vertex_count];
   vertex_heap_counter__ = new uint[1];
 
   triangle_count_ = triangle_count;
   triangles_ = new Triangle[triangle_count];
-  triangle_heap_ = new uint[triangle_count];
+  triangle_heap__ = new uint[triangle_count];
   triangle_heap_counter__ = new uint[1];
 
   voxel_size_ = voxel_size;

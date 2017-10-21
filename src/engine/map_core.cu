@@ -87,7 +87,7 @@ __global__
 void RecycleGarbageBlockArrayTrianglesKernel(HashTable        hash_table,
                                 EntryArray candidate_entries,
                                 BlockArray           blocks,
-                                MeshGPU             mesh) {
+                                Mesh             mesh) {
   const uint idx = blockIdx.x;
   if (candidate_entries.flag(idx) == 0) return;
 
@@ -100,8 +100,8 @@ void RecycleGarbageBlockArrayTrianglesKernel(HashTable        hash_table,
     if (triangle_ptr == FREE_PTR) continue;
 
     // Clear ref_count of its pointed vertices
-    mesh.ReleaseTriangle(mesh.triangles[triangle_ptr]);
-    mesh.triangles[triangle_ptr].Clear();
+    mesh.ReleaseTriangle(mesh.triangle(triangle_ptr));
+    mesh.triangle(triangle_ptr).Clear();
     mesh.FreeTriangle(triangle_ptr);
     voxel.triangle_ptrs[i] = FREE_PTR;
   }
@@ -111,7 +111,7 @@ __global__
 void RecycleGarbageBlockArrayVerticesKernel(HashTable        hash_table,
                                          EntryArray candidate_entries,
                                          BlockArray           blocks,
-                                         MeshGPU             mesh) {
+                                         Mesh             mesh) {
   if (candidate_entries.flag(blockIdx.x) == 0) return;
   const HashEntry &entry = candidate_entries[blockIdx.x];
   const uint local_idx = threadIdx.x;
@@ -125,8 +125,8 @@ void RecycleGarbageBlockArrayVerticesKernel(HashTable        hash_table,
 #pragma unroll 1
   for (int i = 0; i < 3; ++i) {
     if (cube.vertex_ptrs[i] != FREE_PTR) {
-      if (mesh.vertices[cube.vertex_ptrs[i]].ref_count <= 0) {
-        mesh.vertices[cube.vertex_ptrs[i]].Clear();
+      if (mesh.vertex(cube.vertex_ptrs[i]).ref_count <= 0) {
+        mesh.vertex(cube.vertex_ptrs[i]).Clear();
         mesh.FreeVertex(cube.vertex_ptrs[i]);
         cube.vertex_ptrs[i] = FREE_PTR;
       }
@@ -322,7 +322,7 @@ void Map::RecycleGarbageBlockArray() {
           hash_table_,
           candidate_entries_,
           blocks_,
-          mesh_.gpu_memory());
+          mesh_);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 
@@ -330,7 +330,7 @@ void Map::RecycleGarbageBlockArray() {
       hash_table_,
           candidate_entries_,
           blocks_,
-          mesh_.gpu_memory());
+          mesh_);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }

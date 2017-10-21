@@ -20,7 +20,7 @@ __global__
 void UpdateBlockArrayKernel(EntryArray candidate_entries,
                         HashTable        hash_table,
                         BlockArray          blocks,
-                        MeshGPU             mesh,
+                        Mesh             mesh,
                         SensorDataGPU       sensor_data,
                         SensorParams        sensor_params,
                         float4x4            c_T_w,
@@ -66,7 +66,7 @@ void UpdateBlockArrayKernel(EntryArray candidate_entries,
   for (int i = 0; i < N_VERTEX; ++i) {
     if (this_voxel.vertex_ptrs[i] > 0) {
       addition = true;
-      Vertex vtx = mesh.vertices[this_voxel.vertex_ptrs[i]];
+      Vertex vtx = mesh.vertex(this_voxel.vertex_ptrs[i]);
       float3 v = vtx.pos;
       float3 n = vtx.normal;
       wn += dot(c_T_w * n, normalize(-dp));
@@ -261,7 +261,7 @@ void Map::UpdateBlockArray(Sensor &sensor) {
           candidate_entries_,
           hash_table_,
           blocks_,
-          mesh_.gpu_memory(),
+          mesh_,
           sensor.gpu_memory(),
           sensor.sensor_params(), sensor.c_T_w(),
               coordinate_converter_);

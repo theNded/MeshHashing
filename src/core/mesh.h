@@ -13,46 +13,67 @@
 #include <helper_cuda.h>
 #include <helper_math.h>
 
+class Mesh {
+public:
+  __host__ Mesh();
+  // __host__ ~Mesh();
 
-struct MeshGPU {
-  // Dynamic memory management for vertices
-  // We need compact operation,
-  // as MC during updating might release some triangles
-  uint*     vertex_heap;
+  __host__ void Alloc(const MeshParams &mesh_params);
+  __host__ void Free();
+  __host__ void Resize(const MeshParams &mesh_params);
+  __host__ void Reset();
+
+  const MeshParams& params() {
+    return mesh_params_;
+  }
+
+  __device__ __host__ Vertex& vertex(uint i) {
+    return vertices[i];
+  }
+  __device__ __host__ Triangle& triangle(uint i) {
+    return triangles[i];
+  }
+
+  __host__ uint vertex_heap_count();
+  __host__ uint triangle_heap_count();
+
+private:
+  uint*     vertex_heap_;
   uint*     vertex_heap_counter_;
   Vertex*   vertices;
 
-  uint*     triangle_heap;
+  uint*     triangle_heap_;
   uint*     triangle_heap_counter_;
   Triangle* triangles;
 
 #ifdef __CUDACC__
+public:
   __device__
   uint AllocVertex() {
     uint addr = atomicSub(&vertex_heap_counter_[0], 1);
     if (addr < MEMORY_LIMIT) {
-      printf("v: %d -> %d\n", addr, vertex_heap[addr]);
+      printf("v: %d -> %d\n", addr, vertex_heap_[addr]);
     }
-    return vertex_heap[addr];
+    return vertex_heap_[addr];
   }
   __device__
   void FreeVertex(uint ptr) {
     uint addr = atomicAdd(&vertex_heap_counter_[0], 1);
-    vertex_heap[addr + 1] = ptr;
+    vertex_heap_[addr + 1] = ptr;
   }
 
   __device__
   uint AllocTriangle() {
     uint addr = atomicSub(&triangle_heap_counter_[0], 1);
     if (addr < MEMORY_LIMIT) {
-      printf("t: %d -> %d\n", addr, vertex_heap[addr]);
+      printf("t: %d -> %d\n", addr, vertex_heap_[addr]);
     }
-    return triangle_heap[addr];
+    return triangle_heap_[addr];
   }
   __device__
   void FreeTriangle(uint ptr) {
     uint addr = atomicAdd(&triangle_heap_counter_[0], 1);
-    triangle_heap[addr + 1] = ptr;
+    triangle_heap_[addr + 1] = ptr;
   }
 
   /// Release is NOT always a FREE operation
@@ -84,32 +105,8 @@ struct MeshGPU {
     vertices[vertex_ptrs.z].normal = n;
   }
 #endif // __CUDACC__
-};
 
-class Mesh {
-private:
-  MeshGPU gpu_memory_;
   MeshParams mesh_params_;
-
-  void Alloc(const MeshParams &mesh_params);
-  void Free();
-
-public:
-  Mesh();
-  ~Mesh();
-
-  void Resize(const MeshParams &mesh_params);
-  void Reset();
-
-  MeshGPU& gpu_memory() {
-    return gpu_memory_;
-  }
-  const MeshParams& params() {
-    return mesh_params_;
-  }
-
-  uint vertex_heap_count();
-  uint triangle_heap_count();
 
 };
 

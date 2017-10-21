@@ -40,7 +40,7 @@ float3 VertexIntersection(const float3& p1, const float3 p2,
 __device__
 inline int AllocateVertexWithMutex(const HashTable &hash_table,
                                    BlockArray &blocks,
-                                   MeshGPU& mesh,
+                                   Mesh& mesh,
                                    Voxel& voxel,
                                    uint& vertex_idx,
                                    const float3& vertex_pos,
@@ -56,9 +56,9 @@ inline int AllocateVertexWithMutex(const HashTable &hash_table,
 
   if (ptr >= 0) {
     voxel.vertex_ptrs[vertex_idx] = ptr;
-    mesh.vertices[ptr].pos = vertex_pos;
+    mesh.vertex(ptr).pos = vertex_pos;
     if (use_fine_gradient) {
-      mesh.vertices[ptr].normal = GradientAtPoint(hash_table, blocks, vertex_pos, converter);
+      mesh.vertex(ptr).normal = GradientAtPoint(hash_table, blocks, vertex_pos, converter);
     }
 
     float sdf;
@@ -66,7 +66,7 @@ inline int AllocateVertexWithMutex(const HashTable &hash_table,
     uchar3 color;
     TrilinearInterpolation(hash_table, blocks, vertex_pos, sdf, stats, color, converter);
     float3 val = ValToRGB(stats.duration, 0, 100);
-    mesh.vertices[ptr].color = make_float3(val.x, val.y, val.z);
+    mesh.vertex(ptr).color = make_float3(val.x, val.y, val.z);
   }
 
   return ptr;
@@ -150,7 +150,7 @@ void MarchingCubesPass1Kernel(
     HashTable        hash_table,
     EntryArray candidate_entries,
     BlockArray           blocks,
-    MeshGPU             mesh,
+    Mesh             mesh,
     bool                use_fine_gradient,
     CoordinateConverter converter) {
 
@@ -225,7 +225,7 @@ void MarchingCubesPass2Kernel(
     HashTable        hash_table,
     EntryArray candidate_entries,
     BlockArray          blocks,
-    MeshGPU             mesh,
+    Mesh             mesh,
     bool                use_fine_gradient,
     CoordinateConverter converter) {
 
@@ -279,16 +279,16 @@ void MarchingCubesPass2Kernel(
     if (triangle_ptr == FREE_PTR) {
       triangle_ptr = mesh.AllocTriangle();
     } else {
-      mesh.ReleaseTriangle(mesh.triangles[triangle_ptr]);
+      mesh.ReleaseTriangle(mesh.triangle(triangle_ptr));
     }
     this_voxel.triangle_ptrs[i] = triangle_ptr;
 
-    mesh.AssignTriangle(mesh.triangles[triangle_ptr],
+    mesh.AssignTriangle(mesh.triangle(triangle_ptr),
                         make_int3(vertex_ptr[kTriangleTable[this_voxel.curr_cube_idx][t + 0]],
                                   vertex_ptr[kTriangleTable[this_voxel.curr_cube_idx][t + 1]],
                                   vertex_ptr[kTriangleTable[this_voxel.curr_cube_idx][t + 2]]));
     if (! use_fine_gradient) {
-      mesh.ComputeTriangleNormal(mesh.triangles[triangle_ptr]);
+      mesh.ComputeTriangleNormal(mesh.triangle(triangle_ptr));
     }
   }
 }
@@ -297,8 +297,8 @@ void MarchingCubesPass2Kernel(
 __global__
 void RecycleTrianglesKernel(
     EntryArray candidate_entries,
-    BlockArray           blocks,
-    MeshGPU             mesh) {
+    BlockArray       blocks,
+    Mesh             mesh) {
   const HashEntry &entry = candidate_entries[blockIdx.x];
 
   const uint local_idx = threadIdx.x;  //inside an SDF block
@@ -312,8 +312,8 @@ void RecycleTrianglesKernel(
     if (triangle_ptr == FREE_PTR) continue;
 
     // Clear ref_count of its pointed vertices
-    mesh.ReleaseTriangle(mesh.triangles[triangle_ptr]);
-    mesh.triangles[triangle_ptr].Clear();
+    mesh.ReleaseTriangle(mesh.triangle(triangle_ptr));
+    mesh.triangle(triangle_ptr).Clear();
     mesh.FreeTriangle(triangle_ptr);
     voxel.triangle_ptrs[i] = FREE_PTR;
   }
@@ -323,7 +323,7 @@ __global__
 void RecycleVerticesKernel(
     EntryArray candidate_entries,
     BlockArray           blocks,
-    MeshGPU             mesh) {
+    Mesh             mesh) {
   const HashEntry &entry = candidate_entries[blockIdx.x];
   const uint local_idx = threadIdx.x;
 
@@ -332,8 +332,8 @@ void RecycleVerticesKernel(
 #pragma unroll 1
   for (int i = 0; i < 3; ++i) {
     if (voxel.vertex_ptrs[i] != FREE_PTR &&
-        mesh.vertices[voxel.vertex_ptrs[i]].ref_count == 0) {
-      mesh.vertices[voxel.vertex_ptrs[i]].Clear();
+        mesh.vertex(voxel.vertex_ptrs[i]).ref_count == 0) {
+      mesh.vertex(voxel.vertex_ptrs[i]).Clear();
       mesh.FreeVertex(voxel.vertex_ptrs[i]);
       voxel.vertex_ptrs[i] = FREE_PTR;
     }
@@ -410,7 +410,7 @@ void Map::MarchingCubes() {
       hash_table_,
           candidate_entries_,
           blocks_,
-          mesh_.gpu_memory(),
+          mesh_,
           use_fine_gradient_,
           coordinate_converter_);
   checkCudaErrors(cudaDeviceSynchronize());
@@ -424,7 +424,7 @@ void Map::MarchingCubes() {
       hash_table_,
           candidate_entries_,
           blocks_,
-          mesh_.gpu_memory(),
+          mesh_,
           use_fine_gradient_,
           coordinate_converter_);
   checkCudaErrors(cudaDeviceSynchronize());
@@ -437,14 +437,14 @@ void Map::MarchingCubes() {
   RecycleTrianglesKernel<<<grid_size, block_size>>>(
       candidate_entries_,
           blocks_,
-          mesh_.gpu_memory());
+          mesh_);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 
   RecycleVerticesKernel<<<grid_size, block_size>>>(
       candidate_entries_,
           blocks_,
-          mesh_.gpu_memory());
+          mesh_);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }
@@ -455,7 +455,7 @@ __global__
 void CollectVerticesAndTrianglesKernel(
     EntryArray candidate_entries,
     BlockArray           blocks,
-    MeshGPU             mesh,
+    Mesh             mesh,
     CompactMeshGPU      compact_mesh) {
   const HashEntry &entry = candidate_entries[blockIdx.x];
   Voxel &cube = blocks[entry.ptr].voxels[threadIdx.x];
@@ -463,7 +463,7 @@ void CollectVerticesAndTrianglesKernel(
   for (int i = 0; i < N_TRIANGLE; ++i) {
     int triangle_ptrs = cube.triangle_ptrs[i];
     if (triangle_ptrs != FREE_PTR) {
-      int3& triangle = mesh.triangles[triangle_ptrs].vertex_ptrs;
+      int3& triangle = mesh.triangle(triangle_ptrs).vertex_ptrs;
       atomicAdd(&compact_mesh.triangles_ref_count[triangle_ptrs], 1);
       atomicAdd(&compact_mesh.vertices_ref_count[triangle.x], 1);
       atomicAdd(&compact_mesh.vertices_ref_count[triangle.y], 1);
@@ -473,7 +473,7 @@ void CollectVerticesAndTrianglesKernel(
 }
 
 __global__
-void CompressVerticesKernel(MeshGPU        mesh,
+void CompressVerticesKernel(Mesh        mesh,
                             CompactMeshGPU compact_mesh,
                             uint           max_vertex_count,
                             uint*          vertex_ref_count) {
@@ -498,16 +498,16 @@ void CompressVerticesKernel(MeshGPU        mesh,
   if (addr_local != -1) {
     const uint addr = addr_global + addr_local;
     compact_mesh.vertex_remapper[idx] = addr;
-    compact_mesh.vertices[addr] = mesh.vertices[idx].pos;
-    compact_mesh.normals[addr]  = mesh.vertices[idx].normal;
-    compact_mesh.colors[addr]   = mesh.vertices[idx].color;
+    compact_mesh.vertices[addr] = mesh.vertex(idx).pos;
+    compact_mesh.normals[addr]  = mesh.vertex(idx).normal;
+    compact_mesh.colors[addr]   = mesh.vertex(idx).color;
 
-    atomicAdd(vertex_ref_count, mesh.vertices[idx].ref_count);
+    atomicAdd(vertex_ref_count, mesh.vertex(idx).ref_count);
   }
 }
 
 __global__
-void CompressTrianglesKernel(MeshGPU        mesh,
+void CompressTrianglesKernel(Mesh        mesh,
                              CompactMeshGPU compact_mesh,
                              uint max_triangle_count) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -530,7 +530,7 @@ void CompressTrianglesKernel(MeshGPU        mesh,
 
   if (addr_local != -1) {
     const uint addr = addr_global + addr_local;
-    int3 vertex_ptrs = mesh.triangles[idx].vertex_ptrs;
+    int3 vertex_ptrs = mesh.triangle(idx).vertex_ptrs;
     compact_mesh.triangles[addr].x = compact_mesh.vertex_remapper[vertex_ptrs.x];
     compact_mesh.triangles[addr].y = compact_mesh.vertex_remapper[vertex_ptrs.y];
     compact_mesh.triangles[addr].z = compact_mesh.vertex_remapper[vertex_ptrs.z];
@@ -555,7 +555,7 @@ void Map::CompressMesh(int3& stats) {
     CollectVerticesAndTrianglesKernel <<< grid_size, block_size >>> (
         candidate_entries_,
             blocks_,
-            mesh_.gpu_memory(),
+            mesh_,
             compact_mesh_.gpu_memory());
     checkCudaErrors(cudaDeviceSynchronize());
     checkCudaErrors(cudaGetLastError());
@@ -573,7 +573,7 @@ void Map::CompressMesh(int3& stats) {
     checkCudaErrors(cudaMemset(vertex_ref_count, 0, sizeof(uint)));
 
     CompressVerticesKernel <<< grid_size, block_size >>> (
-        mesh_.gpu_memory(),
+        mesh_,
             compact_mesh_.gpu_memory(),
             mesh_.params().max_vertex_count,
             vertex_ref_count);
@@ -598,7 +598,7 @@ void Map::CompressMesh(int3& stats) {
     const dim3 block_size(threads_per_block, 1);
 
     CompressTrianglesKernel <<< grid_size, block_size >>> (
-        mesh_.gpu_memory(),
+        mesh_,
             compact_mesh_.gpu_memory(),
             mesh_.params().max_triangle_count);
     checkCudaErrors(cudaDeviceSynchronize());

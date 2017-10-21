@@ -41,11 +41,11 @@ private:
   Block *blocks_;
   ///           |
   ///           v
-  uint *vertex_heap_;
+  uint *vertex_heap__;
   uint *vertex_heap_counter__;
   Vertex *vertices_;
 
-  uint *triangle_heap_;
+  uint *triangle_heap__;
   uint *triangle_heap_counter__;
   Triangle *triangles_;
 
