@@ -30,9 +30,9 @@
 #include <glog/logging.h>
 
 #include "../core/params.h"
-#include "../io/dataset_manager.h"
-#include "../engine/map.h"
-#include "../engine/sensor.h"
+#include "io/config_manager.h"
+#include "engine/mapping_engine.h"
+#include "sensor/rgbd_sensor.h"
 #include "../visualization/ray_caster.h"
 #include "../opengl/args.h"
 #include "../opengl/uniforms.h"
@@ -119,7 +119,7 @@ int main(int argc, char **argv) {
                        30000);
 
   SetConstantSDFParams(config.sdf_params);
-  Map       map(config.hash_params, config.mesh_params,
+  MappingEngine       map(config.hash_params, config.mesh_params,
                 "../result/3dv/" + args.time_profile + ".txt",
                 "../result/3dv/" + args.memo_profile + ".txt");
   Sensor    sensor(config.sensor_params);

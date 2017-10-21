@@ -7,9 +7,9 @@
 
 #include "../core/common.h"
 
-#include "../engine/map.h"
+#include "engine/mapping_engine.h"
 #include "../core/params.h"
-#include "../engine/sensor.h"
+#include "sensor/rgbd_sensor.h"
 
 struct RayCasterSample {
   float  entropy;
@@ -40,7 +40,7 @@ public:
   RayCaster(const RayCasterParams& params);
   ~RayCaster(void);
 
-  void Cast(Map& map, const float4x4& c_T_w);
+  void Cast(MappingEngine& map, const float4x4& c_T_w);
 
   const cv::Mat& depth_image() {
     return depth_image_;

@@ -7,7 +7,7 @@
 
 #include <opencv2/opencv.hpp>
 #include <helper_cuda.h>
-#include "../core/params.h"
+#include "core/params.h"
 
 /// At first get rid of CUDARGBDAdaptor and RGBDSensor, use it directly
 struct SensorDataGPU {

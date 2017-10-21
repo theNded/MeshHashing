@@ -108,12 +108,15 @@ CUDA_ADD_LIBRARY(mesh-hashing-cuda
         ${VH}/core/entry_array.cu
         ${VH}/core/block_array.cu
         ${VH}/core/mesh.cu
-        ${VH}/engine/sensor.cu
-        ${VH}/engine/map_core.cu
-        ${VH}/fusion/map_fusion.cu
+        ${VH}/sensor/rgbd_sensor.cu
+        ${VH}/mapping/collect.cu
+        ${VH}/mapping/recycle.cu
+        ${VH}/mapping/fusion.cu
         ${VH}/meshing/map_mesh.cu
         #${VH}/src/map_plane.cu
         ${VH}/util/map_debug.cu
+        ${VH}/visualization/bounding_box.cu
+        ${VH}/visualization/compact_mesh.cu
         ${VH}/visualization/ray_caster.cu)
 TARGET_LINK_LIBRARIES(mesh-hashing-cuda
         ${CUDA_DEPENDENCIES}
@@ -122,7 +125,9 @@ TARGET_LINK_LIBRARIES(mesh-hashing-cuda
 
 ### 3. C++
 ADD_LIBRARY(mesh-hashing
-        ${VH}/io/dataset_manager.cc)
+        ${VH}/engine/mapping_engine.cc
+        ${VH}/io/config_manager.cc
+        ${VH}/sensor/rgbd_local_sequence.cc)
         #${VH}/tool/cpp/debugger.cc)
 TARGET_LINK_LIBRARIES(mesh-hashing
         mesh-hashing-cuda

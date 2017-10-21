@@ -75,25 +75,6 @@ struct ConfigManager {
   void LoadConfig(std::string config_path);
 };
 
-struct DataManager {
-  /// Read from Disk
-  size_t frame_id = 0;
-  std::vector<std::string> depth_image_list;
-  std::vector<std::string> color_image_list;
-  std::vector<float4x4>    wTcs;
-
-  void LoadDataset(DatasetType dataset_type);
-
-  void LoadDataset(std::string dataset_path,
-                   DatasetType dataset_type);
-  void LoadDataset(Dataset     dataset);
-
-  /// If read from disk, then provide mat at frame_id
-  /// If read from network/USB, then wait until a mat comes;
-  ///                           a while loop might be inside
-  bool ProvideData(cv::Mat &depth, cv::Mat &color);
-  bool ProvideData(cv::Mat &depth, cv::Mat &color, float4x4 &wTc);
-};
 
 
 #endif //VH_DATA_MANAGER

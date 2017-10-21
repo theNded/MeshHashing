@@ -1,16 +1,14 @@
 #include <device_launch_parameters.h>
 
 #include "core/block_array.h"
-#include "engine/map.h"
-#include "engine/sensor.h"
+#include "mapping/fusion.h"
+#include "engine/mapping_engine.h"
+#include "sensor/rgbd_sensor.h"
 #include "geometry/gradient.h"
 
-#ifndef PINF
-#define PINF  __int_as_float(0x7f800000)
-#endif
 
 ////////////////////
-/// class Map - integrate sensor data
+/// class MappingEngine - integrate sensor data
 ////////////////////
 
 ////////////////////
@@ -214,22 +212,8 @@ void AllocBlockArrayKernel(HashTable   hash_table,
   }
 }
 
-
-////////////////////
-/// Host code
-////////////////////
-void Map::Integrate(Sensor& sensor) {
-  AllocBlockArray(sensor);
-
-  CollectInFrustumBlockArray(sensor);
-  UpdateBlockArray(sensor);
-
-  Recycle(integrated_frame_count_);
-  integrated_frame_count_ ++;
-}
-
-void Map::AllocBlockArray(Sensor& sensor) {
-  hash_table_.ResetMutexes();
+void AllocBlockArray(HashTable& hash_table, Sensor& sensor, CoordinateConverter& converter) {
+  hash_table.ResetMutexes();
 
   const uint threads_per_block = 8;
   const dim3 grid_size((sensor.sensor_params().width + threads_per_block - 1)
@@ -239,32 +223,37 @@ void Map::AllocBlockArray(Sensor& sensor) {
   const dim3 block_size(threads_per_block, threads_per_block);
 
   AllocBlockArrayKernel<<<grid_size, block_size>>>(
-          hash_table_,
+          hash_table,
           sensor.gpu_memory(),
           sensor.sensor_params(), sensor.w_T_c(),
           NULL,
-              coordinate_converter_);
+              converter);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }
 
-void Map::UpdateBlockArray(Sensor &sensor) {
+void UpdateBlockArray(EntryArray& candidate_entries,
+                      HashTable&  hash_table,
+                      BlockArray& blocks,
+                      Mesh& mesh,
+                      Sensor &sensor,
+                      CoordinateConverter& converter) {
   const uint threads_per_block = BLOCK_SIZE;
 
-  uint compacted_entry_count = candidate_entries_.count();
+  uint compacted_entry_count = candidate_entries.count();
   if (compacted_entry_count <= 0)
     return;
 
   const dim3 grid_size(compacted_entry_count, 1);
   const dim3 block_size(threads_per_block, 1);
   UpdateBlockArrayKernel <<<grid_size, block_size>>>(
-          candidate_entries_,
-          hash_table_,
-          blocks_,
-          mesh_,
+          candidate_entries,
+          hash_table,
+          blocks,
+          mesh,
           sensor.gpu_memory(),
           sensor.sensor_params(), sensor.c_T_w(),
-              coordinate_converter_);
+              converter);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }

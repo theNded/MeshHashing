@@ -10,7 +10,7 @@
 #ifndef VH_PARAMS_H
 #define VH_PARAMS_H
 
-#include "common.h"
+#include "core/common.h"
 #include <matrix.h>
 
 struct HashParams {

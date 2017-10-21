@@ -9,13 +9,14 @@
 
 #include "mc_tables.h"
 #include "util/timer.h"
-#include "engine/map.h"
+#include "engine/mapping_engine.h"
 #include "geometry/gradient.h"
+#include "mapping/collect.h"
 
 //#define REDUCTION
 
 ////////////////////
-/// class Map - meshing
+/// class MappingEngine - meshing
 ////////////////////
 
 ////////////////////
@@ -383,7 +384,7 @@ void UpdateStatisticsKernel(HashTable        hash_table,
 ////////////////////
 /// Host code
 ////////////////////
-void Map::MarchingCubes() {
+void MappingEngine::MarchingCubes() {
   uint occupied_block_count = candidate_entries_.count();
   LOG(INFO) << "Marching cubes block count: " << occupied_block_count;
   if (occupied_block_count <= 0)
@@ -540,7 +541,7 @@ void CompressTrianglesKernel(Mesh        mesh,
 /// Assume this operation is following
 /// CollectInFrustumBlockArray or
 /// CollectAllBlockArray
-void Map::CompressMesh(int3& stats) {
+void MappingEngine::CompressMesh(int3& stats) {
   compact_mesh_.Reset();
 
   int occupied_block_count = candidate_entries_.count();
@@ -614,10 +615,10 @@ void Map::CompressMesh(int3& stats) {
   stats.x = compact_mesh_.triangle_count();
 }
 
-void Map::SaveMesh(std::string path) {
+void MappingEngine::SaveMesh(std::string path) {
   LOG(INFO) << "Copying data from GPU";
 
-  CollectAllBlockArray();
+  CollectAllBlockArray(candidate_entries_, hash_table_);
   int3 stats;
   CompressMesh(stats);
 
@@ -684,10 +685,10 @@ void Map::SaveMesh(std::string path) {
 }
 
 
-void Map::SavePly(std::string path) {
+void MappingEngine::SavePly(std::string path) {
   LOG(INFO) << "Copying data from GPU";
 
-  CollectAllBlockArray();
+  CollectAllBlockArray(candidate_entries_, hash_table_);
   int3 stats;
   CompressMesh(stats);
 

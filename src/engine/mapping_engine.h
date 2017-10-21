@@ -1,7 +1,7 @@
 //
 // Created by wei on 17-4-5.
 //
-// Map: managing HashTable<Block> and might be other structs later
+// MappingEngine: managing HashTable<Block> and might be other structs later
 
 #ifndef VH_MAP_H
 #define VH_MAP_H
@@ -11,9 +11,11 @@
 #include "core/entry_array.h"
 #include "core/mesh.h"
 
-#include "sensor.h"
+#include "visualization/compact_mesh.h"
+#include "visualization/bounding_box.h"
+#include "sensor/rgbd_sensor.h"
 
-class Map {
+class MappingEngine {
 private:
   HashTable        hash_table_;
   BlockArray       blocks_;
@@ -35,24 +37,16 @@ private:
 ////////////////////
 /// Core
 ////////////////////
-private:
-  /// Garbage collection
-  void StarveOccupiedBlockArray();
-  void CollectGarbageBlockArray();
-  void RecycleGarbageBlockArray();
 
 public:
-  /// Compress entries
-  void CollectInFrustumBlockArray(Sensor& sensor);
-  void CollectAllBlockArray();
 
   /// Life cycle
-  Map(const HashParams& hash_params,
+  MappingEngine(const HashParams& hash_params,
       const MeshParams& mesh_params,
       const SDFParams&  sdf_params,
       const std::string& time_profile,
       const std::string& memo_profile);
-  ~Map();
+  ~MappingEngine();
 
   /// Reset and recycle
   void Reset();
@@ -61,10 +55,6 @@ public:
 ////////////////////
 /// Fusion
 ////////////////////
-private:
-  void UpdateBlockArray(Sensor& sensor);
-  void AllocBlockArray(Sensor& sensor);
-
 public:
   void Integrate(Sensor &sensor);
 

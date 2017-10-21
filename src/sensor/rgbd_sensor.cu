@@ -1,8 +1,8 @@
 /// 16 threads per block
 
-#include "sensor.h"
-#include "../geometry/coordinate_utils.h"
-#include "../visualization/color_util.h"
+#include "rgbd_sensor.h"
+#include "geometry/coordinate_utils.h"
+#include "visualization/color_util.h"
 #include <helper_cuda.h>
 #include <helper_math.h>
 #include <glog/logging.h>

@@ -37,6 +37,10 @@ typedef signed char schar;
 #include <cuda_runtime.h>
 #endif
 
+#ifndef PINF
+#define PINF  __int_as_float(0x7f800000)
+#endif
+
 /// Enable linked list in the hash table
 #define HANDLE_COLLISIONS
 

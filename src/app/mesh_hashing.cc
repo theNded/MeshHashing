@@ -18,10 +18,12 @@
 #include "util/timer.h"
 #include <queue>
 
-#include "../engine/sensor.h"
-#include "../visualization/ray_caster.h"
+#include "sensor/rgbd_local_sequence.h"
+#include "sensor/rgbd_sensor.h"
+#include "visualization/ray_caster.h"
 
-#include "../io/dataset_manager.h"
+#include "io/config_manager.h"
+#include "mapping/collect.h"
 #include "glwrapper.h"
 
 
@@ -49,11 +51,11 @@ int main(int argc, char** argv) {
   LoadRuntimeParams("../config/args.yml", args);
 
   ConfigManager config;
-  DataManager   rgbd_data;
+  RGBDLocalSequence rgbd_local_sequence;
 
   DatasetType dataset_type = DatasetType(args.dataset_type);
   config.LoadConfig(dataset_type);
-  rgbd_data.LoadDataset(dataset_type);
+  rgbd_local_sequence.LoadDataset(dataset_type);
 
   gl::Window window("Mesh", config.sensor_params.width * 2, config.sensor_params.height * 2);
   gl::Camera camera(window.visual_width(), window.visual_height());
@@ -109,7 +111,7 @@ int main(int argc, char** argv) {
   traj_args.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
                        30000);
 
-  Map       map(config.hash_params, config.mesh_params, config.sdf_params,
+  MappingEngine       map(config.hash_params, config.mesh_params, config.sdf_params,
                 "../result/3dv/" + args.time_profile + ".txt",
                 "../result/3dv/" + args.memo_profile + ".txt");
   Sensor    sensor(config.sensor_params);
@@ -144,7 +146,7 @@ int main(int argc, char** argv) {
   std::ofstream time_prof("reduction.txt");
   double all_seconds = 0, meshing_seconds = 0, rendering_seconds = 0, compressing_seconds = 0;
   float3 prev_cam_pos;
-  while (rgbd_data.ProvideData(depth, color, wTc)) {
+  while (rgbd_local_sequence.ProvideData(depth, color, wTc)) {
     Timer timer_all, timer_meshing, timer_rendering, timer_compressing;
 
     frame_count ++;
@@ -190,7 +192,7 @@ int main(int argc, char** argv) {
 
     // TODO: add flag to blocks to deal with boundary conditions
     if (! args.mesh_range) {
-      map.CollectAllBlockArray();
+      CollectAllBlockArray(map.candidate_entries(), map.hash_table());
     }
 
     map.GetBoundingBoxes();

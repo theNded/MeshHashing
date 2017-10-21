@@ -174,7 +174,7 @@ RayCaster::~RayCaster() {
 //////////
 /// Member function: (CPU calling GPU kernels)
 /// Major function, extract surface and normal from the volumes
-void RayCaster::Cast(Map& map, const float4x4& c_T_w) {
+void RayCaster::Cast(MappingEngine& map, const float4x4& c_T_w) {
   const uint threads_per_block = 8;
   const float4x4 w_T_c = c_T_w.getInverse();
 
