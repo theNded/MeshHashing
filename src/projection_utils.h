@@ -1,8 +1,0 @@
-//
-// Created by wei on 17-10-20.
-//
-
-#ifndef MESH_HASHING_PROJECTION_UTILS_H
-#define MESH_HASHING_PROJECTION_UTILS_H
-
-#endif //MESH_HASHING_PROJECTION_UTILS_H

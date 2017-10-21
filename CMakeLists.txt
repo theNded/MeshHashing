@@ -76,12 +76,13 @@ endforeach()
 #---------
 
 #----------
-SET(VH ${PROJECT_SOURCE_DIR})
-MESSAGE(STATUS ${CUDA_TOOLKIT_INCLUDE})
+SET(VH ${PROJECT_SOURCE_DIR}/src)
+SET(GL_WRAPPER ${VH}/extern/opengl-wrapper)
 
 INCLUDE_DIRECTORIES(
-        ${VH}/src/opengl-wrapper/include
-        ${VH}/src/cuda
+        ${VH}
+        ${VH}/extern/cuda
+        ${GL_WRAPPER}/include
         ${GLOG_INCLUDE_DIRS}
         ${CUDA_TOOLKIT_INCLUDE})
 
@@ -89,11 +90,11 @@ INCLUDE_DIRECTORIES(
 ## Building Libraries
 ### 1. OpenGL util
 ADD_LIBRARY(gl-util
-        ${VH}/src/opengl-wrapper/src/args.cc
-        ${VH}/src/opengl-wrapper/src/program.cc
-        ${VH}/src/opengl-wrapper/src/window.cc
-        ${VH}/src/opengl-wrapper/src/uniforms.cc
-        ${VH}/src/opengl-wrapper/src/camera.cc)
+        ${GL_WRAPPER}/src/args.cc
+        ${GL_WRAPPER}/src/program.cc
+        ${GL_WRAPPER}/src/window.cc
+        ${GL_WRAPPER}/src//uniforms.cc
+        ${GL_WRAPPER}/src/camera.cc)
 SET_TARGET_PROPERTIES(gl-util PROPERTIES COMPILE_DEFINITIONS USE_CUDA)
 TARGET_LINK_LIBRARIES(gl-util
         ${OPENGL_DEPENDENCIES}
@@ -103,16 +104,16 @@ TARGET_LINK_LIBRARIES(gl-util
 # Don't know exactly how it should be configured
 LIST(APPEND CUDA_NVCC_FLAGS -gencode=arch=compute_50,code=sm_60)
 CUDA_ADD_LIBRARY(mesh-hashing-cuda
-        ${VH}/src/hash_table.cu
-        ${VH}/src/block.cu
-        ${VH}/src/mesh.cu
-        ${VH}/src/sensor.cu
-        ${VH}/src/map_core.cu
-        ${VH}/src/map_fusion.cu
-        ${VH}/src/map_mesh.cu
+        ${VH}/core/hash_table.cu
+        ${VH}/core/block.cu
+        ${VH}/core/mesh.cu
+        ${VH}/engine/sensor.cu
+        ${VH}/engine/map_core.cu
+        ${VH}/fusion/map_fusion.cu
+        ${VH}/meshing/map_mesh.cu
         #${VH}/src/map_plane.cu
-        ${VH}/src/map_debug.cu
-        ${VH}/src/ray_caster.cu)
+        ${VH}/util/map_debug.cu
+        ${VH}/visualization/ray_caster.cu)
 TARGET_LINK_LIBRARIES(mesh-hashing-cuda
         ${CUDA_DEPENDENCIES}
         -lopencv_core -lopencv_highgui -lopencv_imgproc
@@ -120,7 +121,7 @@ TARGET_LINK_LIBRARIES(mesh-hashing-cuda
 
 ### 3. C++
 ADD_LIBRARY(mesh-hashing
-        ${VH}/src/dataset_manager.cc)
+        ${VH}/io/dataset_manager.cc)
         #${VH}/tool/cpp/debugger.cc)
 TARGET_LINK_LIBRARIES(mesh-hashing
         mesh-hashing-cuda
@@ -129,35 +130,35 @@ TARGET_LINK_LIBRARIES(mesh-hashing
 #----------
 ## Unit tests
 ### CUDA - OpenGL intergration
-ADD_EXECUTABLE(cuda_gl_interp src/unit_test/cuda_gl_interp.cc)
+ADD_EXECUTABLE(cuda_gl_interp src/util/cuda_gl_interp.cc)
 TARGET_LINK_LIBRARIES(cuda_gl_interp
         mesh-hashing
         -lopencv_core -lopencv_highgui
         ${GLOG_LIBRARIES})
 
-ADD_EXECUTABLE(block_visualizer src/unit_test/block_visualizer.cc
-        src/timer.h
-        src/unit_test/video_clip.cc
-        src/projection_utils.h)
+ADD_EXECUTABLE(block_visualizer src/util/block_visualizer.cc
+        src/util/timer.h
+        src/util/video_clip.cc
+        )
 TARGET_LINK_LIBRARIES(block_visualizer
         mesh-hashing
         ${OpenCV_LIBRARIES}
         ${GLOG_LIBRARIES})
 
-ADD_EXECUTABLE(video_clip src/unit_test/video_clip.cc)
+ADD_EXECUTABLE(video_clip src/util/video_clip.cc)
 TARGET_LINK_LIBRARIES(video_clip
         -lopencv_core -lopencv_highgui)
 
 ### Loop over
 MESSAGE(STATUS ${GLOG_LIBRARIES})
 ADD_EXECUTABLE(mesh_hashing
-        src/example/mesh_hashing.cc)
+        src/app/mesh_hashing.cc)
 TARGET_LINK_LIBRARIES(mesh_hashing
         mesh-hashing
         -lopencv_core -lopencv_highgui
         ${GLOG_LIBRARIES})
 
-### An ORB example
+### An ORB app
 OPTION(WITH_ORBSLAM2 "Build with orb slam" ON)
 if (WITH_ORBSLAM2)
     SET(ORB_SLAM2_PATH ../../opensource/orb_slam2)
@@ -170,7 +171,7 @@ if (WITH_ORBSLAM2)
             ${ORB_SLAM2_PATH}/include
             ${EIGEN3_INCLUDE_DIR})
     LINK_DIRECTORIES(${ORB_SLAM2_PATH}/lib)
-    ADD_EXECUTABLE(rgbd_orb src/example/rgbd_orb.cc)
+    ADD_EXECUTABLE(rgbd_orb src/app/rgbd_orb.cc)
     TARGET_LINK_LIBRARIES(rgbd_orb
             mesh-hashing
             ORB_SLAM2
