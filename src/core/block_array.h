@@ -11,13 +11,14 @@
 class BlockArray {
 public:
   __host__ BlockArray();
-  __host__ BlockArray(uint block_count);
+  __host__ explicit BlockArray(uint block_count);
 
   // We have to pass VALUE instead of REFERENCE to GPU,
   // therefore destructor will be called after a kernel launch,
   // and improper Free() will be triggered.
   // So if on GPU, disable destructor (temporarily),
-  // TODO: when CPU version is implemented, let it decide when to call it
+  // and call Free() manually.
+  // TODO: when CPU version is implemented, let it decide when to call Free()
   //__host__ ~BlockArray();
 
   __host__ void Alloc(uint block_count);
@@ -26,10 +27,6 @@ public:
   __host__ void Reset();
   __host__ void Resize(uint block_count);
 
-  __host__ Block* gpu_memory() {
-    return blocks_;
-  }
-
   __host__ __device__ Block& operator[] (uint i) {
     return blocks_[i];
   }
@@ -37,7 +34,9 @@ public:
     return blocks_[i];
   }
 private:
+  // @param array
   Block*  blocks_;
+  // @param const element
   uint    block_count_;
 };
 

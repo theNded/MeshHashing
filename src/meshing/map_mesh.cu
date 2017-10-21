@@ -384,7 +384,7 @@ void UpdateStatisticsKernel(HashTable        hash_table,
 /// Host code
 ////////////////////
 void Map::MarchingCubes() {
-  uint occupied_block_count = candidate_entries_.entry_count();
+  uint occupied_block_count = candidate_entries_.count();
   LOG(INFO) << "Marching cubes block count: " << occupied_block_count;
   if (occupied_block_count <= 0)
     return;
@@ -543,7 +543,7 @@ void CompressTrianglesKernel(MeshGPU        mesh,
 void Map::CompressMesh(int3& stats) {
   compact_mesh_.Reset();
 
-  int occupied_block_count = candidate_entries_.entry_count();
+  int occupied_block_count = candidate_entries_.count();
   if (occupied_block_count <= 0) return;
 
   {

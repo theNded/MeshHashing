@@ -15,9 +15,6 @@
 
 class HashTable {
 public:
-  // TEMPORARY!
-  HashEntry *entries;          /// hash entries that stores pointers to sdf values
-
   /// Parameters
   uint      bucket_count;
   uint      bucket_size;
@@ -26,7 +23,7 @@ public:
   uint      linked_list_size;
 
   __host__ HashTable();
-  __host__ HashTable(const HashParams &params);
+  __host__ explicit HashTable(const HashParams &params);
   // ~HashTable();
   __host__ void Alloc(const HashParams &params);
   __host__ void Free();
@@ -35,11 +32,27 @@ public:
   __host__ void Reset();
   __host__ void ResetMutexes();
 
+  __host__ __device__ HashEntry& entry(uint i) {
+    return entries_[i];
+  }
   //__host__ void Debug();
 
   /////////////////
   // Device part //
+
+private:
+  // @param array
+  uint      *heap_;             /// index to free values
+  // @param read-write element
+  uint      *heap_counter_;     /// single element; used as an atomic counter (points to the next free block)
+
+  // @param array
+  HashEntry *entries_;          /// hash entries that stores pointers to sdf values
+  // @param array
+  int       *bucket_mutexes_;   /// binary flag per hash bucket; used for allocation to atomically lock a bucket
+
 #ifdef __CUDACC__
+public:
   __device__
   HashEntry GetEntry(const int3& pos) const {
     uint bucket_idx             = HashBucketForBlockPos(pos);
@@ -51,7 +64,7 @@ public:
     entry.ptr    = FREE_ENTRY;
 
     for (uint i = 0; i < bucket_size; ++i) {
-      HashEntry curr_entry = entries[i + bucket_first_entry_idx];
+      HashEntry curr_entry = entries_[i + bucket_first_entry_idx];
       if (IsPosAllocated(pos, curr_entry)) {
         return curr_entry;
       }
@@ -64,7 +77,7 @@ public:
 
     #pragma unroll 1
     for (uint iter = 0; iter < linked_list_size; ++iter) {
-      HashEntry curr_entry = entries[i];
+      HashEntry curr_entry = entries_[i];
 
       if (IsPosAllocated(pos, curr_entry)) {
         return curr_entry;
@@ -88,7 +101,7 @@ public:
     int empty_entry_idx = -1;
     for (uint j = 0; j < bucket_size; j++) {
       uint i = j + bucket_first_entry_idx;
-      const HashEntry& curr_entry = entries[i];
+      const HashEntry& curr_entry = entries_[i];
       if (IsPosAllocated(pos, curr_entry)) {
         return;
       }
@@ -103,7 +116,7 @@ public:
     const uint bucket_last_entry_idx = bucket_first_entry_idx + bucket_size - 1;
     uint i = bucket_last_entry_idx;
     for (uint iter = 0; iter < linked_list_size; ++iter) {
-      HashEntry curr_entry = entries[i];
+      HashEntry curr_entry = entries_[i];
 
       if (IsPosAllocated(pos, curr_entry)) {
         return;
@@ -117,9 +130,9 @@ public:
 
     /// 2. NOT FOUND, Allocate
     if (empty_entry_idx != -1) {
-      int lock = atomicExch(&bucket_mutexes[bucket_idx], LOCK_ENTRY);
+      int lock = atomicExch(&bucket_mutexes_[bucket_idx], LOCK_ENTRY);
       if (lock != LOCK_ENTRY) {
-        HashEntry& entry = entries[empty_entry_idx];
+        HashEntry& entry = entries_[empty_entry_idx];
         entry.pos    = pos;
         entry.ptr    = Alloc();
         entry.offset = NO_OFFSET;
@@ -138,24 +151,24 @@ public:
 
       i = (bucket_last_entry_idx + offset) % (entry_count);
 
-      HashEntry& curr_entry = entries[i];
+      HashEntry& curr_entry = entries_[i];
 
       if (curr_entry.ptr == FREE_ENTRY) {
-        int lock = atomicExch(&bucket_mutexes[bucket_idx], LOCK_ENTRY);
+        int lock = atomicExch(&bucket_mutexes_[bucket_idx], LOCK_ENTRY);
         if (lock != LOCK_ENTRY) {
-          HashEntry& bucket_last_entry = entries[bucket_last_entry_idx];
+          HashEntry& bucket_last_entry = entries_[bucket_last_entry_idx];
           uint alloc_bucket_idx = i / bucket_size;
 
-          lock = atomicExch(&bucket_mutexes[alloc_bucket_idx], LOCK_ENTRY);
+          lock = atomicExch(&bucket_mutexes_[alloc_bucket_idx], LOCK_ENTRY);
           if (lock != LOCK_ENTRY) {
-            HashEntry& entry = entries[i];
+            HashEntry& entry = entries_[i];
             entry.pos    = pos;
             entry.offset = bucket_last_entry.offset; // pointer assignment in linked list
             entry.ptr    = Alloc();	//memory alloc
 
             // Not sure if it is ok to directly assign to reference
             bucket_last_entry.offset = offset;
-            entries[bucket_last_entry_idx] = bucket_last_entry;
+            entries_[bucket_last_entry_idx] = bucket_last_entry;
           }
         }
         return;	//bucket was already locked
@@ -173,29 +186,29 @@ public:
 
     for (uint j = 0; j < bucket_size; j++) {
       uint i = j + bucket_first_entry_idx;
-      const HashEntry& curr = entries[i];
+      const HashEntry& curr = entries_[i];
       if (IsPosAllocated(pos, curr)) {
 
 #ifndef HANDLE_COLLISIONS
         Free(curr.ptr);
-        entries[i].Clear();
+        entries_[i].Clear();
         return true;
 #else
         // Deal with linked list: curr = curr->next
         if (curr.offset != 0) {
-          int lock = atomicExch(&bucket_mutexes[bucket_idx], LOCK_ENTRY);
+          int lock = atomicExch(&bucket_mutexes_[bucket_idx], LOCK_ENTRY);
           if (lock != LOCK_ENTRY) {
             Free(curr.ptr);
             int next_idx = (i + curr.offset) % (entry_count);
-            entries[i] = entries[next_idx];
-            entries[next_idx].Clear();
+            entries_[i] = entries_[next_idx];
+            entries_[next_idx].Clear();
             return true;
           } else {
             return false;
           }
         } else {
           Free(curr.ptr);
-          entries[i].Clear();
+          entries_[i].Clear();
           return true;
         }
 #endif
@@ -206,23 +219,23 @@ public:
     // Init with linked list traverse
     const uint bucket_last_entry_idx = bucket_first_entry_idx + bucket_size - 1;
     int i = bucket_last_entry_idx;
-    HashEntry& curr = entries[i];
+    HashEntry& curr = entries_[i];
 
     int prev_idx = i;
     i = (bucket_last_entry_idx + curr.offset) % (entry_count);
 
     #pragma unroll 1
     for (uint iter = 0; iter < linked_list_size; ++iter) {
-      curr = entries[i];
+      curr = entries_[i];
 
       if (IsPosAllocated(pos, curr)) {
-        int lock = atomicExch(&bucket_mutexes[bucket_idx], LOCK_ENTRY);
+        int lock = atomicExch(&bucket_mutexes_[bucket_idx], LOCK_ENTRY);
         if (lock != LOCK_ENTRY) {
           Free(curr.ptr);
-          entries[i].Clear();
-          HashEntry prev = entries[prev_idx];
+          entries_[i].Clear();
+          HashEntry prev = entries_[prev_idx];
           prev.offset = curr.offset;
-          entries[prev_idx] = prev;
+          entries_[prev_idx] = prev;
           return true;
         } else {
           return false;
@@ -239,21 +252,8 @@ public:
 #endif	// HANDLE_COLLSISION
     return false;
   }
-#endif	//CUDACC
 
 private:
-  /// Hash VALUE part
-  uint      *heap;             /// index to free values
-  uint      *heap_counter;     /// single element; used as an atomic counter (points to the next free block)
-
-  /// Hash KEY part
-  /// == occupied_block_count
-  /// Misc
-  int       *bucket_mutexes;   /// binary flag per hash bucket; used for allocation to atomically lock a bucket
-
-  HashParams hash_params_;
-
-#ifdef __CUDACC__
   //! see Teschner et al. (but with correct prime values)
   __device__
   uint HashBucketForBlockPos(const int3& pos) const {
@@ -277,17 +277,17 @@ private:
 
   __device__
   uint Alloc() {
-    uint addr = atomicSub(&heap_counter[0], 1);
+    uint addr = atomicSub(&heap_counter_[0], 1);
     if (addr < MEMORY_LIMIT) {
-      printf("Memory nearly exhausted! %d -> %d\n", addr, heap[addr]);
+      printf("Memory nearly exhausted! %d -> %d\n", addr, heap_[addr]);
     }
-    return heap[addr];
+    return heap_[addr];
   }
 
   __device__
   void Free(uint ptr) {
-    uint addr = atomicAdd(&heap_counter[0], 1);
-    heap[addr + 1] = ptr;
+    uint addr = atomicAdd(&heap_counter_[0], 1);
+    heap_[addr + 1] = ptr;
   }
 #endif
 };

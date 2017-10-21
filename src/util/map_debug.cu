@@ -48,7 +48,7 @@ void GetBoundingBoxKernel(
 void Map::GetBoundingBoxes() {
   bbox_.Reset();
 
-  int occupied_block_count = candidate_entries_.entry_count();
+  int occupied_block_count = candidate_entries_.count();
   if (occupied_block_count <= 0) return;
 
   {

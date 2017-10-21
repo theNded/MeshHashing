@@ -11,7 +11,7 @@ Debugger::Debugger(int entry_count, int block_count,
   entry_count_ = entry_count;
   entries_ = new HashEntry[entry_count];
   heap_ = new uint[block_count];
-  heap_counter_ = new uint[1];
+  heap_counter__ = new uint[1];
 
   blocks_ = new Block[block_count];
   block_count_ = block_count;
@@ -19,12 +19,12 @@ Debugger::Debugger(int entry_count, int block_count,
   vertex_count_ = vertex_count;
   vertices_ = new Vertex[vertex_count];
   vertex_heap_ = new uint[vertex_count];
-  vertex_heap_counter_ = new uint[1];
+  vertex_heap_counter__ = new uint[1];
 
   triangle_count_ = triangle_count;
   triangles_ = new Triangle[triangle_count];
   triangle_heap_ = new uint[triangle_count];
-  triangle_heap_counter_ = new uint[1];
+  triangle_heap_counter__ = new uint[1];
 
   voxel_size_ = voxel_size;
 }
@@ -32,17 +32,17 @@ Debugger::Debugger(int entry_count, int block_count,
 Debugger::~Debugger() {
   delete[] entries_;
   delete[] heap_;
-  delete[] heap_counter_;
+  delete[] heap_counter__;
   delete[] blocks_;
 }
 
 void Debugger::CoreDump(EntryArrayGPU &hash_table) {
-  checkCudaErrors(cudaMemcpy(heap_counter_, hash_table.candidate_entry_counter,
+  checkCudaErrors(cudaMemcpy(heap_counter__, hash_table.counter,
                              sizeof(int),
                              cudaMemcpyDeviceToHost));
-  LOG(INFO) << *heap_counter_;
+  LOG(INFO) << *heap_counter__;
   checkCudaErrors(cudaMemcpy(entries_, hash_table.entries,
-                             sizeof(HashEntry) * (*heap_counter_),
+                             sizeof(HashEntry) * (*heap_counter__),
                              cudaMemcpyDeviceToHost));
 }
 
@@ -55,15 +55,15 @@ void Debugger::CoreDump(BlockGPUMemory &blocks) {
 }
 
 void Debugger::CoreDump(MeshGPU &mesh) {
-  checkCudaErrors(cudaMemcpy(triangle_heap_counter_, mesh.triangle_heap_counter,
+  checkCudaErrors(cudaMemcpy(triangle_heap_counter__, mesh.triangle_heap_counter_,
                              sizeof(uint),
                              cudaMemcpyDeviceToHost));
-  checkCudaErrors(cudaMemcpy(vertex_heap_counter_, mesh.vertex_heap_counter,
+  checkCudaErrors(cudaMemcpy(vertex_heap_counter__, mesh.vertex_heap_counter_,
                              sizeof(uint),
                              cudaMemcpyDeviceToHost));
 
-  LOG(INFO) << "Triangles: " << *triangle_heap_counter_;
-  LOG(INFO) << "Vertices: " << *vertex_heap_counter_;
+  LOG(INFO) << "Triangles: " << *triangle_heap_counter__;
+  LOG(INFO) << "Vertices: " << *vertex_heap_counter__;
 
   checkCudaErrors(cudaMemcpy(triangles_, mesh.triangles,
                              sizeof(Triangle) * triangle_count_,
@@ -77,7 +77,7 @@ void Debugger::DebugAll() {
   /// entry -> block -> (sdf, mesh)
 
   std::stringstream ss;
-  for (int e = 0; e < *heap_counter_; ++e) {
+  for (int e = 0; e < *heap_counter__; ++e) {
     LOG(INFO) << "Entry " << e;
 
     HashEntry &entry = entries_[e];

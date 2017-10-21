@@ -77,9 +77,8 @@ void CollectGarbageBlockArrayKernel(EntryArray candidate_entries,
     float t = converter.truncate_distance(5.0f);
 
     // TODO(wei): add || valid_triangles == 0 when memory leak is dealt with
-    candidate_entries.entry_recycle_flags[idx] =
-            (min_sdf >= t || max_weight < EPSILON) ? 1 : 0;
-
+    candidate_entries.flag(idx) =
+            (min_sdf >= t || max_weight < EPSILON) ? (uchar)1 : (uchar)0;
   }
 }
 
@@ -90,7 +89,7 @@ void RecycleGarbageBlockArrayTrianglesKernel(HashTable        hash_table,
                                 BlockArray           blocks,
                                 MeshGPU             mesh) {
   const uint idx = blockIdx.x;
-  if (candidate_entries.entry_recycle_flags[idx] == 0) return;
+  if (candidate_entries.flag(idx) == 0) return;
 
   const HashEntry& entry = candidate_entries[idx];
   const uint local_idx = threadIdx.x;  //inside an SDF block
@@ -113,7 +112,7 @@ void RecycleGarbageBlockArrayVerticesKernel(HashTable        hash_table,
                                          EntryArray candidate_entries,
                                          BlockArray           blocks,
                                          MeshGPU             mesh) {
-  if (candidate_entries.entry_recycle_flags[blockIdx.x] == 0) return;
+  if (candidate_entries.flag(blockIdx.x) == 0) return;
   const HashEntry &entry = candidate_entries[blockIdx.x];
   const uint local_idx = threadIdx.x;
 
@@ -160,8 +159,8 @@ void CollectInFrustumBlockArrayKernel(HashTable        hash_table,
 
   int addr_local = -1;
   if (idx < hash_table.entry_count
-    && hash_table.entries[idx].ptr != FREE_ENTRY
-    && converter.IsBlockInCameraFrustum(c_T_w, hash_table.entries[idx].pos,
+    && hash_table.entry(idx).ptr != FREE_ENTRY
+    && converter.IsBlockInCameraFrustum(c_T_w, hash_table.entry(idx).pos,
                                         sensor_params)) {
     addr_local = atomicAdd(&local_counter, 1);
   }
@@ -169,14 +168,14 @@ void CollectInFrustumBlockArrayKernel(HashTable        hash_table,
 
   __shared__ int addr_global;
   if (threadIdx.x == 0 && local_counter > 0) {
-    addr_global = atomicAdd(candidate_entries.candidate_entry_counter,
+    addr_global = atomicAdd(&candidate_entries.counter(),
                             local_counter);
   }
   __syncthreads();
 
   if (addr_local != -1) {
     const uint addr = addr_global + addr_local;
-    candidate_entries[addr] = hash_table.entries[idx];
+    candidate_entries[addr] = hash_table.entry(idx);
   }
 }
 
@@ -191,7 +190,7 @@ void CollectAllBlockArrayKernel(HashTable        hash_table,
 
   int addr_local = -1;
   if (idx < hash_table.entry_count
-      && hash_table.entries[idx].ptr != FREE_ENTRY) {
+      && hash_table.entry(idx).ptr != FREE_ENTRY) {
     addr_local = atomicAdd(&local_counter, 1);
   }
 
@@ -199,14 +198,14 @@ void CollectAllBlockArrayKernel(HashTable        hash_table,
 
   __shared__ int addr_global;
   if (threadIdx.x == 0 && local_counter > 0) {
-    addr_global = atomicAdd(candidate_entries.candidate_entry_counter,
+    addr_global = atomicAdd(&candidate_entries.counter(),
                             local_counter);
   }
   __syncthreads();
 
   if (addr_local != -1) {
     const uint addr = addr_global + addr_local;
-    candidate_entries[addr] = hash_table.entries[idx];
+    candidate_entries[addr] = hash_table.entry(idx);
   }
 }
 
@@ -275,7 +274,7 @@ void Map::Recycle(int frame_count) {
 void Map::StarveOccupiedBlockArray() {
   const uint threads_per_block = BLOCK_SIZE;
 
-  uint processing_block_count = candidate_entries_.entry_count();
+  uint processing_block_count = candidate_entries_.count();
   if (processing_block_count <= 0)
     return;
 
@@ -292,7 +291,7 @@ void Map::StarveOccupiedBlockArray() {
 void Map::CollectGarbageBlockArray() {
   const uint threads_per_block = BLOCK_SIZE / 2;
 
-  uint processing_block_count = candidate_entries_.entry_count();
+  uint processing_block_count = candidate_entries_.count();
   if (processing_block_count <= 0)
     return;
 
@@ -312,7 +311,7 @@ void Map::CollectGarbageBlockArray() {
 void Map::RecycleGarbageBlockArray() {
   const uint threads_per_block = BLOCK_SIZE;
 
-  uint processing_block_count = candidate_entries_.entry_count();
+  uint processing_block_count = candidate_entries_.count();
   if (processing_block_count <= 0)
     return;
 
@@ -345,7 +344,7 @@ void Map::CollectAllBlockArray(){
                        / threads_per_block, 1);
   const dim3 block_size(threads_per_block, 1);
 
-  candidate_entries_.reset_entry_count();
+  candidate_entries_.reset_count();
   CollectAllBlockArrayKernel<<<grid_size, block_size >>>(
           hash_table_,
           candidate_entries_);
@@ -353,7 +352,7 @@ void Map::CollectAllBlockArray(){
   checkCudaErrors(cudaGetLastError());
 
   LOG(INFO) << "Block count in all: "
-            << candidate_entries_.entry_count();
+            << candidate_entries_.count();
 }
 
 void Map::CollectInFrustumBlockArray(Sensor &sensor){
@@ -365,7 +364,7 @@ void Map::CollectInFrustumBlockArray(Sensor &sensor){
                        / threads_per_block, 1);
   const dim3 block_size(threads_per_block, 1);
 
-  candidate_entries_.reset_entry_count();
+  candidate_entries_.reset_count();
   CollectInFrustumBlockArrayKernel<<<grid_size, block_size >>>(
       hash_table_,
           candidate_entries_,
@@ -377,6 +376,6 @@ void Map::CollectInFrustumBlockArray(Sensor &sensor){
   checkCudaErrors(cudaGetLastError());
 
   LOG(INFO) << "Block count in view frustum: "
-            << candidate_entries_.entry_count();
+            << candidate_entries_.count();
 }
 

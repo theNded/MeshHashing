@@ -37,7 +37,7 @@ void LoadHashParams(std::string path, HashParams& params) {
   cv::FileStorage fs(path, cv::FileStorage::READ);
   params.bucket_count     = (int)fs["bucket_count"];
   params.bucket_size      = (int)fs["bucket_size"];
-  params.entry_count      = (int)fs["entry_count"];
+  params.entry_count      = (int)fs["count"];
   params.linked_list_size = (int)fs["linked_list_size"];
   params.value_capacity   = (int)fs["value_capacity"];
 }

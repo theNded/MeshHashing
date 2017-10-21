@@ -40,24 +40,24 @@ Mesh::~Mesh() {
 void Mesh::Alloc(const MeshParams &mesh_params) {
   checkCudaErrors(cudaMalloc(&gpu_memory_.vertex_heap,
                              sizeof(uint) * mesh_params.max_vertex_count));
-  checkCudaErrors(cudaMalloc(&gpu_memory_.vertex_heap_counter, sizeof(uint)));
+  checkCudaErrors(cudaMalloc(&gpu_memory_.vertex_heap_counter_, sizeof(uint)));
   checkCudaErrors(cudaMalloc(&gpu_memory_.vertices,
                              sizeof(Vertex) * mesh_params.max_vertex_count));
 
   checkCudaErrors(cudaMalloc(&gpu_memory_.triangle_heap,
                              sizeof(uint) * mesh_params.max_triangle_count));
-  checkCudaErrors(cudaMalloc(&gpu_memory_.triangle_heap_counter, sizeof(uint)));
+  checkCudaErrors(cudaMalloc(&gpu_memory_.triangle_heap_counter_, sizeof(uint)));
   checkCudaErrors(cudaMalloc(&gpu_memory_.triangles,
                              sizeof(Triangle) * mesh_params.max_triangle_count));
 }
 
 void Mesh::Free() {
   checkCudaErrors(cudaFree(gpu_memory_.vertex_heap));
-  checkCudaErrors(cudaFree(gpu_memory_.vertex_heap_counter));
+  checkCudaErrors(cudaFree(gpu_memory_.vertex_heap_counter_));
   checkCudaErrors(cudaFree(gpu_memory_.vertices));
 
   checkCudaErrors(cudaFree(gpu_memory_.triangle_heap));
-  checkCudaErrors(cudaFree(gpu_memory_.triangle_heap_counter));
+  checkCudaErrors(cudaFree(gpu_memory_.triangle_heap_counter_));
   checkCudaErrors(cudaFree(gpu_memory_.triangles));
 }
 
@@ -71,12 +71,12 @@ void Mesh::Reset() {
   uint val;
 
   val = mesh_params_.max_vertex_count - 1;
-  checkCudaErrors(cudaMemcpy(gpu_memory_.vertex_heap_counter,
+  checkCudaErrors(cudaMemcpy(gpu_memory_.vertex_heap_counter_,
                              &val, sizeof(uint),
                              cudaMemcpyHostToDevice));
 
   val = mesh_params_.max_triangle_count - 1;
-  checkCudaErrors(cudaMemcpy(gpu_memory_.triangle_heap_counter,
+  checkCudaErrors(cudaMemcpy(gpu_memory_.triangle_heap_counter_,
                              &val, sizeof(uint),
                              cudaMemcpyHostToDevice));
 
@@ -97,7 +97,7 @@ void Mesh::Reset() {
 uint Mesh::vertex_heap_count() {
   uint vertex_heap_count;
   checkCudaErrors(cudaMemcpy(&vertex_heap_count,
-                             gpu_memory_.vertex_heap_counter,
+                             gpu_memory_.vertex_heap_counter_,
                              sizeof(uint), cudaMemcpyDeviceToHost));
   return vertex_heap_count;
 }
@@ -105,7 +105,7 @@ uint Mesh::vertex_heap_count() {
 uint Mesh::triangle_heap_count() {
   uint triangle_heap_count;
   checkCudaErrors(cudaMemcpy(&triangle_heap_count,
-                             gpu_memory_.triangle_heap_counter,
+                             gpu_memory_.triangle_heap_counter_,
                              sizeof(uint), cudaMemcpyDeviceToHost));
   return triangle_heap_count;
 }

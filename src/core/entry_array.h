@@ -8,30 +8,41 @@
 #include "hash_entry.h"
 
 class EntryArray {
-private:
-  HashEntry *entries;       /// allocated for parallel computation
-  uint       entry_count_;
-
 public:
-  int       *candidate_entry_counter; /// atomic counter to add compacted entries atomically
-  int       *entry_recycle_flags;     /// used in garbage collection
-
   __host__ EntryArray();
+  __host__ explicit EntryArray(uint entry_count);
+  // __host__ ~EntryArray();
+
   __host__ void Alloc(uint entry_count);
   __host__ void Free();
 
-//  ~EntryArray();
+  __host__ uint count();
+  __host__ void reset_count();
 
-  uint entry_count();
-  void reset_entry_count();
-
-  void Resize(uint entry_count);
-  void Reset();
+  __host__ void Resize(uint entry_count);
+  __host__ void Reset();
 
   __host__ __device__
   HashEntry& operator [] (int i) {
-    return entries[i];
+    return entries_[i];
   }
+  __host__ __device__ uchar& flag(int i) {
+    return flags_[i];
+  }
+  __host__ __device__ int& counter() {
+    return counter_[0];
+  }
+
+private:
+  // @param const element
+  uint       entry_count_;
+  // @param array
+  HashEntry *entries_;
+  // @param read-write element
+  int       *counter_;       /// atomic counter
+  // @param array
+  uchar     *flags_; /// used in garbage collection
+
 };
 
 #endif //MESH_HASHING_ENTRY_ARRAY_H

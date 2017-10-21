@@ -29,7 +29,6 @@ BlockArray::BlockArray(uint block_count) {
   Resize(block_count);
 }
 
-//
 //BlockArray::~BlockArray() {
 //  Free();
 //}

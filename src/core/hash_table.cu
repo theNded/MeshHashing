@@ -14,7 +14,7 @@
 /// Device code
 ////////////////////
 __global__
-void ResetBucketMutexesKernel(int* bucket_mutexes, uint bucket_count) {
+void HashTableResetBucketMutexesKernel(int *bucket_mutexes, uint bucket_count) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
 
   if (idx < bucket_count) {
@@ -23,7 +23,7 @@ void ResetBucketMutexesKernel(int* bucket_mutexes, uint bucket_count) {
 }
 
 __global__
-void ResetHeapKernel(uint* heap, uint value_capacity) {
+void HashTableResetHeapKernel(uint *heap, uint value_capacity) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
 
   if (idx < value_capacity) {
@@ -32,7 +32,7 @@ void ResetHeapKernel(uint* heap, uint value_capacity) {
 }
 
 __global__
-void ResetEntriesKernel(HashEntry* entries, uint entry_count) {
+void HashTableResetEntriesKernel(HashEntry *entries, uint entry_count) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
 
   if (idx < entry_count) {
@@ -48,7 +48,6 @@ void ResetEntriesKernel(HashEntry* entries, uint entry_count) {
 HashTable::HashTable() {}
 
 HashTable::HashTable(const HashParams &params) {
-  hash_params_ = params;
   Alloc(params);
   Reset();
 }
@@ -66,30 +65,25 @@ void HashTable::Alloc(const HashParams &params) {
   linked_list_size = params.linked_list_size;
 
   /// Values
-  checkCudaErrors(cudaMalloc(&heap,
-                             sizeof(uint) * params.value_capacity));
-  checkCudaErrors(cudaMalloc(&heap_counter,
-                             sizeof(uint)));
+  checkCudaErrors(cudaMalloc(&heap_, sizeof(uint) * params.value_capacity));
+  checkCudaErrors(cudaMalloc(&heap_counter_, sizeof(uint)));
 
   /// Entries
-  checkCudaErrors(cudaMalloc(&entries,
-                             sizeof(HashEntry) * params.entry_count));
+  checkCudaErrors(cudaMalloc(&entries_, sizeof(HashEntry) * params.entry_count));
 
   /// Mutexes
-  checkCudaErrors(cudaMalloc(&bucket_mutexes,
-                             sizeof(int) * params.bucket_count));
+  checkCudaErrors(cudaMalloc(&bucket_mutexes_, sizeof(int) * params.bucket_count));
 }
 
 void HashTable::Free() {
-  checkCudaErrors(cudaFree(heap));
-  checkCudaErrors(cudaFree(heap_counter));
+  checkCudaErrors(cudaFree(heap_));
+  checkCudaErrors(cudaFree(heap_counter_));
 
-  checkCudaErrors(cudaFree(entries));
-  checkCudaErrors(cudaFree(bucket_mutexes));
+  checkCudaErrors(cudaFree(entries_));
+  checkCudaErrors(cudaFree(bucket_mutexes_));
 }
 
 void HashTable::Resize(const HashParams &params) {
-  hash_params_ = params;
   Alloc(params);
   Reset();
 }
@@ -101,28 +95,28 @@ void HashTable::Reset() {
   {
     /// Reset entries
     const int threads_per_block = 64;
-    const dim3 grid_size((hash_params_.entry_count + threads_per_block - 1)
+    const dim3 grid_size((entry_count + threads_per_block - 1)
                          / threads_per_block, 1);
     const dim3 block_size(threads_per_block, 1);
 
-    ResetEntriesKernel<<<grid_size, block_size>>>(entries, entry_count);
+    HashTableResetEntriesKernel <<<grid_size, block_size>>>(entries_, entry_count);
     checkCudaErrors(cudaDeviceSynchronize());
     checkCudaErrors(cudaGetLastError());
   }
 
   {
     /// Reset allocated memory
-    uint heap_counter_init = hash_params_.value_capacity - 1;
-    checkCudaErrors(cudaMemcpy(heap_counter, &heap_counter_init,
+    uint heap_counter_init = value_capacity - 1;
+    checkCudaErrors(cudaMemcpy(heap_counter_, &heap_counter_init,
                                sizeof(uint),
                                cudaMemcpyHostToDevice));
 
     const int threads_per_block = 64;
-    const dim3 grid_size((hash_params_.value_capacity + threads_per_block - 1)
+    const dim3 grid_size((value_capacity + threads_per_block - 1)
                          / threads_per_block, 1);
     const dim3 block_size(threads_per_block, 1);
 
-    ResetHeapKernel<<<grid_size, block_size>>>(heap, value_capacity);
+    HashTableResetHeapKernel <<<grid_size, block_size>>>(heap_, value_capacity);
     checkCudaErrors(cudaDeviceSynchronize());
     checkCudaErrors(cudaGetLastError());
   }
@@ -130,11 +124,11 @@ void HashTable::Reset() {
 
 void HashTable::ResetMutexes() {
   const int threads_per_block = 64;
-  const dim3 grid_size((hash_params_.bucket_count + threads_per_block - 1)
+  const dim3 grid_size((bucket_count + threads_per_block - 1)
                        / threads_per_block, 1);
   const dim3 block_size(threads_per_block, 1);
 
-  ResetBucketMutexesKernel<<<grid_size, block_size>>>(bucket_mutexes, bucket_count);
+  HashTableResetBucketMutexesKernel <<<grid_size, block_size>>>(bucket_mutexes_, bucket_count);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }
@@ -142,13 +136,13 @@ void HashTable::ResetMutexes() {
 /// Member function: Others
 //void HashTable::Debug() {
 //  HashEntry *entries = new HashEntry[hash_params_.bucket_size * hash_params_.bucket_count];
-//  uint *heap = new uint[hash_params_.value_capacity];
-//  uint  heap_counter;
+//  uint *heap_ = new uint[hash_params_.value_capacity];
+//  uint  heap_counter_;
 //
-//  checkCudaErrors(cudaMemcpy(&heap_counter, heap_counter, sizeof(uint), cudaMemcpyDeviceToHost));
-//  heap_counter++; //points to the first free entry: number of blocks is one more
+//  checkCudaErrors(cudaMemcpy(&heap_counter_, heap_counter_, sizeof(uint), cudaMemcpyDeviceToHost));
+//  heap_counter_++; //points to the first free entry: number of blocks is one more
 //
-//  checkCudaErrors(cudaMemcpy(heap, heap,
+//  checkCudaErrors(cudaMemcpy(heap_, heap_,
 //                             sizeof(uint) * hash_params_.value_capacity,
 //                             cudaMemcpyDeviceToHost));
 //  checkCudaErrors(cudaMemcpy(entries, entries,
@@ -185,15 +179,15 @@ void HashTable::ResetMutexes() {
 //    int ptr;
 //  };
 //
-//  /// Iterate over free heap
+//  /// Iterate over free heap_
 //  std::unordered_set<uint> free_heap_index;
 //  std::vector<int> free_value_index(hash_params_.value_capacity, 0);
-//  for (uint i = 0; i < heap_counter; i++) {
-//    free_heap_index.insert(heap[i]);
-//    free_value_index[heap[i]] = FREE_ENTRY;
+//  for (uint i = 0; i < heap_counter_; i++) {
+//    free_heap_index.insert(heap_[i]);
+//    free_value_index[heap_[i]] = FREE_ENTRY;
 //  }
-//  if (free_heap_index.size() != heap_counter) {
-//    LOG(ERROR) << "Heap check invalid";
+//  if (free_heap_index.size() != heap_counter_) {
+//    LOG(ERROR) << "heap_ check invalid";
 //  }
 //
 //  uint not_free_entry_count = 0;
@@ -201,8 +195,8 @@ void HashTable::ResetMutexes() {
 //
 //  /// Iterate over entries
 //  std::list<Entry> l;
-//  uint entry_count = hash_params_.entry_count;
-//  for (uint i = 0; i < entry_count; i++) {
+//  uint entry_count = hash_params_.count;
+//  for (uint i = 0; i < count; i++) {
 //    if (entries[i].ptr != LOCK_ENTRY) {
 //      not_locked_entry_count++;
 //    }
@@ -214,7 +208,7 @@ void HashTable::ResetMutexes() {
 //      l.push_back(occupied_entry);
 //
 //      if (free_heap_index.find(occupied_entry.ptr) != free_heap_index.end()) {
-//        LOG(ERROR) << "ERROR: ptr is on free heap, but also marked as an allocated entry";
+//        LOG(ERROR) << "ERROR: ptr is on free heap_, but also marked as an allocated entry";
 //      }
 //      free_value_index[entries[i].ptr] = LOCK_ENTRY;
 //    }
@@ -235,9 +229,9 @@ void HashTable::ResetMutexes() {
 //  }
 //
 //  if (free_value_count + not_free_value_count == hash_params_.value_capacity)
-//    LOG(INFO) << "HEAP OK!";
+//    LOG(INFO) << "heap_ OK!";
 //  else {
-//    LOG(ERROR) << "HEAP CORRUPTED";
+//    LOG(ERROR) << "heap_ CORRUPTED";
 //    return;
 //  }
 //
@@ -256,5 +250,5 @@ void HashTable::ResetMutexes() {
 //
 //  delete [] entries;
 //  //delete [] values;
-//  delete [] heap;
+//  delete [] heap_;
 //}

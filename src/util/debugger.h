@@ -35,18 +35,18 @@ private:
 
   HashEntry *entries_;
   uint *heap_;
-  uint *heap_counter_;
+  uint *heap_counter__;
   ///           |
   ///           v
   Block *blocks_;
   ///           |
   ///           v
   uint *vertex_heap_;
-  uint *vertex_heap_counter_;
+  uint *vertex_heap_counter__;
   Vertex *vertices_;
 
   uint *triangle_heap_;
-  uint *triangle_heap_counter_;
+  uint *triangle_heap_counter__;
   Triangle *triangles_;
 
   int entry_count_;

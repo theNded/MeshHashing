@@ -251,7 +251,7 @@ void Map::AllocBlockArray(Sensor& sensor) {
 void Map::UpdateBlockArray(Sensor &sensor) {
   const uint threads_per_block = BLOCK_SIZE;
 
-  uint compacted_entry_count = candidate_entries_.entry_count();
+  uint compacted_entry_count = candidate_entries_.count();
   if (compacted_entry_count <= 0)
     return;
 

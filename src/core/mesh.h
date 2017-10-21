@@ -5,52 +5,31 @@
 #ifndef CORE_MESH_H
 #define CORE_MESH_H
 
-#include "common.h"
-#include "params.h"
+#include "core/common.h"
+#include "core/params.h"
+#include "core/vertex.h"
+#include "core/triangle.h"
 
 #include <helper_cuda.h>
 #include <helper_math.h>
 
-struct __ALIGN__(4) Vertex {
-  float3 pos;
-  float3 normal;
-  float3 color;
-  int    ref_count;
-
-  __device__
-  void Clear() {
-    pos = make_float3(0.0);
-    normal = make_float3(0.0);
-    color = make_float3(0);
-    ref_count = 0;
-  }
-};
-
-struct __ALIGN__(4) Triangle {
-  int3 vertex_ptrs;
-
-  __device__
-  void Clear() {
-    vertex_ptrs = make_int3(-1, -1, -1);
-  }
-};
 
 struct MeshGPU {
   // Dynamic memory management for vertices
   // We need compact operation,
   // as MC during updating might release some triangles
   uint*     vertex_heap;
-  uint*     vertex_heap_counter;
+  uint*     vertex_heap_counter_;
   Vertex*   vertices;
 
   uint*     triangle_heap;
-  uint*     triangle_heap_counter;
+  uint*     triangle_heap_counter_;
   Triangle* triangles;
 
 #ifdef __CUDACC__
   __device__
   uint AllocVertex() {
-    uint addr = atomicSub(&vertex_heap_counter[0], 1);
+    uint addr = atomicSub(&vertex_heap_counter_[0], 1);
     if (addr < MEMORY_LIMIT) {
       printf("v: %d -> %d\n", addr, vertex_heap[addr]);
     }
@@ -58,13 +37,13 @@ struct MeshGPU {
   }
   __device__
   void FreeVertex(uint ptr) {
-    uint addr = atomicAdd(&vertex_heap_counter[0], 1);
+    uint addr = atomicAdd(&vertex_heap_counter_[0], 1);
     vertex_heap[addr + 1] = ptr;
   }
 
   __device__
   uint AllocTriangle() {
-    uint addr = atomicSub(&triangle_heap_counter[0], 1);
+    uint addr = atomicSub(&triangle_heap_counter_[0], 1);
     if (addr < MEMORY_LIMIT) {
       printf("t: %d -> %d\n", addr, vertex_heap[addr]);
     }
@@ -72,7 +51,7 @@ struct MeshGPU {
   }
   __device__
   void FreeTriangle(uint ptr) {
-    uint addr = atomicAdd(&triangle_heap_counter[0], 1);
+    uint addr = atomicAdd(&triangle_heap_counter_[0], 1);
     triangle_heap[addr + 1] = ptr;
   }
 

@@ -140,7 +140,7 @@ TARGET_LINK_LIBRARIES(cuda_gl_interp
 ADD_EXECUTABLE(block_visualizer src/util/block_visualizer.cc
         src/util/timer.h
         src/util/video_clip.cc
-        src/core/block_array.h src/core/hash_entry.h src/core/entry_array.cu src/core/entry_array.h)
+        src/core/block_array.h src/core/hash_entry.h src/core/entry_array.cu src/core/entry_array.h src/core/vertex.h src/core/triangle.h)
 TARGET_LINK_LIBRARIES(block_visualizer
         mesh-hashing
         ${OpenCV_LIBRARIES}
