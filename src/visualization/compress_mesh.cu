@@ -93,7 +93,7 @@ void CompressTrianglesKernel(Mesh        mesh,
   }
 }
 
-void CompressMeshImpl(EntryArray& candidate_entries,
+void CompressMesh(EntryArray& candidate_entries,
                   BlockArray& blocks,
                   Mesh& mesh,
                   CompactMesh & compact_mesh, int3& stats) {

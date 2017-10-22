@@ -174,7 +174,9 @@ RayCaster::~RayCaster() {
 //////////
 /// Member function: (CPU calling GPU kernels)
 /// Major function, extract surface and normal from the volumes
-void RayCaster::Cast(MappingEngine& map, const float4x4& c_T_w) {
+void RayCaster::Cast(HashTable& hash_table, BlockArray& blocks,
+                     CoordinateConverter& converter,
+                     const float4x4& c_T_w) {
   const uint threads_per_block = 8;
   const float4x4 w_T_c = c_T_w.getInverse();
 
@@ -185,9 +187,9 @@ void RayCaster::Cast(MappingEngine& map, const float4x4& c_T_w) {
   const dim3 block_size(threads_per_block, threads_per_block);
 
   CastKernel<<<grid_size, block_size>>>(
-          map.hash_table(),
-                  map.blocks(),
-                  gpu_memory_, ray_caster_params_, c_T_w, w_T_c, map.converter());
+      hash_table,
+          blocks,
+          gpu_memory_, ray_caster_params_, c_T_w, w_T_c, converter);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 

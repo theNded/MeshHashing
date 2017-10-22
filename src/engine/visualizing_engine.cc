@@ -8,6 +8,10 @@
 const std::string kShaderPath = "../src/extern/opengl-wrapper/shader";
 
 VisualizingEngine::VisualizingEngine(std::string window_name, int width, int height) {
+  Init(window_name, width, height);
+}
+
+void VisualizingEngine::Init(std::string window_name, int width, int height) {
   window_.Init(window_name, width, height);
   camera_.set_perspective(width, height);
   glm::mat4 m = glm::mat4(1.0f);

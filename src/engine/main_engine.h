@@ -1,7 +1,7 @@
 //
 // Created by wei on 17-4-5.
 //
-// MappingEngine: managing HashTable<Block> and might be other structs later
+// MainEngine: managing HashTable<Block> and might be other structs later
 
 #ifndef VH_MAP_H
 #define VH_MAP_H
@@ -15,24 +15,27 @@
 #include "visualization/bounding_box.h"
 #include "sensor/rgbd_sensor.h"
 
-class MappingEngine {
+class MainEngine {
 private:
+  // Core
   HashTable        hash_table_;
   BlockArray       blocks_;
+  EntryArray       candidate_entries_;
+
+  // Meshing
   Mesh             mesh_;
 
-  CoordinateConverter coordinate_converter_;
-  EntryArray       candidate_entries_;
+  // Visualization
   CompactMesh      compact_mesh_;
+
+  // Geometry
+  CoordinateConverter coordinate_converter_;
+
 
   uint             integrated_frame_count_;
   bool             use_fine_gradient_;
 
   BBox             bbox_;
-
-  /// Focus on Pass1, Pass2, and lock free
-  std::fstream     time_profile_;
-  std::fstream     memo_profile_;
 
 ////////////////////
 /// Core
@@ -41,34 +44,26 @@ private:
 public:
 
   /// Life cycle
-  MappingEngine(const HashParams& hash_params,
+  MainEngine(
+      const HashParams& hash_params,
       const MeshParams& mesh_params,
       const SDFParams&  sdf_params);
-  ~MappingEngine();
+  ~MainEngine();
 
   /// Reset and recycle
   void Reset();
-  void Recycle(int frame_count);
 
 ////////////////////
 /// Fusion
 ////////////////////
 public:
-  void Integrate(Sensor &sensor);
-
-////////////////////
-/// Meshing
-////////////////////
-public:
-  void CompressMesh(int3& stats);
-  void MarchingCubes();
-  void PlaneFitting(float3 camera_pos);
-
-  void SaveMesh(std::string path);
-  void SavePly(std::string path);
+  void Mapping(Sensor &sensor);
+  void Meshing();
+  void Recycle();
 
 
-////////////////////
+
+  ////////////////////
 /// Access functions
 ////////////////////
   /// Only classes with Kernel function should call it

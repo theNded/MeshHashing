@@ -31,7 +31,7 @@
 
 #include "../core/params.h"
 #include "io/config_manager.h"
-#include "engine/mapping_engine.h"
+#include "engine/main_engine.h"
 #include "sensor/rgbd_sensor.h"
 #include "../visualization/ray_caster.h"
 #include "../opengl/args.h"
@@ -119,7 +119,7 @@ int main(int argc, char **argv) {
                        30000);
 
   SetConstantSDFParams(config.sdf_params);
-  MappingEngine       map(config.hash_params, config.mesh_params,
+  MainEngine       map(config.hash_params, config.mesh_params,
                 "../result/3dv/" + args.time_profile + ".txt",
                 "../result/3dv/" + args.memo_profile + ".txt");
   Sensor    sensor(config.sensor_params);
@@ -165,7 +165,7 @@ int main(int argc, char **argv) {
     wTc = cTw.getInverse();
     sensor.set_transform(wTc);
 
-    map.Integrate(sensor);
+    map.Mapping(sensor);
     map.MarchingCubes();
 
     if (args.ray_casting) {
@@ -258,7 +258,7 @@ int main(int argc, char **argv) {
   }
 
   if (args.save_mesh) {
-    map.SaveMesh(args.filename_prefix + ".obj");
+    map.SaveObj(args.filename_prefix + ".obj");
   }
 
   SLAM.Shutdown();

@@ -1,6 +1,6 @@
 #include "matrix.h"
 
-#include "engine/mapping_engine.h"
+#include "engine/main_engine.h"
 #include "sensor/rgbd_sensor.h"
 
 #include <helper_cuda.h>

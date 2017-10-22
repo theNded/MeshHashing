@@ -12,6 +12,9 @@
 // TODO: setup a factory
 class VisualizingEngine {
 public:
+  VisualizingEngine() = default;
+  void Init(std::string, int width, int height);
+
   VisualizingEngine(std::string window_name, int width, int height);
   void set_interaction_mode(bool is_free);
   void UpdateViewpoint(glm::mat4 view);
@@ -28,9 +31,10 @@ public:
                                 float light_power,
                                 CompactMesh &compact_mesh);
 
-public:
+private:
   bool interaction_enabled_;
 
+  // Shared viewpoint
   glm::mat4  mvp_;
   glm::mat4  view_;
   gl::Window window_;

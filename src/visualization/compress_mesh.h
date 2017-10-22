@@ -11,7 +11,7 @@
 #include "core/mesh.h"
 #include "visualization/compact_mesh.h"
 
-void CompressMeshImpl(EntryArray& candidate_entries, BlockArray& blocks,
+void CompressMesh(EntryArray& candidate_entries, BlockArray& blocks,
                   Mesh& mesh,
                   CompactMesh & compact_mesh, int3& stats);
 

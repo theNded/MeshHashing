@@ -1,18 +1,6 @@
-#include <glog/logging.h>
-#include <unordered_map>
-#include "../visualization/color_util.h"
-#include <chrono>
-
-#include <ctime>
-#include <curand_kernel.h>
-#include <device_launch_parameters.h>
-
-#include "mc_tables.h"
-#include "util/timer.h"
-#include "engine/mapping_engine.h"
+#include "meshing/marching_cubes.h"
 #include "geometry/gradient.h"
-#include "core/collect.h"
-
+#include "visualization/color_util.h"
 //#define REDUCTION
 
 ////////////////////
@@ -384,8 +372,13 @@ void UpdateStatisticsKernel(HashTable        hash_table,
 ////////////////////
 /// Host code
 ////////////////////
-void MappingEngine::MarchingCubes() {
-  uint occupied_block_count = candidate_entries_.count();
+void MarchingCubes(EntryArray& candidate_entries,
+                   HashTable& hash_table,
+                   BlockArray& blocks,
+                   Mesh& mesh,
+                   bool use_fine_gradient,
+                   CoordinateConverter& converter) {
+  uint occupied_block_count = candidate_entries.count();
   LOG(INFO) << "Marching cubes block count: " << occupied_block_count;
   if (occupied_block_count <= 0)
     return;
@@ -397,9 +390,9 @@ void MappingEngine::MarchingCubes() {
   /// First update statistics
 #ifdef STATS
   UpdateStatisticsKernel<<<grid_size, block_size>>>(
-      hash_table_,
-          candidate_entries_,
-          blocks_);
+      hash_table,
+          candidate_entries,
+          blocks);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 #endif
@@ -408,188 +401,35 @@ void MappingEngine::MarchingCubes() {
   Timer timer;
   timer.Tick();
   MarchingCubesPass1Kernel<<<grid_size, block_size>>>(
-      hash_table_,
-          candidate_entries_,
-          blocks_,
-          mesh_,
-          use_fine_gradient_,
-          coordinate_converter_);
+      hash_table,
+          candidate_entries,
+          blocks,
+          mesh,
+          use_fine_gradient,
+          converter);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
   double pass1_seconds = timer.Tock();
   LOG(INFO) << "Pass1 duration: " << pass1_seconds;
-  time_profile_ << pass1_seconds << " ";
 
   timer.Tick();
   MarchingCubesPass2Kernel<<<grid_size, block_size>>>(
-      hash_table_,
-          candidate_entries_,
-          blocks_,
-          mesh_,
-          use_fine_gradient_,
-          coordinate_converter_);
+      hash_table,
+          candidate_entries,
+          blocks,
+          mesh,
+          use_fine_gradient,
+          converter);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
   double pass2_seconds = timer.Tock();
   LOG(INFO) << "Pass2 duration: " << pass2_seconds;
-  time_profile_ << pass2_seconds << "\n";
 
-
-  RecycleTrianglesKernel<<<grid_size, block_size>>>(
-      candidate_entries_,
-          blocks_,
-          mesh_);
+  RecycleTrianglesKernel<<<grid_size, block_size>>>(candidate_entries, blocks, mesh);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 
-  RecycleVerticesKernel<<<grid_size, block_size>>>(
-      candidate_entries_,
-          blocks_,
-          mesh_);
+  RecycleVerticesKernel<<<grid_size, block_size>>>(candidate_entries, blocks, mesh);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
-}
-
-/// Assume this operation is following
-/// CollectInFrustumBlockArray or
-/// CollectAllBlockArray
-void MappingEngine::SaveMesh(std::string path) {
-  LOG(INFO) << "Copying data from GPU";
-
-  CollectAllBlockArray(candidate_entries_, hash_table_);
-  int3 stats;
-  CompressMesh(stats);
-
-  uint compact_vertex_count = compact_mesh_.vertex_count();
-  uint compact_triangle_count = compact_mesh_.triangle_count();
-  LOG(INFO) << "Vertices: " << compact_vertex_count;
-  LOG(INFO) << "Triangles: " << compact_triangle_count;
-
-  float3* vertices = new float3[compact_vertex_count];
-  float3* normals  = new float3[compact_vertex_count];
-  int3* triangles  = new int3  [compact_triangle_count];
-  checkCudaErrors(cudaMemcpy(vertices, compact_mesh_.vertices(),
-                             sizeof(float3) * compact_vertex_count,
-                             cudaMemcpyDeviceToHost));
-  checkCudaErrors(cudaMemcpy(normals, compact_mesh_.normals(),
-                             sizeof(float3) * compact_vertex_count,
-                             cudaMemcpyDeviceToHost));
-  checkCudaErrors(cudaMemcpy(triangles, compact_mesh_.triangles(),
-                             sizeof(int3) * compact_triangle_count,
-                             cudaMemcpyDeviceToHost));
-
-  std::ofstream out(path);
-  std::stringstream ss;
-  LOG(INFO) << "Writing vertices";
-  for (uint i = 0; i < compact_vertex_count; ++i) {
-    ss.str("");
-    ss <<  "v " << vertices[i].x << " "
-       << vertices[i].y << " "
-       << vertices[i].z << "\n";
-    out << ss.str();
-  }
-
-  if (use_fine_gradient_) {
-    LOG(INFO) << "Writing normals";
-    for (uint i = 0; i < compact_vertex_count; ++i) {
-      ss.str("");
-      ss << "vn " << normals[i].x << " "
-         << normals[i].y << " "
-         << normals[i].z << "\n";
-      out << ss.str();
-    }
-  }
-
-  LOG(INFO) << "Writing faces";
-  for (uint i = 0; i < compact_triangle_count; ++i) {
-    ss.str("");
-    int3 idx = triangles[i] + make_int3(1);
-    if (use_fine_gradient_) {
-      ss << "f " << idx.x << "//" << idx.x << " "
-         << idx.y << "//" << idx.y << " "
-         << idx.z << "//" << idx.z << "\n";
-    } else {
-      ss << "f " << idx.x << " " << idx.y << " " << idx.z << "\n";
-    }
-    out << ss.str();
-  }
-
-  LOG(INFO) << "Finishing vertices";
-  delete[] vertices;
-  LOG(INFO) << "Finishing normals";
-  delete[] normals;
-  LOG(INFO) << "Finishing triangles";
-  delete[] triangles;
-}
-
-
-void MappingEngine::SavePly(std::string path) {
-  LOG(INFO) << "Copying data from GPU";
-
-  CollectAllBlockArray(candidate_entries_, hash_table_);
-  int3 stats;
-  CompressMesh(stats);
-
-  uint compact_vertex_count = compact_mesh_.vertex_count();
-  uint compact_triangle_count = compact_mesh_.triangle_count();
-  LOG(INFO) << "Vertices: " << compact_vertex_count;
-  LOG(INFO) << "Triangles: " << compact_triangle_count;
-
-  float3* vertices = new float3[compact_vertex_count];
-  float3* normals  = new float3[compact_vertex_count];
-  int3* triangles  = new int3  [compact_triangle_count];
-  checkCudaErrors(cudaMemcpy(vertices, compact_mesh_.vertices(),
-                             sizeof(float3) * compact_vertex_count,
-                             cudaMemcpyDeviceToHost));
-  checkCudaErrors(cudaMemcpy(normals, compact_mesh_.normals(),
-                             sizeof(float3) * compact_vertex_count,
-                             cudaMemcpyDeviceToHost));
-  checkCudaErrors(cudaMemcpy(triangles, compact_mesh_.triangles(),
-                             sizeof(int3) * compact_triangle_count,
-                             cudaMemcpyDeviceToHost));
-
-  std::ofstream out(path);
-  std::stringstream ss;
-  ////// Header
-  ss.str("");
-  ss << "ply\n"
-      "format ascii 1.0\n";
-  ss << "element vertex " << compact_vertex_count << "\n";
-  ss << "property float x\n"
-      "property float y\n"
-      "property float z\n"
-      "property float nx\n"
-      "property float ny\n"
-      "property float nz\n";
-  ss << "element face " << compact_triangle_count << "\n";
-  ss << "property list uchar int vertex_index\n";
-  ss << "end_header\n";
-  out << ss.str();
-
-  LOG(INFO) << "Writing vertices";
-  for (uint i = 0; i < compact_vertex_count; ++i) {
-    ss.str("");
-    ss << vertices[i].x << " "
-       << vertices[i].y << " "
-       << vertices[i].z << " "
-       << normals[i].x << " "
-       << normals[i].y << " "
-       << normals[i].z << "\n";
-    out << ss.str();
-  }
-
-  LOG(INFO) << "Writing faces";
-  for (uint i = 0; i < compact_triangle_count; ++i) {
-    ss.str("");
-    int3 idx = triangles[i];
-    ss << "3 " << idx.x << " " << idx.y << " " << idx.z << "\n";
-    out << ss.str();
-  }
-
-  LOG(INFO) << "Finishing vertices";
-  delete[] vertices;
-  LOG(INFO) << "Finishing normals";
-  delete[] normals;
-  LOG(INFO) << "Finishing triangles";
-  delete[] triangles;
 }

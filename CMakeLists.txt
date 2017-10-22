@@ -109,17 +109,13 @@ CUDA_ADD_LIBRARY(mesh-hashing-cuda
         ${VH}/core/block_array.cu
         ${VH}/core/mesh.cu
         ${VH}/core/collect.cu
-
         ${VH}/sensor/rgbd_sensor.cu
-
+        ${VH}/mapping/allocate.cu
+        ${VH}/mapping/update.cu
         ${VH}/mapping/recycle.cu
-        ${VH}/mapping/fusion.cu
-
         ${VH}/meshing/marching_cubes.cu
-
         #${VH}/src/map_plane.cu
         ${VH}/util/map_debug.cu
-
         ${VH}/visualization/compact_mesh.cu
         ${VH}/visualization/compress_mesh.cu
         ${VH}/visualization/bounding_box.cu
@@ -131,9 +127,10 @@ TARGET_LINK_LIBRARIES(mesh-hashing-cuda
 
 ### 3. C++
 ADD_LIBRARY(mesh-hashing
-        ${VH}/engine/mapping_engine.cc
+        ${VH}/engine/main_engine.cc
         ${VH}/engine/visualizing_engine.cc
         ${VH}/io/config_manager.cc
+        ${VH}/io/mesh_writer.cc
         ${VH}/sensor/rgbd_local_sequence.cc)
         #${VH}/tool/cpp/debugger.cc)
 SET_TARGET_PROPERTIES(mesh-hashing PROPERTIES COMPILE_DEFINITIONS USE_CUDA)
@@ -152,8 +149,7 @@ TARGET_LINK_LIBRARIES(cuda_gl_interp
 
 ADD_EXECUTABLE(block_visualizer src/util/block_visualizer.cc
         src/util/timer.h
-        src/util/video_clip.cc
-        src/core/block_array.h src/core/hash_entry.h src/core/entry_array.cu src/core/entry_array.h src/core/vertex.h src/core/triangle.h)
+        src/util/video_clip.cc)
 TARGET_LINK_LIBRARIES(block_visualizer
         mesh-hashing
         ${OpenCV_LIBRARIES}

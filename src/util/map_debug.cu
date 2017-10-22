@@ -1,4 +1,4 @@
-#include "engine/mapping_engine.h"
+#include "engine/main_engine.h"
 #include <glog/logging.h>
 
 //////////
@@ -45,7 +45,7 @@ void GetBoundingBoxKernel(
 }
 
 
-void MappingEngine::GetBoundingBoxes() {
+void MainEngine::GetBoundingBoxes() {
   bbox_.Reset();
 
   int occupied_block_count = candidate_entries_.count();

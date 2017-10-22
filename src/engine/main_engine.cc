@@ -2,34 +2,46 @@
 // Created by wei on 17-10-22.
 //
 
-#include "engine/mapping_engine.h"
-#include "mapping/fusion.h"
+#include "engine/main_engine.h"
+#include "mapping/allocate.h"
+#include "mapping/update.h"
 #include "mapping/recycle.h"
 #include "core/collect.h"
 #include "visualization/compress_mesh.h"
+#include "meshing/marching_cubes.h"
+
 
 ////////////////////
 /// Host code
 ////////////////////
-void MappingEngine::Integrate(Sensor& sensor) {
+void MainEngine::Mapping(Sensor &sensor) {
   AllocBlockArray(hash_table_, sensor, coordinate_converter_);
 
   CollectInFrustumBlockArray(hash_table_, candidate_entries_, sensor, coordinate_converter_);
+
   UpdateBlockArray(candidate_entries_,
                    hash_table_,
-                   blocks_, mesh_,
+                   blocks_,
+                   mesh_,
                    sensor,
                    coordinate_converter_);
-
-  Recycle(integrated_frame_count_);
   integrated_frame_count_ ++;
 }
 
-void MappingEngine::Recycle(int frame_count) {
+void MainEngine::Meshing() {
+  MarchingCubes(candidate_entries_,
+                hash_table_,
+                blocks_,
+                mesh_,
+                use_fine_gradient_,
+                coordinate_converter_);
+}
+
+void MainEngine::Recycle() {
   // TODO(wei): change it via global parameters
 
   int kRecycleGap = 15;
-  if (frame_count % kRecycleGap == kRecycleGap - 1) {
+  if (integrated_frame_count_ % kRecycleGap == kRecycleGap - 1) {
     StarveOccupiedBlockArray(candidate_entries_, blocks_);
 
     CollectGarbageBlockArray(candidate_entries_,
@@ -41,7 +53,7 @@ void MappingEngine::Recycle(int frame_count) {
 }
 
 /// Life cycle
-MappingEngine::MappingEngine(const HashParams &hash_params,
+MainEngine::MainEngine(const HashParams& hash_params,
                              const MeshParams &mesh_params,
                              const SDFParams &sdf_params) {
   hash_table_.Resize(hash_params);
@@ -61,13 +73,17 @@ MappingEngine::MappingEngine(const HashParams &hash_params,
   coordinate_converter_.weight_sample = sdf_params.weight_sample;
 }
 
-MappingEngine::~MappingEngine() {
-  time_profile_.close();
-  memo_profile_.close();
+MainEngine::~MainEngine() {
+  hash_table_.Free();
+  blocks_.Free();
+  mesh_.Free();
+
+  candidate_entries_.Free();
+  compact_mesh_.Free();
 }
 
 /// Reset
-void MappingEngine::Reset() {
+void MainEngine::Reset() {
   integrated_frame_count_ = 0;
 
   hash_table_.Reset();
@@ -77,8 +93,4 @@ void MappingEngine::Reset() {
   candidate_entries_.Reset();
   compact_mesh_.Reset();
   bbox_.Reset();
-}
-
-void MappingEngine::CompressMesh(int3 &stats) {
-  CompressMeshImpl(candidate_entries_, blocks_, mesh_, compact_mesh_, stats);
 }

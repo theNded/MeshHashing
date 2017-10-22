@@ -12,8 +12,6 @@
 #include "sensor/rgbd_sensor.h"
 #include "geometry/coordinate_utils.h"
 
-void AllocBlockArray(HashTable& hash_table, Sensor& sensor, CoordinateConverter& converter);
-
 void UpdateBlockArray(EntryArray& candidate_entries,
                       HashTable&  hash_table,
                       BlockArray& blocks,

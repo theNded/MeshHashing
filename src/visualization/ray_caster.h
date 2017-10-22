@@ -7,7 +7,7 @@
 
 #include "../core/common.h"
 
-#include "engine/mapping_engine.h"
+#include "engine/main_engine.h"
 #include "../core/params.h"
 #include "sensor/rgbd_sensor.h"
 
@@ -40,7 +40,7 @@ public:
   RayCaster(const RayCasterParams& params);
   ~RayCaster(void);
 
-  void Cast(MappingEngine& map, const float4x4& c_T_w);
+  void Cast(HashTable& hash_table, BlockArray& blocks, CoordinateConverter& converter, const float4x4& c_T_w);
 
   const cv::Mat& depth_image() {
     return depth_image_;

@@ -18,6 +18,9 @@
 #include "util/timer.h"
 #include <queue>
 #include <engine/visualizing_engine.h>
+#include <io/mesh_writer.h>
+#include <meshing/marching_cubes.h>
+#include <visualization/compress_mesh.h>
 
 #include "sensor/rgbd_local_sequence.h"
 #include "sensor/rgbd_sensor.h"
@@ -54,9 +57,9 @@ int main(int argc, char** argv) {
   config.LoadConfig(dataset_type);
   rgbd_local_sequence.LoadDataset(dataset_type);
 
-  VisualizingEngine vis_engine("Mesh",
-                               config.sensor_params.width*2,
-                               config.sensor_params.height*2);
+  MainEngine main_engine(config.hash_params, config.mesh_params, config.sdf_params);
+  // Add SetLights for main_engine
+  VisualizingEngine vis_engine("Mesh", config.sensor_params.width*2, config.sensor_params.height*2);
   vis_engine.set_interaction_mode(args.free_walk);
   vis_engine.SetMultiLightGeometryProgram(config.mesh_params.max_vertex_count,
                                           config.mesh_params.max_triangle_count,
@@ -78,11 +81,10 @@ int main(int argc, char** argv) {
 //  traj_args.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
 //                       30000);
 
-  MappingEngine map(config.hash_params, config.mesh_params, config.sdf_params);
   Sensor    sensor(config.sensor_params);
   RayCaster ray_caster(config.ray_caster_params);
 
-  map.use_fine_gradient()   = args.fine_gradient;
+  main_engine.use_fine_gradient()   = args.fine_gradient;
 
   cv::VideoWriter writer;
   cv::Mat screen;
@@ -99,10 +101,8 @@ int main(int argc, char** argv) {
 
   std::chrono::time_point<std::chrono::system_clock> start, end;
 
-  //std::ofstream out_trs("trs.txt"), out_vtx_our("our.txt"), out_vtx_base("baseline.txt");
-  std::ofstream time_prof("reduction.txt");
   double all_seconds = 0, meshing_seconds = 0, rendering_seconds = 0, compressing_seconds = 0;
-  float3 prev_cam_pos;
+  //float3 prev_cam_pos;
   while (rgbd_local_sequence.ProvideData(depth, color, wTc)) {
     Timer timer_all, timer_meshing, timer_rendering, timer_compressing;
 
@@ -110,55 +110,68 @@ int main(int argc, char** argv) {
     if (args.run_frames > 0 &&  frame_count > args.run_frames)
       break;
 
-
     sensor.Process(depth, color);
     sensor.set_transform(wTc);
     cTw = wTc.getInverse();
-
-    float3 camera_pos = make_float3(wTc.m14, wTc.m24, wTc.m34);
-    float scale = 0.25;
-    float4 v04 = wTc * make_float4(scale, scale, 2*scale, 1);
-    float4 v14 = wTc * make_float4(scale, -scale, 2*scale, 1);
-    float4 v24 = wTc * make_float4(-scale, scale, 2*scale, 1);
-    float4 v34 = wTc * make_float4(-scale, -scale, 2*scale, 1);
-    float3 v0 = make_float3(v04.x, v04.y, v04.z);
-    float3 v1 = make_float3(v14.x, v14.y, v14.z);
-    float3 v2 = make_float3(v24.x, v24.y, v24.z);
-    float3 v3 = make_float3(v34.x, v34.y, v34.z);
-
-    std::vector<float3> vs = {camera_pos, v0, camera_pos, v1, camera_pos, v2, camera_pos, v3,
-                              v0, v1, v1, v3, v3, v2, v2, v0};
-
-    prev_cam_pos = camera_pos;
+//
+//    float3 camera_pos = make_float3(wTc.m14, wTc.m24, wTc.m34);
+//    float scale = 0.25;
+//    float4 v04 = wTc * make_float4(scale, scale, 2*scale, 1);
+//    float4 v14 = wTc * make_float4(scale, -scale, 2*scale, 1);
+//    float4 v24 = wTc * make_float4(-scale, scale, 2*scale, 1);
+//    float4 v34 = wTc * make_float4(-scale, -scale, 2*scale, 1);
+//    float3 v0 = make_float3(v04.x, v04.y, v04.z);
+//    float3 v1 = make_float3(v14.x, v14.y, v14.z);
+//    float3 v2 = make_float3(v24.x, v24.y, v24.z);
+//    float3 v3 = make_float3(v34.x, v34.y, v34.z);
+//
+//    std::vector<float3> vs = {camera_pos, v0, camera_pos, v1, camera_pos, v2, camera_pos, v3,
+//                              v0, v1, v1, v3, v3, v2, v2, v0};
+//
+//    prev_cam_pos = camera_pos;
 
     timer_all.Tick();
-    map.Integrate(sensor);
+    main_engine.Mapping(sensor);
+    main_engine.Meshing();
+    main_engine.Recycle();
+    //main_engine.Visualizing();
+    // in main_engine.Visualizing():
+    // if (ray_casting)
+    //   ray_caster.Cast
+    // if (! partial_mesh)
+    //   CollectAll
+    // CompressMesh
+    // visualize_engine.Render()
 
+    /////////////////////////////
+    /// Should be in VisualizingEngine
     if (args.ray_casting) {
-      ray_caster.Cast(map, cTw);
+      ray_caster.Cast(main_engine.hash_table(), main_engine.blocks(), main_engine.converter(), cTw);
       cv::imshow("RayCasting", ray_caster.surface_image());
       cv::waitKey(1);
     }
 //
 //    if (frame_count > 1) // Re-estimate the SDF field
-//      map.PlaneFitting(camera_pos);
+//      main_engine.PlaneFitting(camera_pos);
 
     timer_meshing.Tick();
 
-    map.MarchingCubes();
 
     // TODO: add flag to blocks to deal with boundary conditions
     if (! args.mesh_range) {
-      CollectAllBlockArray(map.candidate_entries(), map.hash_table());
+      CollectAllBlockArray(main_engine.candidate_entries(), main_engine.hash_table());
     }
 
-    map.GetBoundingBoxes();
+    main_engine.GetBoundingBoxes();
     double meshing_period = timer_meshing.Tock();
     meshing_seconds += meshing_period;
 
     timer_compressing.Tick();
     int3 stats;
-    map.CompressMesh(stats);
+    CompressMesh(main_engine.candidate_entries(),
+                 main_engine.blocks(),
+                 main_engine.mesh(),
+                 main_engine.compact_mesh(),stats);
     compressing_seconds += timer_compressing.Tock();
 
     timer_rendering.Tick();
@@ -173,7 +186,8 @@ int main(int argc, char** argv) {
     vis_engine.RenderMultiLightGeometry(light_src_positions,
                                         light_color,
                                         light_power,
-                                        map.compact_mesh());
+                                        main_engine.compact_mesh());
+/////////////////////////////
 
 //    if (args.bounding_box) {
 //      glUseProgram(bbox_program.id());
@@ -182,11 +196,11 @@ int main(int argc, char** argv) {
 //      bbox_uniforms.Bind("uni_color", &col, 1);
 //
 //      bbox_args.BindBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-//                           map.bbox().vertex_count(), map.bbox().vertices());
+//                           main_engine.bbox().vertex_count(), main_engine.bbox().vertices());
 //
 //      glEnable(GL_LINE_SMOOTH);
 //      glLineWidth(5.0f);
-//      glDrawArrays(GL_LINES, 0, map.bbox().vertex_count());
+//      glDrawArrays(GL_LINES, 0, main_engine.bbox().vertex_count());
 //    }
 
 //    glUseProgram(bbox_program.id());
@@ -208,7 +222,6 @@ int main(int argc, char** argv) {
 //      writer << rgb;
 //    }
 
-    time_prof << "(" << frame_count << ", " << 1000 * meshing_period << ")\n";
 
 //    out_trs << "(" << frame_count << ", " << stats.x << ")\n";
 //    out_vtx_our << "(" << frame_count << ", " << stats.y << ")\n";
@@ -216,13 +229,13 @@ int main(int argc, char** argv) {
   }
 
 #ifdef DEBUG
-//  debugger.CoreDump(map.candidate_entries().gpu_memory());
-//  debugger.CoreDump(map.blocks().gpu_memory());
-//  debugger.CoreDump(map.meshing().gpu_memory());
+//  debugger.CoreDump(main_engine.candidate_entries().gpu_memory());
+//  debugger.CoreDump(main_engine.blocks().gpu_memory());
+//  debugger.CoreDump(main_engine.meshing().gpu_memory());
 //  debugger.DebugAll();
 #endif
   if (args.save_mesh) {
-    map.SavePly("../result/" + args.filename_prefix + ".ply");
+    SavePly(main_engine.compact_mesh(), "../result/" + args.filename_prefix + ".ply");
   }
 
   LOG(INFO) << (all_seconds - compressing_seconds)/ frame_count << "/" << all_seconds / frame_count;
