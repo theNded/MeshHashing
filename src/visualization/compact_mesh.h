@@ -10,57 +10,70 @@
 #include "core/vertex.h"
 #include "core/triangle.h"
 
-
-struct CompactMeshGPU {
-  // Remap from the separated vertices to the compacted vertices
-  int*      vertex_remapper;
-
-  // They are decoupled so as to be separately assigned to the rendering pipeline
-  float3*   vertices;
-  float3*   normals;
-  float3*   colors;
-  int*      vertices_ref_count;
-  uint*     vertex_counter;
-
-  int3*     triangles;
-  int*      triangles_ref_count;
-  uint*     triangle_counter;
-};
-
 class CompactMesh {
-private:
-  CompactMeshGPU gpu_memory_;
-  MeshParams     mesh_params_;
-
-  void Alloc(const MeshParams& mesh_params);
-  void Free();
-
 public:
   CompactMesh();
-  ~CompactMesh();
+  //~CompactMesh();
 
   uint vertex_count();
   uint triangle_count();
 
+  __device__ __host__
+  int* vertex_remapper() {
+    return vertex_remapper_;
+  }
+  __device__ __host__
   float3* vertices() {
-    return gpu_memory_.vertices;
+    return vertices_;
   }
+  __device__ __host__
   float3* normals() {
-    return gpu_memory_.normals;
+    return normals_;
   }
+  __device__ __host__
   float3* colors() {
-    return gpu_memory_.colors;
+    return colors_;
   }
+  __device__ __host__
   int3* triangles() {
-    return gpu_memory_.triangles;
+    return triangles_;
   }
+  __device__ __host__
+  int* triangles_ref_count() {
+    return triangles_ref_count_;
+  }
+  __device__ __host__
+  int* vertices_ref_count() {
+    return vertices_ref_count_;
+  }
+  __device__ __host__
+  uint* triangle_counter() {
+    return triangle_counter_;
+  }
+  __device__ __host__
+  uint* vertex_counter() {
+    return vertex_counter_;
+  }
+  void Alloc(const MeshParams& mesh_params);
+  void Free();
 
   void Resize(const MeshParams &mesh_params);
   void Reset();
 
-  CompactMeshGPU& gpu_memory() {
-    return gpu_memory_;
-  }
+private:
+  int*      vertex_remapper_;
+
+  // They are decoupled so as to be separately assigned to the rendering pipeline
+  float3*   vertices_;
+  float3*   normals_;
+  float3*   colors_;
+  int*      vertices_ref_count_;
+  uint*     vertex_counter_;
+
+  int3*     triangles_;
+  int*      triangles_ref_count_;
+  uint*     triangle_counter_;
+  MeshParams     mesh_params_;
 };
 
 

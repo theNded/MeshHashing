@@ -11,45 +11,45 @@
 /// Life cycle
 CompactMesh::CompactMesh() {}
 
-CompactMesh::~CompactMesh() {
-  Free();
-}
+//CompactMesh::~CompactMesh() {
+//  Free();
+//}
 
 void CompactMesh::Alloc(const MeshParams &mesh_params) {
-  checkCudaErrors(cudaMalloc(&gpu_memory_.vertex_remapper,
+  checkCudaErrors(cudaMalloc(&vertex_remapper_,
                              sizeof(int) * mesh_params.max_vertex_count));
 
-  checkCudaErrors(cudaMalloc(&gpu_memory_.vertex_counter,
+  checkCudaErrors(cudaMalloc(&vertex_counter_,
                              sizeof(uint)));
-  checkCudaErrors(cudaMalloc(&gpu_memory_.vertices_ref_count,
+  checkCudaErrors(cudaMalloc(&vertices_ref_count_,
                              sizeof(int) * mesh_params.max_vertex_count));
-  checkCudaErrors(cudaMalloc(&gpu_memory_.vertices,
+  checkCudaErrors(cudaMalloc(&vertices_,
                              sizeof(float3) * mesh_params.max_vertex_count));
-  checkCudaErrors(cudaMalloc(&gpu_memory_.normals,
+  checkCudaErrors(cudaMalloc(&normals_,
                              sizeof(float3) * mesh_params.max_vertex_count));
-  checkCudaErrors(cudaMalloc(&gpu_memory_.colors,
+  checkCudaErrors(cudaMalloc(&colors_,
                              sizeof(float3) * mesh_params.max_vertex_count));
 
-  checkCudaErrors(cudaMalloc(&gpu_memory_.triangle_counter,
+  checkCudaErrors(cudaMalloc(&triangle_counter_,
                              sizeof(uint)));
-  checkCudaErrors(cudaMalloc(&gpu_memory_.triangles_ref_count,
+  checkCudaErrors(cudaMalloc(&triangles_ref_count_,
                              sizeof(int) * mesh_params.max_triangle_count));
-  checkCudaErrors(cudaMalloc(&gpu_memory_.triangles,
+  checkCudaErrors(cudaMalloc(&triangles_,
                              sizeof(int3) * mesh_params.max_triangle_count));
 }
 
 void CompactMesh::Free() {
-  checkCudaErrors(cudaFree(gpu_memory_.vertex_remapper));
+  checkCudaErrors(cudaFree(vertex_remapper_));
 
-  checkCudaErrors(cudaFree(gpu_memory_.vertex_counter));
-  checkCudaErrors(cudaFree(gpu_memory_.vertices_ref_count));
-  checkCudaErrors(cudaFree(gpu_memory_.vertices));
-  checkCudaErrors(cudaFree(gpu_memory_.normals));
-  checkCudaErrors(cudaFree(gpu_memory_.colors));
+  checkCudaErrors(cudaFree(vertex_counter_));
+  checkCudaErrors(cudaFree(vertices_ref_count_));
+  checkCudaErrors(cudaFree(vertices_));
+  checkCudaErrors(cudaFree(normals_));
+  checkCudaErrors(cudaFree(colors_));
 
-  checkCudaErrors(cudaFree(gpu_memory_.triangle_counter));
-  checkCudaErrors(cudaFree(gpu_memory_.triangles_ref_count));
-  checkCudaErrors(cudaFree(gpu_memory_.triangles));
+  checkCudaErrors(cudaFree(triangle_counter_));
+  checkCudaErrors(cudaFree(triangles_ref_count_));
+  checkCudaErrors(cudaFree(triangles_));
 }
 
 void CompactMesh::Resize(const MeshParams &mesh_params) {
@@ -60,22 +60,22 @@ void CompactMesh::Resize(const MeshParams &mesh_params) {
 
 /// Reset
 void CompactMesh::Reset() {
-  checkCudaErrors(cudaMemset(gpu_memory_.vertex_remapper, 0xff,
+  checkCudaErrors(cudaMemset(vertex_remapper_, 0xff,
                              sizeof(int) * mesh_params_.max_vertex_count));
-  checkCudaErrors(cudaMemset(gpu_memory_.vertices_ref_count, 0,
+  checkCudaErrors(cudaMemset(vertices_ref_count_, 0,
                              sizeof(int) * mesh_params_.max_vertex_count));
-  checkCudaErrors(cudaMemset(gpu_memory_.vertex_counter,
+  checkCudaErrors(cudaMemset(vertex_counter_,
                              0, sizeof(uint)));
-  checkCudaErrors(cudaMemset(gpu_memory_.triangles_ref_count, 0,
+  checkCudaErrors(cudaMemset(triangles_ref_count_, 0,
                              sizeof(int) * mesh_params_.max_triangle_count));
-  checkCudaErrors(cudaMemset(gpu_memory_.triangle_counter,
+  checkCudaErrors(cudaMemset(triangle_counter_,
                              0, sizeof(uint)));
 }
 
 uint CompactMesh::vertex_count() {
   uint compact_vertex_count;
   checkCudaErrors(cudaMemcpy(&compact_vertex_count,
-                             gpu_memory_.vertex_counter,
+                             vertex_counter_,
                              sizeof(uint), cudaMemcpyDeviceToHost));
   return compact_vertex_count;
 }
@@ -83,7 +83,7 @@ uint CompactMesh::vertex_count() {
 uint CompactMesh::triangle_count() {
   uint compact_triangle_count;
   checkCudaErrors(cudaMemcpy(&compact_triangle_count,
-                             gpu_memory_.triangle_counter,
+                             triangle_counter_,
                              sizeof(uint), cudaMemcpyDeviceToHost));
   return compact_triangle_count;
 }

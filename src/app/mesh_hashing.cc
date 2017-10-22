@@ -23,7 +23,7 @@
 #include "visualization/ray_caster.h"
 
 #include "io/config_manager.h"
-#include "mapping/collect.h"
+#include "core/collect.h"
 #include "glwrapper.h"
 
 

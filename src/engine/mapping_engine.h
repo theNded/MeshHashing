@@ -22,7 +22,7 @@ private:
   Mesh             mesh_;
 
   CoordinateConverter coordinate_converter_;
-  EntryArray candidate_entries_;
+  EntryArray       candidate_entries_;
   CompactMesh      compact_mesh_;
 
   uint             integrated_frame_count_;
@@ -62,10 +62,10 @@ public:
 /// Meshing
 ////////////////////
 public:
+  void CompressMesh(int3& stats);
   void MarchingCubes();
   void PlaneFitting(float3 camera_pos);
 
-  void CompressMesh(int3 &stats);
   void SaveMesh(std::string path);
   void SavePly(std::string path);
 

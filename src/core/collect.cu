@@ -90,7 +90,7 @@ void CollectAllBlockArrayKernel(HashTable        hash_table,
 ///////////////////
 
 /// Compress discrete hash table entries
-void CollectAllBlockArray(EntryArray& candidate_entries, HashTable& hash_table){
+void CollectAllBlockArray(EntryArray& candidate_entries, HashTable& hash_table) {
   const uint threads_per_block = 256;
 
   uint entry_count = hash_table.entry_count;

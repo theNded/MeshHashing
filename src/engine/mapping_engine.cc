@@ -5,7 +5,8 @@
 #include "engine/mapping_engine.h"
 #include "mapping/fusion.h"
 #include "mapping/recycle.h"
-#include "mapping/collect.h"
+#include "core/collect.h"
+#include "visualization/compress_mesh.h"
 
 ////////////////////
 /// Host code
@@ -81,4 +82,8 @@ void MappingEngine::Reset() {
   candidate_entries_.Reset();
   compact_mesh_.Reset();
   bbox_.Reset();
+}
+
+void MappingEngine::CompressMesh(int3 &stats) {
+  CompressMeshImpl(candidate_entries_, blocks_, mesh_, compact_mesh_, stats);
 }
