@@ -16,12 +16,12 @@ VisualizingEngine::VisualizingEngine(std::string window_name, int width, int hei
   camera_.set_model(m);
 }
 
-void VisualizingEngine::SetMultiLightGeometryProgram(int max_vertices,
-                                                     int max_triangles,
-                                                     int light_sources) {
+void VisualizingEngine::SetMultiLightGeometryProgram(uint max_vertices,
+                                                     uint max_triangles,
+                                                     uint light_sources) {
   std::stringstream ss("");
   ss << light_sources;
-  LOG(INFO) << ss.str();
+
   program_.Load(kShaderPath + "/model_multi_light_vertex.glsl", gl::kVertexShader);
   program_.ReplaceMacro("LIGHT_COUNT", ss.str(), gl::kVertexShader);
   program_.Load(kShaderPath + "/model_multi_light_fragment.glsl", gl::kFragmentShader);
@@ -36,15 +36,20 @@ void VisualizingEngine::SetMultiLightGeometryProgram(int max_vertices,
 
   args_.Init(3, true);
   args_.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-                    max_vertices);
+                   max_vertices);
   args_.InitBuffer(1, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-                    max_vertices);
+                   max_vertices);
   args_.InitBuffer(2, {GL_ELEMENT_ARRAY_BUFFER, sizeof(int), 3, GL_UNSIGNED_INT},
-                    max_triangles);
+                   max_triangles);
 };
 
 void VisualizingEngine::UpdateViewpoint(glm::mat4 view) {
-  view_ = camera_.model() * view * glm::inverse(camera_.model());
+  if (interaction_enabled_) {
+    camera_.UpdateView(window_);
+    view_ = camera_.view();
+  } else {
+    view_ = camera_.model() * view * glm::inverse(camera_.model());
+  }
   mvp_ = camera_.projection() * view_ * camera_.model();
 }
 
@@ -60,43 +65,38 @@ void VisualizingEngine::UpdateMultiLightGeometryUniforms(
 }
 
 void VisualizingEngine::UpdateMultiLightGeometryData(CompactMesh &compact_mesh) {
-  LOG(INFO) << 0;
-  LOG(INFO) << compact_mesh.vertex_count();
   args_.BindBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
                    compact_mesh.vertex_count(), compact_mesh.vertices());
-  LOG(INFO) << 1;
   args_.BindBuffer(1, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
                    compact_mesh.vertex_count(), compact_mesh.normals());
-  LOG(INFO) << 2;
   args_.BindBuffer(2, {GL_ELEMENT_ARRAY_BUFFER, sizeof(int), 3, GL_UNSIGNED_INT},
                    compact_mesh.triangle_count(), compact_mesh.triangles());
 }
 
-void VisualizingEngine::set_interaction_mode(bool is_free) {
-  camera_.SwitchInteraction(is_free);
+void VisualizingEngine::set_interaction_mode(bool enable_interaction) {
+  interaction_enabled_ = enable_interaction;
+  camera_.SwitchInteraction(enable_interaction);
 }
 
-void VisualizingEngine::Render(std::vector<glm::vec3> &light_src_positions,
-                               glm::vec3 light_color,
-                               float light_power,
-                               CompactMesh& compact_mesh) {
+void VisualizingEngine::RenderMultiLightGeometry(std::vector<glm::vec3> &light_src_positions,
+                                                 glm::vec3 light_color,
+                                                 float light_power,
+                                                 CompactMesh &compact_mesh) {
   glClearColor(1, 1, 1, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   glUseProgram(program_.id());
 
-  LOG(INFO) << "uniforms";
   UpdateMultiLightGeometryUniforms(light_src_positions,
                                    light_color,
                                    light_power);
-  LOG(INFO) << "data";
   UpdateMultiLightGeometryData(compact_mesh);
 
-  LOG(INFO) << "render";
   glEnable(GL_DEPTH_TEST);
   glDepthFunc(GL_LESS);
   /// NOTE: Use GL_UNSIGNED_INT instead of GL_INT, otherwise it won't work
   glDrawElements(GL_TRIANGLES, compact_mesh.triangle_count() * 3, GL_UNSIGNED_INT, 0);
+//  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
   window_.swap_buffer();
   if (window_.get_key(GLFW_KEY_ESCAPE) == GLFW_PRESS ) {

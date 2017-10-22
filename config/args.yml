@@ -7,7 +7,7 @@
 dataset_type:    4
 
 # -----------
-# Render options
+# RenderMultiLightGeometry options
 # TODO: add light source(s)
 # and free walk view points
 free_walk:       0

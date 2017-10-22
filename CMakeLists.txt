@@ -136,6 +136,7 @@ ADD_LIBRARY(mesh-hashing
         ${VH}/io/config_manager.cc
         ${VH}/sensor/rgbd_local_sequence.cc)
         #${VH}/tool/cpp/debugger.cc)
+SET_TARGET_PROPERTIES(mesh-hashing PROPERTIES COMPILE_DEFINITIONS USE_CUDA)
 TARGET_LINK_LIBRARIES(mesh-hashing
         mesh-hashing-cuda
         gl-util)
@@ -166,6 +167,7 @@ TARGET_LINK_LIBRARIES(video_clip
 MESSAGE(STATUS ${GLOG_LIBRARIES})
 ADD_EXECUTABLE(mesh_hashing
         src/app/mesh_hashing.cc)
+SET_TARGET_PROPERTIES(mesh_hashing PROPERTIES COMPILE_DEFINITIONS USE_CUDA)
 TARGET_LINK_LIBRARIES(mesh_hashing
         mesh-hashing
         -lopencv_core -lopencv_highgui

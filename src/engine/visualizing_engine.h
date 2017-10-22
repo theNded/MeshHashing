@@ -9,23 +9,24 @@
 #include "glwrapper.h"
 #include "visualization/compact_mesh.h"
 
+// TODO: setup a factory
 class VisualizingEngine {
 public:
   VisualizingEngine(std::string window_name, int width, int height);
   void set_interaction_mode(bool is_free);
-
-  void SetMultiLightGeometryProgram(int max_vertices,
-                                    int max_triangles,
-                                    int light_sources);
   void UpdateViewpoint(glm::mat4 view);
+
+  void SetMultiLightGeometryProgram(uint max_vertices,
+                                    uint max_triangles,
+                                    uint light_sources);
   void UpdateMultiLightGeometryUniforms(std::vector<glm::vec3> &light_src_positions,
                                         glm::vec3 light_color,
                                         float light_power);
   void UpdateMultiLightGeometryData(CompactMesh& compact_mesh);
-  void Render(std::vector<glm::vec3> &light_src_positions,
-              glm::vec3 light_color,
-              float light_power,
-              CompactMesh& compact_mesh);
+  void RenderMultiLightGeometry(std::vector<glm::vec3> &light_src_positions,
+                                glm::vec3 light_color,
+                                float light_power,
+                                CompactMesh &compact_mesh);
 
 public:
   bool interaction_enabled_;
@@ -36,6 +37,7 @@ public:
   gl::Camera camera_;
 
   // Main shader
+  // Problem with initialization if args is put below
   gl::Program  program_;
   gl::Uniforms uniforms_;
   gl::Args     args_;

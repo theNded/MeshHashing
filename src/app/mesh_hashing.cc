@@ -27,11 +27,7 @@
 #include "core/collect.h"
 #include "glwrapper.h"
 
-
 #define DEBUG_
-
-const std::string kShaderPath = "../src/extern/opengl-wrapper/shader";
-/// Refer to constant.cu
 
 int main(int argc, char** argv) {
   std::vector<glm::vec3> light_src_positions = {
@@ -61,33 +57,10 @@ int main(int argc, char** argv) {
   VisualizingEngine vis_engine("Mesh",
                                config.sensor_params.width*2,
                                config.sensor_params.height*2);
-  vis_engine.set_interaction_mode(true);
-  glm::mat4 p = vis_engine.camera_.projection();
-  glm::mat4 m = glm::mat4(1.0f);
-  m[1][1] = -1;
-  m[2][2] = -1;
-
-  //vis_engine.SetMultiLightGeometryProgram()
-  gl::Program program;
-  gl::Uniforms uniforms;
-  program.Load(kShaderPath + "/model_multi_light_vertex.glsl", gl::kVertexShader);
-  program.ReplaceMacro("LIGHT_COUNT", ss.str(), gl::kVertexShader);
-  program.Load(kShaderPath + "/model_multi_light_fragment.glsl", gl::kFragmentShader);
-  program.ReplaceMacro("LIGHT_COUNT", ss.str(), gl::kFragmentShader);
-  program.Build();
-  uniforms.GetLocation(program.id(), "mvp", gl::kMatrix4f);
-  uniforms.GetLocation(program.id(), "c_T_w", gl::kMatrix4f);
-  uniforms.GetLocation(program.id(), "light",gl::kVector3f);
-  uniforms.GetLocation(program.id(), "light_power",gl::kFloat);
-  uniforms.GetLocation(program.id(), "light_color",gl::kVector3f);
-
-  gl::Args glargs(3, true);
-  glargs.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-                    config.mesh_params.max_vertex_count);
-  glargs.InitBuffer(1, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-                    config.mesh_params.max_vertex_count);
-  glargs.InitBuffer(2, {GL_ELEMENT_ARRAY_BUFFER, sizeof(int), 3, GL_UNSIGNED_INT},
-                    config.mesh_params.max_triangle_count);
+  vis_engine.set_interaction_mode(args.free_walk);
+  vis_engine.SetMultiLightGeometryProgram(config.mesh_params.max_vertex_count,
+                                          config.mesh_params.max_triangle_count,
+                                          light_src_positions.size());
 
 //  gl::Program bbox_program;
 //  bbox_program.Load(kShaderPath + "/line_vertex.glsl", gl::kVertexShader);
@@ -125,14 +98,6 @@ int main(int argc, char** argv) {
   int frame_count = 0;
 
   std::chrono::time_point<std::chrono::system_clock> start, end;
-
-#ifdef DEBUG
-  Debugger debugger(config.hash_params.entry_count,
-                    config.hash_params.value_capacity,
-                    config.mesh_params.max_vertex_count,
-                    config.mesh_params.max_triangle_count,
-                    config.sdf_params.voxel_size);
-#endif
 
   //std::ofstream out_trs("trs.txt"), out_vtx_our("our.txt"), out_vtx_base("baseline.txt");
   std::ofstream time_prof("reduction.txt");
@@ -198,48 +163,18 @@ int main(int argc, char** argv) {
 
     timer_rendering.Tick();
 
-    glClearColor(1, 1, 1, 1);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    glUseProgram(program.id());
-
     /// Set uniform data
     glm::mat4 view;
     cTw = cTw.getTranspose();
     for (int i = 0; i < 4; ++i)
       for (int j = 0; j < 4; ++j)
         view[i][j] = cTw.entries2[i][j];
-    view = m * view * glm::inverse(m);
-    if (args.free_walk) {
-      vis_engine.camera_.UpdateView(vis_engine.window_);
-      view = vis_engine.camera_.view();
-    }
-    glm::mat4 mvp = p * view * m;
+    vis_engine.UpdateViewpoint(view);
+    vis_engine.RenderMultiLightGeometry(light_src_positions,
+                                        light_color,
+                                        light_power,
+                                        map.compact_mesh());
 
-    /// Set args data
-    uniforms.Bind("mvp", &mvp, 1);
-    uniforms.Bind("c_T_w", &view, 1);
-    uniforms.Bind("light", light_src_positions.data(), light_src_positions.size());
-    uniforms.Bind("light_power", &light_power, 1);
-    uniforms.Bind("light_color", &light_color, 1);
-    glargs.BindBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-                      map.compact_mesh().vertex_count(), map.compact_mesh().vertices());
-    glargs.BindBuffer(1, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-                      map.compact_mesh().vertex_count(), map.compact_mesh().normals());
-    glargs.BindBuffer(2, {GL_ELEMENT_ARRAY_BUFFER, sizeof(int), 3, GL_UNSIGNED_INT},
-                      map.compact_mesh().triangle_count(), map.compact_mesh().triangles());
-
-
-    // If render meshing only:
-    if (args.ploygon_mode) {
-      glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-    }
-
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LESS);
-    /// NOTE: Use GL_UNSIGNED_INT instead of GL_INT, otherwise it won't work
-    glDrawElements(GL_TRIANGLES, map.compact_mesh().triangle_count() * 3, GL_UNSIGNED_INT, 0);
-//
 //    if (args.bounding_box) {
 //      glUseProgram(bbox_program.id());
 //      glm::vec3 col = glm::vec3(1, 0, 0);
@@ -263,13 +198,6 @@ int main(int argc, char** argv) {
 //    glEnable(GL_LINE_SMOOTH);
 //    glLineWidth(5.0f);
 //    glDrawArrays(GL_LINES, 0, vs.size());
-
-
-    vis_engine.window_.swap_buffer();
-
-    if (vis_engine.window_.get_key(GLFW_KEY_ESCAPE) == GLFW_PRESS ) {
-      exit(0);
-    }
 
     rendering_seconds += timer_rendering.Tock();
     all_seconds += timer_all.Tock();
