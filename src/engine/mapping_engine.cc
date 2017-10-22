@@ -43,9 +43,7 @@ void MappingEngine::Recycle(int frame_count) {
 /// Life cycle
 MappingEngine::MappingEngine(const HashParams &hash_params,
                              const MeshParams &mesh_params,
-                             const SDFParams &sdf_params,
-                             const std::string& time_profile,
-                             const std::string& memo_profile) {
+                             const SDFParams &sdf_params) {
   hash_table_.Resize(hash_params);
   candidate_entries_.Resize(hash_params.entry_count);
   blocks_.Resize(hash_params.value_capacity);
@@ -53,9 +51,6 @@ MappingEngine::MappingEngine(const HashParams &hash_params,
   mesh_.Resize(mesh_params);
   compact_mesh_.Resize(mesh_params);
   bbox_.Resize(hash_params.value_capacity * 24);
-
-  time_profile_.open(time_profile, std::ios::out);
-  memo_profile_.open(memo_profile, std::ios::out);
 
   coordinate_converter_.voxel_size = sdf_params.voxel_size;
   coordinate_converter_.truncation_distance_scale =

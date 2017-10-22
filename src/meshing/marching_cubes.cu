@@ -185,7 +185,7 @@ void MarchingCubesPass1Kernel(
     float weight;
 
     d[i] = GetSDF(hash_table, blocks, entry, voxel_local_pos + offset, weight, converter);
-    if (weight < EPSILON)
+    if (weight < 20)
       return;
 
     if (fabs(d[i]) > kThreshold) return;

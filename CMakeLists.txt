@@ -132,6 +132,7 @@ TARGET_LINK_LIBRARIES(mesh-hashing-cuda
 ### 3. C++
 ADD_LIBRARY(mesh-hashing
         ${VH}/engine/mapping_engine.cc
+        ${VH}/engine/visualizing_engine.cc
         ${VH}/io/config_manager.cc
         ${VH}/sensor/rgbd_local_sequence.cc)
         #${VH}/tool/cpp/debugger.cc)

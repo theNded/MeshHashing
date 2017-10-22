@@ -17,6 +17,7 @@
 
 #include "util/timer.h"
 #include <queue>
+#include <engine/visualizing_engine.h>
 
 #include "sensor/rgbd_local_sequence.h"
 #include "sensor/rgbd_sensor.h"
@@ -57,35 +58,28 @@ int main(int argc, char** argv) {
   config.LoadConfig(dataset_type);
   rgbd_local_sequence.LoadDataset(dataset_type);
 
-  gl::Window window("Mesh", config.sensor_params.width * 2, config.sensor_params.height * 2);
-  gl::Camera camera(window.visual_width(), window.visual_height());
-  camera.SwitchInteraction(true);
-  glm::mat4 p = camera.projection();
+  VisualizingEngine vis_engine("Mesh",
+                               config.sensor_params.width*2,
+                               config.sensor_params.height*2);
+  vis_engine.set_interaction_mode(true);
+  glm::mat4 p = vis_engine.camera_.projection();
   glm::mat4 m = glm::mat4(1.0f);
   m[1][1] = -1;
   m[2][2] = -1;
 
+  //vis_engine.SetMultiLightGeometryProgram()
   gl::Program program;
   gl::Uniforms uniforms;
-  if (args.render_type == 0) {
-    program.Load(kShaderPath + "/model_multi_light_vertex.glsl", gl::kVertexShader);
-    program.ReplaceMacro("LIGHT_COUNT", ss.str(), gl::kVertexShader);
-    program.Load(kShaderPath + "/model_multi_light_fragment.glsl", gl::kFragmentShader);
-    program.ReplaceMacro("LIGHT_COUNT", ss.str(), gl::kFragmentShader);
-    program.Build();
-  } else {
-    program.Load(kShaderPath + "/mesh_vc_vertex.glsl", gl::kVertexShader);
-    program.Load(kShaderPath + "/mesh_vc_fragment.glsl", gl::kFragmentShader);
-    program.Build();
-  }
+  program.Load(kShaderPath + "/model_multi_light_vertex.glsl", gl::kVertexShader);
+  program.ReplaceMacro("LIGHT_COUNT", ss.str(), gl::kVertexShader);
+  program.Load(kShaderPath + "/model_multi_light_fragment.glsl", gl::kFragmentShader);
+  program.ReplaceMacro("LIGHT_COUNT", ss.str(), gl::kFragmentShader);
+  program.Build();
   uniforms.GetLocation(program.id(), "mvp", gl::kMatrix4f);
-  if (args.render_type == 0) {
-    uniforms.GetLocation(program.id(), "mvp", gl::kMatrix4f);
-    uniforms.GetLocation(program.id(), "c_T_w", gl::kMatrix4f);
-    uniforms.GetLocation(program.id(), "light",gl::kVector3f);
-    uniforms.GetLocation(program.id(), "light_power",gl::kFloat);
-    uniforms.GetLocation(program.id(), "light_color",gl::kVector3f);
-  }
+  uniforms.GetLocation(program.id(), "c_T_w", gl::kMatrix4f);
+  uniforms.GetLocation(program.id(), "light",gl::kVector3f);
+  uniforms.GetLocation(program.id(), "light_power",gl::kFloat);
+  uniforms.GetLocation(program.id(), "light_color",gl::kVector3f);
 
   gl::Args glargs(3, true);
   glargs.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
@@ -95,25 +89,23 @@ int main(int argc, char** argv) {
   glargs.InitBuffer(2, {GL_ELEMENT_ARRAY_BUFFER, sizeof(int), 3, GL_UNSIGNED_INT},
                     config.mesh_params.max_triangle_count);
 
-  gl::Program bbox_program;
-  bbox_program.Load(kShaderPath + "/line_vertex.glsl", gl::kVertexShader);
-  bbox_program.Load(kShaderPath + "/line_fragment.glsl", gl::kFragmentShader);
-  bbox_program.Build();
+//  gl::Program bbox_program;
+//  bbox_program.Load(kShaderPath + "/line_vertex.glsl", gl::kVertexShader);
+//  bbox_program.Load(kShaderPath + "/line_fragment.glsl", gl::kFragmentShader);
+//  bbox_program.Build();
+//
+//  gl::Args bbox_args(1, true);
+//  bbox_args.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+//                       config.hash_params.value_capacity * 24);
+//  gl::Uniforms bbox_uniforms;
+//  bbox_uniforms.GetLocation(bbox_program.id(), "mvp", gl::kMatrix4f);
+//  bbox_uniforms.GetLocation(bbox_program.id(), "uni_color", gl::kVector3f);
+//
+//  gl::Args traj_args(1);
+//  traj_args.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+//                       30000);
 
-  gl::Args bbox_args(1, true);
-  bbox_args.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-                       config.hash_params.value_capacity * 24);
-  gl::Uniforms bbox_uniforms;
-  bbox_uniforms.GetLocation(bbox_program.id(), "mvp", gl::kMatrix4f);
-  bbox_uniforms.GetLocation(bbox_program.id(), "uni_color", gl::kVector3f);
-
-  gl::Args traj_args(1);
-  traj_args.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-                       30000);
-
-  MappingEngine       map(config.hash_params, config.mesh_params, config.sdf_params,
-                "../result/3dv/" + args.time_profile + ".txt",
-                "../result/3dv/" + args.memo_profile + ".txt");
+  MappingEngine map(config.hash_params, config.mesh_params, config.sdf_params);
   Sensor    sensor(config.sensor_params);
   RayCaster ray_caster(config.ray_caster_params);
 
@@ -219,37 +211,24 @@ int main(int argc, char** argv) {
         view[i][j] = cTw.entries2[i][j];
     view = m * view * glm::inverse(m);
     if (args.free_walk) {
-      camera.UpdateView(window);
-      view = camera.view();
+      vis_engine.camera_.UpdateView(vis_engine.window_);
+      view = vis_engine.camera_.view();
     }
     glm::mat4 mvp = p * view * m;
-    uniforms.Bind("mvp", &mvp, 1);
-    if (args.render_type == 0) {
-      uniforms.Bind("view_mat", &view, 1);
-      uniforms.Bind("model_mat", &m, 1);
-    }
 
     /// Set args data
-    if (args.render_type == 0) {
-      uniforms.Bind("mvp", &mvp, 1);
-      uniforms.Bind("c_T_w", &view, 1);
-      uniforms.Bind("light", light_src_positions.data(), light_src_positions.size());
-      uniforms.Bind("light_power", &light_power, 1);
-      uniforms.Bind("light_color", &light_color, 1);
-      glargs.BindBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-                        map.compact_mesh().vertex_count(), map.compact_mesh().vertices());
-      glargs.BindBuffer(1, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-                        map.compact_mesh().vertex_count(), map.compact_mesh().normals());
-      glargs.BindBuffer(2, {GL_ELEMENT_ARRAY_BUFFER, sizeof(int), 3, GL_UNSIGNED_INT},
-                        map.compact_mesh().triangle_count(), map.compact_mesh().triangles());
-    } else {
-      glargs.BindBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-                        map.compact_mesh().vertex_count(), map.compact_mesh().vertices());
-      glargs.BindBuffer(1, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-                        map.compact_mesh().vertex_count(), map.compact_mesh().colors());
-      glargs.BindBuffer(2, {GL_ELEMENT_ARRAY_BUFFER, sizeof(int), 3, GL_UNSIGNED_INT},
-                        map.compact_mesh().triangle_count(), map.compact_mesh().triangles());
-    }
+    uniforms.Bind("mvp", &mvp, 1);
+    uniforms.Bind("c_T_w", &view, 1);
+    uniforms.Bind("light", light_src_positions.data(), light_src_positions.size());
+    uniforms.Bind("light_power", &light_power, 1);
+    uniforms.Bind("light_color", &light_color, 1);
+    glargs.BindBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+                      map.compact_mesh().vertex_count(), map.compact_mesh().vertices());
+    glargs.BindBuffer(1, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+                      map.compact_mesh().vertex_count(), map.compact_mesh().normals());
+    glargs.BindBuffer(2, {GL_ELEMENT_ARRAY_BUFFER, sizeof(int), 3, GL_UNSIGNED_INT},
+                      map.compact_mesh().triangle_count(), map.compact_mesh().triangles());
+
 
     // If render meshing only:
     if (args.ploygon_mode) {
@@ -260,20 +239,20 @@ int main(int argc, char** argv) {
     glDepthFunc(GL_LESS);
     /// NOTE: Use GL_UNSIGNED_INT instead of GL_INT, otherwise it won't work
     glDrawElements(GL_TRIANGLES, map.compact_mesh().triangle_count() * 3, GL_UNSIGNED_INT, 0);
-
-    if (args.bounding_box) {
-      glUseProgram(bbox_program.id());
-      glm::vec3 col = glm::vec3(1, 0, 0);
-      bbox_uniforms.Bind("mvp", &mvp, 1);
-      bbox_uniforms.Bind("uni_color", &col, 1);
-
-      bbox_args.BindBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-                           map.bbox().vertex_count(), map.bbox().vertices());
-
-      glEnable(GL_LINE_SMOOTH);
-      glLineWidth(5.0f);
-      glDrawArrays(GL_LINES, 0, map.bbox().vertex_count());
-    }
+//
+//    if (args.bounding_box) {
+//      glUseProgram(bbox_program.id());
+//      glm::vec3 col = glm::vec3(1, 0, 0);
+//      bbox_uniforms.Bind("mvp", &mvp, 1);
+//      bbox_uniforms.Bind("uni_color", &col, 1);
+//
+//      bbox_args.BindBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+//                           map.bbox().vertex_count(), map.bbox().vertices());
+//
+//      glEnable(GL_LINE_SMOOTH);
+//      glLineWidth(5.0f);
+//      glDrawArrays(GL_LINES, 0, map.bbox().vertex_count());
+//    }
 
 //    glUseProgram(bbox_program.id());
 //    glm::vec3 col = glm::vec3(1, 0, 0);
@@ -286,9 +265,9 @@ int main(int argc, char** argv) {
 //    glDrawArrays(GL_LINES, 0, vs.size());
 
 
-    window.swap_buffer();
+    vis_engine.window_.swap_buffer();
 
-    if (window.get_key(GLFW_KEY_ESCAPE) == GLFW_PRESS ) {
+    if (vis_engine.window_.get_key(GLFW_KEY_ESCAPE) == GLFW_PRESS ) {
       exit(0);
     }
 
@@ -296,10 +275,10 @@ int main(int argc, char** argv) {
     all_seconds += timer_all.Tock();
     LOG(INFO) << frame_count / all_seconds;
 
-    if (args.record_video) {
-      cv::Mat rgb = window.CaptureRGB();
-      writer << rgb;
-    }
+//    if (args.record_video) {
+//      cv::Mat rgb = window.CaptureRGB();
+//      writer << rgb;
+//    }
 
     time_prof << "(" << frame_count << ", " << 1000 * meshing_period << ")\n";
 

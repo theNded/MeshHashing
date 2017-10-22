@@ -43,9 +43,7 @@ public:
   /// Life cycle
   MappingEngine(const HashParams& hash_params,
       const MeshParams& mesh_params,
-      const SDFParams&  sdf_params,
-      const std::string& time_profile,
-      const std::string& memo_profile);
+      const SDFParams&  sdf_params);
   ~MappingEngine();
 
   /// Reset and recycle

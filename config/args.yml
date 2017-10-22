@@ -32,7 +32,7 @@ ray_casting:     0
 
 # Result saving
 record_video:    0
-save_mesh:       0
+save_mesh:       1
 filename_prefix: "lounge-new"
 time_profile:    "tum3-nhm"
 memo_profile:    "tum3-nhm"
