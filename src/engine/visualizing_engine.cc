@@ -3,7 +3,7 @@
 //
 
 #include <glog/logging.h>
-#include "visualizing_engine.h"
+#include "engine/visualizing_engine.h"
 
 const std::string kShaderPath = "../src/extern/opengl-wrapper/shader";
 
@@ -20,81 +20,80 @@ void VisualizingEngine::Init(std::string window_name, int width, int height) {
   camera_.set_model(m);
 }
 
-void VisualizingEngine::SetMultiLightGeometryProgram(uint max_vertices,
-                                                     uint max_triangles,
-                                                     uint light_sources) {
-  std::stringstream ss("");
-  ss << light_sources;
+void VisualizingEngine::BuildMultiLightGeometryProgram(uint max_vertices,
+                                                       uint max_triangles,
+                                                       bool enable_global_mesh) {
+  std::stringstream ss;
+  ss << light_.light_srcs.size();
 
-  program_.Load(kShaderPath + "/model_multi_light_vertex.glsl", gl::kVertexShader);
-  program_.ReplaceMacro("LIGHT_COUNT", ss.str(), gl::kVertexShader);
-  program_.Load(kShaderPath + "/model_multi_light_fragment.glsl", gl::kFragmentShader);
-  program_.ReplaceMacro("LIGHT_COUNT", ss.str(), gl::kFragmentShader);
-  program_.Build();
+  main_program_.Load(kShaderPath + "/model_multi_light_vertex.glsl", gl::kVertexShader);
+  main_program_.ReplaceMacro("LIGHT_COUNT", ss.str(), gl::kVertexShader);
+  main_program_.Load(kShaderPath + "/model_multi_light_fragment.glsl", gl::kFragmentShader);
+  main_program_.ReplaceMacro("LIGHT_COUNT", ss.str(), gl::kFragmentShader);
+  main_program_.Build();
 
-  uniforms_.GetLocation(program_.id(), "mvp", gl::kMatrix4f);
-  uniforms_.GetLocation(program_.id(), "c_T_w", gl::kMatrix4f);
-  uniforms_.GetLocation(program_.id(), "light",gl::kVector3f);
-  uniforms_.GetLocation(program_.id(), "light_power",gl::kFloat);
-  uniforms_.GetLocation(program_.id(), "light_color",gl::kVector3f);
+  main_uniforms_.GetLocation(main_program_.id(), "mvp", gl::kMatrix4f);
+  main_uniforms_.GetLocation(main_program_.id(), "c_T_w", gl::kMatrix4f);
+  main_uniforms_.GetLocation(main_program_.id(), "light",gl::kVector3f);
+  main_uniforms_.GetLocation(main_program_.id(), "light_power",gl::kFloat);
+  main_uniforms_.GetLocation(main_program_.id(), "light_color",gl::kVector3f);
 
-  args_.Init(3, true);
-  args_.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+  main_args_.Init(3, true);
+  main_args_.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
                    max_vertices);
-  args_.InitBuffer(1, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+  main_args_.InitBuffer(1, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
                    max_vertices);
-  args_.InitBuffer(2, {GL_ELEMENT_ARRAY_BUFFER, sizeof(int), 3, GL_UNSIGNED_INT},
+  main_args_.InitBuffer(2, {GL_ELEMENT_ARRAY_BUFFER, sizeof(int), 3, GL_UNSIGNED_INT},
                    max_triangles);
+
+  enable_global_mesh_ = enable_global_mesh;
 };
 
-void VisualizingEngine::UpdateViewpoint(glm::mat4 view) {
-  if (interaction_enabled_) {
-    camera_.UpdateView(window_);
-    view_ = camera_.view();
-  } else {
-    view_ = camera_.model() * view * glm::inverse(camera_.model());
-  }
-  mvp_ = camera_.projection() * view_ * camera_.model();
+
+void VisualizingEngine::BindMultiLightGeometryUniforms() {
+  main_uniforms_.Bind("mvp", &mvp_, 1);
+  main_uniforms_.Bind("c_T_w", &view_, 1);
+  main_uniforms_.Bind("light", light_.light_srcs.data(), light_.light_srcs.size());
+  main_uniforms_.Bind("light_color", &light_.light_color, 1);
+  main_uniforms_.Bind("light_power", &light_.light_power, 1);
 }
 
-void VisualizingEngine::UpdateMultiLightGeometryUniforms(
-    std::vector<glm::vec3> &light_src_positions,
-    glm::vec3 light_color,
-    float light_power) {
-  uniforms_.Bind("mvp", &mvp_, 1);
-  uniforms_.Bind("c_T_w", &view_, 1);
-  uniforms_.Bind("light", light_src_positions.data(), light_src_positions.size());
-  uniforms_.Bind("light_color", &light_color, 1);
-  uniforms_.Bind("light_power", &light_power, 1);
-}
-
-void VisualizingEngine::UpdateMultiLightGeometryData(CompactMesh &compact_mesh) {
-  args_.BindBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+void VisualizingEngine::BindMultiLightGeometryData(CompactMesh &compact_mesh) {
+  main_args_.BindBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
                    compact_mesh.vertex_count(), compact_mesh.vertices());
-  args_.BindBuffer(1, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+  main_args_.BindBuffer(1, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
                    compact_mesh.vertex_count(), compact_mesh.normals());
-  args_.BindBuffer(2, {GL_ELEMENT_ARRAY_BUFFER, sizeof(int), 3, GL_UNSIGNED_INT},
+  main_args_.BindBuffer(2, {GL_ELEMENT_ARRAY_BUFFER, sizeof(int), 3, GL_UNSIGNED_INT},
                    compact_mesh.triangle_count(), compact_mesh.triangles());
 }
 
 void VisualizingEngine::set_interaction_mode(bool enable_interaction) {
-  interaction_enabled_ = enable_interaction;
+  enable_interaction_ = enable_interaction;
   camera_.SwitchInteraction(enable_interaction);
 }
 
-void VisualizingEngine::RenderMultiLightGeometry(std::vector<glm::vec3> &light_src_positions,
-                                                 glm::vec3 light_color,
-                                                 float light_power,
-                                                 CompactMesh &compact_mesh) {
+void VisualizingEngine::set_light(Light& light) {
+  light_ = light;
+}
+
+void VisualizingEngine::update_view_matrix() {
+  camera_.UpdateView(window_);
+  view_ = camera_.view();
+  mvp_ = camera_.mvp();
+}
+void VisualizingEngine::set_view_matrix(glm::mat4 view) {
+  view_ = camera_.model() * view * glm::inverse(camera_.model());
+  mvp_ = camera_.projection() * view_ * camera_.model();
+}
+
+void VisualizingEngine::RenderMultiLightGeometry(CompactMesh &compact_mesh) {
   glClearColor(1, 1, 1, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-  glUseProgram(program_.id());
+  glUseProgram(main_program_.id());
 
-  UpdateMultiLightGeometryUniforms(light_src_positions,
-                                   light_color,
-                                   light_power);
-  UpdateMultiLightGeometryData(compact_mesh);
+  BindMultiLightGeometryUniforms();
+  BindMultiLightGeometryData(compact_mesh);
 
   glEnable(GL_DEPTH_TEST);
   glDepthFunc(GL_LESS);
@@ -106,4 +105,15 @@ void VisualizingEngine::RenderMultiLightGeometry(std::vector<glm::vec3> &light_s
   if (window_.get_key(GLFW_KEY_ESCAPE) == GLFW_PRESS ) {
     exit(0);
   }
+}
+
+void VisualizingEngine::BuildRayCaster(const RayCasterParams &ray_caster_params) {
+  ray_caster_.Init(ray_caster_params);
+  enable_ray_casting_ = true;
+}
+
+void VisualizingEngine::RenderRayCaster(float4x4 view, HashTable& hash_table, BlockArray& blocks, CoordinateConverter& converter) {
+  ray_caster_.Cast(hash_table, blocks, converter, view);
+  cv::imshow("RayCasting", ray_caster_.surface_image());
+  cv::waitKey(1);
 }

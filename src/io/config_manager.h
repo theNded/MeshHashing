@@ -31,7 +31,7 @@ struct Dataset {
 void LoadRuntimeParams(std::string path, RuntimeParams &params);
 void LoadHashParams(std::string path, HashParams& params);
 void LoadMeshParams(std::string path, MeshParams &params);
-void LoadSDFParams(std::string path, SDFParams& params);
+void LoadVolumeParams(std::string path, VolumeParams& params);
 void LoadSensorParams(std::string path, SensorParams& params);
 void LoadRayCasterParams(std::string path, RayCasterParams& params);
 
@@ -67,7 +67,7 @@ void LoadTUM(
 struct ConfigManager {
   HashParams      hash_params;
   MeshParams      mesh_params;
-  SDFParams       sdf_params;
+  VolumeParams       sdf_params;
   SensorParams    sensor_params;
   RayCasterParams ray_caster_params;
 

@@ -52,10 +52,41 @@ void MainEngine::Recycle() {
   }
 }
 
+void MainEngine::Visualizing(float4x4 view) {
+  if (vis_engine_.enable_interaction()) {
+    vis_engine_.update_view_matrix();
+  } else {
+    glm::mat4 glm_view;
+    for (int i = 0; i < 4; ++i)
+      for (int j = 0; j < 4; ++j)
+        glm_view[i][j] = view.entries2[i][j];
+    glm_view = glm::transpose(glm_view);
+    vis_engine_.set_view_matrix(glm_view);
+  }
+
+  if (vis_engine_.enable_global_mesh()) {
+    CollectAllBlockArray(candidate_entries_, hash_table_);
+  }
+
+  int3 timing;
+  CompressMesh(candidate_entries_,
+               blocks_,
+               mesh_,
+               compact_mesh_,timing);
+  vis_engine_.RenderMultiLightGeometry(compact_mesh_);
+
+  if (vis_engine_.enable_ray_casting()) {
+    vis_engine_.RenderRayCaster(view, hash_table_, blocks_, coordinate_converter_);
+  }
+}
 /// Life cycle
 MainEngine::MainEngine(const HashParams& hash_params,
-                             const MeshParams &mesh_params,
-                             const SDFParams &sdf_params) {
+                       const MeshParams &mesh_params,
+                       const VolumeParams &sdf_params) {
+  hash_params_ = hash_params;
+  mesh_params_ = mesh_params;
+  volume_params_ = sdf_params;
+
   hash_table_.Resize(hash_params);
   candidate_entries_.Resize(hash_params.entry_count);
   blocks_.Resize(hash_params.value_capacity);
@@ -93,4 +124,17 @@ void MainEngine::Reset() {
   candidate_entries_.Reset();
   compact_mesh_.Reset();
   bbox_.Reset();
+}
+
+void MainEngine::ConfigVisualizingEngineMesh(Light &light, bool free_viewpoints, bool render_global_mesh) {
+  vis_engine_.Init("VisEngine", 640, 480);
+  vis_engine_.set_interaction_mode(free_viewpoints);
+  vis_engine_.set_light(light);
+  vis_engine_.BuildMultiLightGeometryProgram(mesh_params_.max_vertex_count,
+                                             mesh_params_.max_triangle_count,
+                                             render_global_mesh);
+}
+
+void MainEngine::ConfigVisualizingEngineRaycaster(const RayCasterParams &params) {
+  vis_engine_.BuildRayCaster(params);
 }

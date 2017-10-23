@@ -52,7 +52,7 @@ static const std::string orb_configs[] = {
 
 std::string path_to_vocabulary = "../../../opensource/orb_slam2/Vocabulary/ORBvoc.bin";
 
-extern void SetConstantSDFParams(const SDFParams& params);
+extern void SetConstantVolumeParams(const VolumeParams& params);
 
 float4x4 MatTofloat4x4(cv::Mat m) {
   float4x4 T;
@@ -118,7 +118,7 @@ int main(int argc, char **argv) {
   traj_args.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
                        30000);
 
-  SetConstantSDFParams(config.sdf_params);
+  SetConstantVolumeParams(config.sdf_params);
   MainEngine       map(config.hash_params, config.mesh_params,
                 "../result/3dv/" + args.time_profile + ".txt",
                 "../result/3dv/" + args.memo_profile + ".txt");

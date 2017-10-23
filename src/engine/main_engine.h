@@ -11,12 +11,15 @@
 #include "core/entry_array.h"
 #include "core/mesh.h"
 
+#include "engine/visualizing_engine.h"
 #include "visualization/compact_mesh.h"
 #include "visualization/bounding_box.h"
 #include "sensor/rgbd_sensor.h"
 
 class MainEngine {
 private:
+  VisualizingEngine vis_engine_;
+
   // Core
   HashTable        hash_table_;
   BlockArray       blocks_;
@@ -37,37 +40,31 @@ private:
 
   BBox             bbox_;
 
-////////////////////
-/// Core
-////////////////////
-
+  HashParams hash_params_;
+  MeshParams mesh_params_;
+  VolumeParams  volume_params_;
 public:
-
-  /// Life cycle
+  // configure main data
   MainEngine(
       const HashParams& hash_params,
       const MeshParams& mesh_params,
-      const SDFParams&  sdf_params);
+      const VolumeParams&  sdf_params);
   ~MainEngine();
+
+  // configure engines
+  void ConfigVisualizingEngineMesh(Light& light,
+                                   bool free_viewpoint,
+                                   bool render_global_mesh);
+  void ConfigVisualizingEngineRaycaster(const RayCasterParams& params);
 
   /// Reset and recycle
   void Reset();
 
-////////////////////
-/// Fusion
-////////////////////
-public:
   void Mapping(Sensor &sensor);
   void Meshing();
   void Recycle();
+  void Visualizing(float4x4 view);
 
-
-
-  ////////////////////
-/// Access functions
-////////////////////
-  /// Only classes with Kernel function should call it
-  /// The other part of the hash_table should be hidden
   const uint& frame_count() {
     return integrated_frame_count_;
   }

@@ -32,20 +32,16 @@
 
 #define DEBUG_
 
-int main(int argc, char** argv) {
-  std::vector<glm::vec3> light_src_positions = {
+Light light = {
+  {
       glm::vec3(0, -2, 0),
       glm::vec3(4, -2, 0)
-  };
-  std::vector<glm::vec3> light_src_colors = {
-      glm::vec3(1, 1, 1),
-      glm::vec3(1, 1, 1)
-  };
-  float light_power = 3;
-  glm::vec3 light_color = glm::vec3(1, 1, 1);
-  std::stringstream ss;
-  ss << light_src_positions.size();
+  },
+  glm::vec3(1, 1, 1),
+  3.0f
+};
 
+int main(int argc, char** argv) {
   /// Use this to substitute tedious argv parsing
   RuntimeParams args;
   LoadRuntimeParams("../config/args.yml", args);
@@ -56,14 +52,16 @@ int main(int argc, char** argv) {
   DatasetType dataset_type = DatasetType(args.dataset_type);
   config.LoadConfig(dataset_type);
   rgbd_local_sequence.LoadDataset(dataset_type);
+  Sensor    sensor(config.sensor_params);
 
-  MainEngine main_engine(config.hash_params, config.mesh_params, config.sdf_params);
-  // Add SetLights for main_engine
-  VisualizingEngine vis_engine("Mesh", config.sensor_params.width*2, config.sensor_params.height*2);
-  vis_engine.set_interaction_mode(args.free_walk);
-  vis_engine.SetMultiLightGeometryProgram(config.mesh_params.max_vertex_count,
-                                          config.mesh_params.max_triangle_count,
-                                          light_src_positions.size());
+  MainEngine main_engine(config.hash_params,
+                         config.mesh_params,
+                         config.sdf_params);
+  main_engine.ConfigVisualizingEngineMesh(light, args.free_walk, !args.mesh_range);
+  if (args.ray_casting) {
+    main_engine.ConfigVisualizingEngineRaycaster(config.ray_caster_params);
+  }
+  main_engine.use_fine_gradient() = args.fine_gradient;
 
 //  gl::Program bbox_program;
 //  bbox_program.Load(kShaderPath + "/line_vertex.glsl", gl::kVertexShader);
@@ -81,10 +79,6 @@ int main(int argc, char** argv) {
 //  traj_args.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
 //                       30000);
 
-  Sensor    sensor(config.sensor_params);
-  RayCaster ray_caster(config.ray_caster_params);
-
-  main_engine.use_fine_gradient()   = args.fine_gradient;
 
   cv::VideoWriter writer;
   cv::Mat screen;
@@ -98,14 +92,7 @@ int main(int argc, char** argv) {
   cv::Mat color, depth;
   float4x4 wTc, cTw;
   int frame_count = 0;
-
-  std::chrono::time_point<std::chrono::system_clock> start, end;
-
-  double all_seconds = 0, meshing_seconds = 0, rendering_seconds = 0, compressing_seconds = 0;
-  //float3 prev_cam_pos;
   while (rgbd_local_sequence.ProvideData(depth, color, wTc)) {
-    Timer timer_all, timer_meshing, timer_rendering, timer_compressing;
-
     frame_count ++;
     if (args.run_frames > 0 &&  frame_count > args.run_frames)
       break;
@@ -130,63 +117,15 @@ int main(int argc, char** argv) {
 //
 //    prev_cam_pos = camera_pos;
 
-    timer_all.Tick();
     main_engine.Mapping(sensor);
     main_engine.Meshing();
     main_engine.Recycle();
-    //main_engine.Visualizing();
-    // in main_engine.Visualizing():
-    // if (ray_casting)
-    //   ray_caster.Cast
-    // if (! partial_mesh)
-    //   CollectAll
-    // CompressMesh
-    // visualize_engine.Render()
+    //main_engine.GetBoundingBoxes();
 
-    /////////////////////////////
-    /// Should be in VisualizingEngine
-    if (args.ray_casting) {
-      ray_caster.Cast(main_engine.hash_table(), main_engine.blocks(), main_engine.converter(), cTw);
-      cv::imshow("RayCasting", ray_caster.surface_image());
-      cv::waitKey(1);
-    }
-//
-//    if (frame_count > 1) // Re-estimate the SDF field
-//      main_engine.PlaneFitting(camera_pos);
-
-    timer_meshing.Tick();
-
-
-    // TODO: add flag to blocks to deal with boundary conditions
-    if (! args.mesh_range) {
-      CollectAllBlockArray(main_engine.candidate_entries(), main_engine.hash_table());
-    }
-
-    main_engine.GetBoundingBoxes();
-    double meshing_period = timer_meshing.Tock();
-    meshing_seconds += meshing_period;
-
-    timer_compressing.Tick();
-    int3 stats;
-    CompressMesh(main_engine.candidate_entries(),
-                 main_engine.blocks(),
-                 main_engine.mesh(),
-                 main_engine.compact_mesh(),stats);
-    compressing_seconds += timer_compressing.Tock();
-
-    timer_rendering.Tick();
 
     /// Set uniform data
-    glm::mat4 view;
-    cTw = cTw.getTranspose();
-    for (int i = 0; i < 4; ++i)
-      for (int j = 0; j < 4; ++j)
-        view[i][j] = cTw.entries2[i][j];
-    vis_engine.UpdateViewpoint(view);
-    vis_engine.RenderMultiLightGeometry(light_src_positions,
-                                        light_color,
-                                        light_power,
-                                        main_engine.compact_mesh());
+    main_engine.Visualizing(cTw);
+
 /////////////////////////////
 
 //    if (args.bounding_box) {
@@ -213,9 +152,6 @@ int main(int argc, char** argv) {
 //    glLineWidth(5.0f);
 //    glDrawArrays(GL_LINES, 0, vs.size());
 
-    rendering_seconds += timer_rendering.Tock();
-    all_seconds += timer_all.Tock();
-    LOG(INFO) << frame_count / all_seconds;
 
 //    if (args.record_video) {
 //      cv::Mat rgb = window.CaptureRGB();
@@ -228,18 +164,9 @@ int main(int argc, char** argv) {
 //    out_vtx_base << "(" << frame_count << ", " << stats.z << ")\n";
   }
 
-#ifdef DEBUG
-//  debugger.CoreDump(main_engine.candidate_entries().gpu_memory());
-//  debugger.CoreDump(main_engine.blocks().gpu_memory());
-//  debugger.CoreDump(main_engine.meshing().gpu_memory());
-//  debugger.DebugAll();
-#endif
   if (args.save_mesh) {
     SavePly(main_engine.compact_mesh(), "../result/" + args.filename_prefix + ".ply");
   }
 
-  LOG(INFO) << (all_seconds - compressing_seconds)/ frame_count << "/" << all_seconds / frame_count;
-  LOG(INFO) << meshing_seconds / frame_count;
-  LOG(INFO) << rendering_seconds / frame_count;
   return 0;
 }

@@ -5,10 +5,11 @@
 #ifndef VH_RAY_CASTER_H
 #define VH_RAY_CASTER_H
 
-#include "../core/common.h"
-
-#include "engine/main_engine.h"
-#include "../core/params.h"
+#include "core/common.h"
+#include "core/params.h"
+#include "core/hash_table.h"
+#include "core/block_array.h"
+#include "geometry/coordinate_utils.h"
 #include "sensor/rgbd_sensor.h"
 
 struct RayCasterSample {
@@ -28,6 +29,7 @@ struct __ALIGN__(8) RayCasterDataGPU {
 
 class RayCaster {
 private:
+  bool initialized_ = false;
   RayCasterDataGPU gpu_memory_;
   RayCasterParams  ray_caster_params_;
 
@@ -37,6 +39,8 @@ private:
   cv::Mat          surface_image_;
 
 public:
+  RayCaster() = default;
+  void Init(const RayCasterParams& params);
   RayCaster(const RayCasterParams& params);
   ~RayCaster(void);
 

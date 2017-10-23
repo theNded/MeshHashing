@@ -28,7 +28,7 @@ struct MeshParams {
   uint max_triangle_count;
 };
 
-struct __ALIGN__(16) SDFParams {
+struct __ALIGN__(16) VolumeParams {
   float	voxel_size;                 // 0.004 (m)
 
   float	truncation_distance_scale;  // 0.01 (m / m)

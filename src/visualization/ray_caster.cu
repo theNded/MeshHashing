@@ -4,7 +4,7 @@
 
 #include "geometry/coordinate_utils.h"
 #include "geometry/gradient.h"
-#include "ray_caster.h"
+#include "visualization/ray_caster.h"
 
 //////////
 /// Device code required by kernel functions
@@ -148,7 +148,11 @@ void CastKernel(const HashTable hash_table,
 }
 
 /// Member function: (CPU code)
-RayCaster::RayCaster(const RayCasterParams& params) {
+RayCaster::RayCaster(const RayCasterParams &params) {
+  Init(params);
+}
+
+void RayCaster::Init(const RayCasterParams& params) {
   ray_caster_params_ = params;
   uint image_size = params.width * params.height;
   checkCudaErrors(cudaMalloc(&gpu_memory_.depth_image, sizeof(float4) * image_size));
@@ -161,14 +165,18 @@ RayCaster::RayCaster(const RayCasterParams& params) {
   normal_image_ = cv::Mat(params.height, params.width, CV_32FC4);
   color_image_  = cv::Mat(params.height, params.width, CV_32FC4);
   surface_image_ = cv::Mat(params.height, params.width, CV_32FC4);
+
+  initialized_ = true;
 }
 
 RayCaster::~RayCaster() {
-  checkCudaErrors(cudaFree(gpu_memory_.depth_image));
-  checkCudaErrors(cudaFree(gpu_memory_.vertex_image));
-  checkCudaErrors(cudaFree(gpu_memory_.normal_image));
-  checkCudaErrors(cudaFree(gpu_memory_.color_image));
-  checkCudaErrors(cudaFree(gpu_memory_.surface_image));
+  if (initialized_) {
+    checkCudaErrors(cudaFree(gpu_memory_.depth_image));
+    checkCudaErrors(cudaFree(gpu_memory_.vertex_image));
+    checkCudaErrors(cudaFree(gpu_memory_.normal_image));
+    checkCudaErrors(cudaFree(gpu_memory_.color_image));
+    checkCudaErrors(cudaFree(gpu_memory_.surface_image));
+  }
 }
 
 //////////

@@ -48,7 +48,7 @@ void LoadMeshParams(std::string path, MeshParams &params) {
   params.max_triangle_count = (int)fs["max_triangle_count"];
 }
 
-void LoadSDFParams(std::string path, SDFParams& params) {
+void LoadVolumeParams(std::string path, VolumeParams& params) {
   cv::FileStorage fs(path, cv::FileStorage::READ);
   params.voxel_size                = (float)fs["voxel_size"];
   params.sdf_upper_bound           = (float)fs["sdf_upper_bound"];
@@ -311,7 +311,7 @@ const std::string kConfigPaths[] = {
 void ConfigManager::LoadConfig(std::string config_path) {
   LoadHashParams(config_path, hash_params);
   LoadMeshParams(config_path, mesh_params);
-  LoadSDFParams(config_path, sdf_params);
+  LoadVolumeParams(config_path, sdf_params);
   LoadSensorParams(config_path, sensor_params);
   LoadRayCasterParams(config_path, ray_caster_params);
 

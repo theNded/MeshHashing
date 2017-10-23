@@ -86,7 +86,7 @@ void UpdateBlockArrayKernel(EntryArray candidate_entries,
 
   //float sdf = dot(normalize(-dp), camera_pos - dp);
   float sdf = depth - camera_pos.z;
-  //uchar weight = (uchar)fmax(1.0f, kSDFParams.weight_sample * wn * wd);
+  //uchar weight = (uchar)fmax(1.0f, kVolumeParams.weight_sample * wn * wd);
 
   float weight = (uchar)fmax(converter.weight_sample * 1.5f *
                      (1.0f - converter.NormalizeDepth(depth,

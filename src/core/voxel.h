@@ -9,7 +9,7 @@
 #include "helper_math.h"
 
 // Statistics typically reserved for Voxels
-// float: *laplation* and *entropy* are intuitive statistics
+// float: *Laplacian* and *entropy* are intuitive statistics
 // float: *duration* is time-interval that the voxel exists
 struct __ALIGN__(4) Stat {
   float laplacian;
