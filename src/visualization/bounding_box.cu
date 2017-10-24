@@ -3,43 +3,40 @@
 //
 
 #include "bounding_box.h"
+#include "core/common.h"
+#include "core/entry_array.h"
+#include "geometry/coordinate_utils.h"
 #include "helper_cuda.h"
 
-////////////////////
-/// class BBox
-////////////////////
-BBox::BBox() {}
-BBox::~BBox() {
-  Free();
+//BoundingBox::~BoundingBox() {
+//  Free();
+//}
+
+void BoundingBox::Alloc(int max_vertex_count) {
+  checkCudaErrors(cudaMalloc(&vertex_counter_, sizeof(uint)));
+  checkCudaErrors(cudaMalloc(&vertices_, sizeof(float3) * max_vertex_count));
 }
 
-void BBox::Alloc(int max_vertex_count) {
-  checkCudaErrors(cudaMalloc(&gpu_memory_.vertex_counter,
-                             sizeof(uint)));
-  checkCudaErrors(cudaMalloc(&gpu_memory_.vertices,
-                             sizeof(float3) * max_vertex_count));
+void BoundingBox::Free() {
+  checkCudaErrors(cudaFree(vertex_counter_));
+  checkCudaErrors(cudaFree(vertices_));
 }
 
-void BBox::Free() {
-  checkCudaErrors(cudaFree(gpu_memory_.vertex_counter));
-  checkCudaErrors(cudaFree(gpu_memory_.vertices));
-}
-
-void BBox::Resize(int max_vertex_count) {
+void BoundingBox::Resize(int max_vertex_count) {
   max_vertex_count_ = max_vertex_count;
   Alloc(max_vertex_count);
   Reset();
 }
 
-void BBox::Reset() {
-  checkCudaErrors(cudaMemset(gpu_memory_.vertex_counter,
-                             0, sizeof(uint)));
+void BoundingBox::Reset() {
+  std::cout << "----------" << vertex_counter_ << std::endl;
+  checkCudaErrors(cudaMemset(vertex_counter_, 0, sizeof(uint)));
 }
 
-uint BBox::vertex_count() {
+uint BoundingBox::vertex_count() {
   uint vertex_count;
   checkCudaErrors(cudaMemcpy(&vertex_count,
-                             gpu_memory_.vertex_counter,
+                             vertex_counter_,
                              sizeof(uint), cudaMemcpyDeviceToHost));
   return vertex_count;
 }

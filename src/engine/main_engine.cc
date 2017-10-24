@@ -6,8 +6,9 @@
 #include "mapping/allocate.h"
 #include "mapping/update.h"
 #include "mapping/recycle.h"
-#include "core/collect.h"
+#include "core/collect_block_array.h"
 #include "visualization/compress_mesh.h"
+#include "visualization/extract_bounding_box.h"
 #include "meshing/marching_cubes.h"
 
 
@@ -72,8 +73,19 @@ void MainEngine::Visualizing(float4x4 view) {
   CompressMesh(candidate_entries_,
                blocks_,
                mesh_,
-               compact_mesh_,timing);
-  vis_engine_.RenderMultiLightGeometry(compact_mesh_);
+               vis_engine_.compact_mesh(),
+               timing);
+
+  if (vis_engine_.enable_bounding_box()) {
+    vis_engine_.bounding_box().Reset();
+    std::cout << 1 << std::endl;
+
+    ExtractBoundingBox(candidate_entries_,
+                       vis_engine_.bounding_box(),
+                       coordinate_converter_);
+  }
+
+  vis_engine_.Render();
 
   if (vis_engine_.enable_ray_casting()) {
     vis_engine_.RenderRayCaster(view, hash_table_, blocks_, coordinate_converter_);
@@ -92,8 +104,7 @@ MainEngine::MainEngine(const HashParams& hash_params,
   blocks_.Resize(hash_params.value_capacity);
 
   mesh_.Resize(mesh_params);
-  compact_mesh_.Resize(mesh_params);
-  bbox_.Resize(hash_params.value_capacity * 24);
+  //bbox_.Resize(hash_params.value_capacity * 24);
 
   coordinate_converter_.voxel_size = sdf_params.voxel_size;
   coordinate_converter_.truncation_distance_scale =
@@ -110,7 +121,6 @@ MainEngine::~MainEngine() {
   mesh_.Free();
 
   candidate_entries_.Free();
-  compact_mesh_.Free();
 }
 
 /// Reset
@@ -122,17 +132,21 @@ void MainEngine::Reset() {
   mesh_.Reset();
 
   candidate_entries_.Reset();
-  compact_mesh_.Reset();
-  bbox_.Reset();
 }
 
-void MainEngine::ConfigVisualizingEngineMesh(Light &light, bool free_viewpoints, bool render_global_mesh) {
+void MainEngine::ConfigVisualizingEngineMesh(Light &light, bool free_viewpoints, bool render_global_mesh, bool enable_bounding_box) {
   vis_engine_.Init("VisEngine", 640, 480);
   vis_engine_.set_interaction_mode(free_viewpoints);
   vis_engine_.set_light(light);
   vis_engine_.BuildMultiLightGeometryProgram(mesh_params_.max_vertex_count,
                                              mesh_params_.max_triangle_count,
                                              render_global_mesh);
+  vis_engine_.compact_mesh().Resize(mesh_params_);
+
+  if (enable_bounding_box) {
+    vis_engine_.BuildBoundingBoxProgram(hash_params_.value_capacity*24);
+    vis_engine_.bounding_box().Resize(hash_params_.value_capacity*24);
+  }
 }
 
 void MainEngine::ConfigVisualizingEngineRaycaster(const RayCasterParams &params) {

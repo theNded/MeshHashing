@@ -108,16 +108,19 @@ CUDA_ADD_LIBRARY(mesh-hashing-cuda
         ${VH}/core/entry_array.cu
         ${VH}/core/block_array.cu
         ${VH}/core/mesh.cu
-        ${VH}/core/collect.cu
+        ${VH}/core/collect_block_array.cu
+
         ${VH}/sensor/rgbd_sensor.cu
+
         ${VH}/mapping/allocate.cu
         ${VH}/mapping/update.cu
         ${VH}/mapping/recycle.cu
+
         ${VH}/meshing/marching_cubes.cu
-        #${VH}/src/map_plane.cu
-        ${VH}/util/map_debug.cu
+
         ${VH}/visualization/compact_mesh.cu
         ${VH}/visualization/compress_mesh.cu
+        ${VH}/visualization/extract_bounding_box.cu
         ${VH}/visualization/bounding_box.cu
         ${VH}/visualization/ray_caster.cu)
 TARGET_LINK_LIBRARIES(mesh-hashing-cuda

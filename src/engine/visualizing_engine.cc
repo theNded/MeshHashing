@@ -20,6 +20,39 @@ void VisualizingEngine::Init(std::string window_name, int width, int height) {
   camera_.set_model(m);
 }
 
+void VisualizingEngine::Render() {
+  glClearColor(1, 1, 1, 1);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  RenderMultiLightGeometry();
+  if (enable_bounding_box_)
+    RenderBoundingBox();
+
+  window_.swap_buffer();
+  if (window_.get_key(GLFW_KEY_ESCAPE) == GLFW_PRESS ) {
+    exit(0);
+  }
+}
+
+void VisualizingEngine::set_interaction_mode(bool enable_interaction) {
+  enable_interaction_ = enable_interaction;
+  camera_.SwitchInteraction(enable_interaction);
+}
+void VisualizingEngine::update_view_matrix() {
+  camera_.UpdateView(window_);
+  view_ = camera_.view();
+  mvp_ = camera_.mvp();
+}
+void VisualizingEngine::set_view_matrix(glm::mat4 view) {
+  view_ = camera_.model() * view * glm::inverse(camera_.model());
+  mvp_ = camera_.projection() * view_ * camera_.model();
+}
+
+
+void VisualizingEngine::set_light(Light& light) {
+  light_ = light;
+}
+
 void VisualizingEngine::BuildMultiLightGeometryProgram(uint max_vertices,
                                                        uint max_triangles,
                                                        bool enable_global_mesh) {
@@ -40,11 +73,11 @@ void VisualizingEngine::BuildMultiLightGeometryProgram(uint max_vertices,
 
   main_args_.Init(3, true);
   main_args_.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-                   max_vertices);
+                        max_vertices);
   main_args_.InitBuffer(1, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-                   max_vertices);
+                        max_vertices);
   main_args_.InitBuffer(2, {GL_ELEMENT_ARRAY_BUFFER, sizeof(int), 3, GL_UNSIGNED_INT},
-                   max_triangles);
+                        max_triangles);
 
   enable_global_mesh_ = enable_global_mesh;
 };
@@ -58,53 +91,62 @@ void VisualizingEngine::BindMultiLightGeometryUniforms() {
   main_uniforms_.Bind("light_power", &light_.light_power, 1);
 }
 
-void VisualizingEngine::BindMultiLightGeometryData(CompactMesh &compact_mesh) {
+void VisualizingEngine::BindMultiLightGeometryData() {
   main_args_.BindBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-                   compact_mesh.vertex_count(), compact_mesh.vertices());
+                        compact_mesh_.vertex_count(), compact_mesh_.vertices());
   main_args_.BindBuffer(1, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-                   compact_mesh.vertex_count(), compact_mesh.normals());
+                        compact_mesh_.vertex_count(), compact_mesh_.normals());
   main_args_.BindBuffer(2, {GL_ELEMENT_ARRAY_BUFFER, sizeof(int), 3, GL_UNSIGNED_INT},
-                   compact_mesh.triangle_count(), compact_mesh.triangles());
+                        compact_mesh_.triangle_count(), compact_mesh_.triangles());
 }
 
-void VisualizingEngine::set_interaction_mode(bool enable_interaction) {
-  enable_interaction_ = enable_interaction;
-  camera_.SwitchInteraction(enable_interaction);
-}
-
-void VisualizingEngine::set_light(Light& light) {
-  light_ = light;
-}
-
-void VisualizingEngine::update_view_matrix() {
-  camera_.UpdateView(window_);
-  view_ = camera_.view();
-  mvp_ = camera_.mvp();
-}
-void VisualizingEngine::set_view_matrix(glm::mat4 view) {
-  view_ = camera_.model() * view * glm::inverse(camera_.model());
-  mvp_ = camera_.projection() * view_ * camera_.model();
-}
-
-void VisualizingEngine::RenderMultiLightGeometry(CompactMesh &compact_mesh) {
-  glClearColor(1, 1, 1, 1);
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
+void VisualizingEngine::RenderMultiLightGeometry() {
   glUseProgram(main_program_.id());
-
   BindMultiLightGeometryUniforms();
-  BindMultiLightGeometryData(compact_mesh);
+  BindMultiLightGeometryData();
 
   glEnable(GL_DEPTH_TEST);
   glDepthFunc(GL_LESS);
   /// NOTE: Use GL_UNSIGNED_INT instead of GL_INT, otherwise it won't work
-  glDrawElements(GL_TRIANGLES, compact_mesh.triangle_count() * 3, GL_UNSIGNED_INT, 0);
+  glDrawElements(GL_TRIANGLES, compact_mesh_.triangle_count() * 3, GL_UNSIGNED_INT, 0);
 //  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+}
 
-  window_.swap_buffer();
-  if (window_.get_key(GLFW_KEY_ESCAPE) == GLFW_PRESS ) {
-    exit(0);
-  }
+void VisualizingEngine::BuildBoundingBoxProgram(uint max_vertices) {
+  box_program_.Load(kShaderPath + "/line_vertex.glsl", gl::kVertexShader);
+  box_program_.Load(kShaderPath + "/line_fragment.glsl", gl::kFragmentShader);
+  box_program_.Build();
+
+  box_args_.Init(1, true);
+  box_args_.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+                       max_vertices);
+
+  box_uniforms_.GetLocation(box_program_.id(), "mvp", gl::kMatrix4f);
+  box_uniforms_.GetLocation(box_program_.id(), "uni_color", gl::kVector3f);
+
+  enable_bounding_box_ = true;
+}
+
+void VisualizingEngine::BindBoundingBoxUniforms() {
+  glm::vec3 color = glm::vec3(1, 0, 0);
+  box_uniforms_.Bind("mvp", &mvp_, 1);
+  box_uniforms_.Bind("uni_color", &color, 1);
+}
+
+void VisualizingEngine::BindBoundingBoxData() {
+  box_args_.BindBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+                       bounding_box_.vertex_count(),
+                       bounding_box_.vertices());
+}
+
+void VisualizingEngine::RenderBoundingBox() {
+  glUseProgram(box_program_.id());
+  BindBoundingBoxUniforms();
+  BindBoundingBoxData();
+
+  glEnable(GL_LINE_SMOOTH);
+  glLineWidth(5.0f);
+  glDrawArrays(GL_LINES, 0, bounding_box_.vertex_count());
 }
 
 void VisualizingEngine::BuildRayCaster(const RayCasterParams &ray_caster_params) {

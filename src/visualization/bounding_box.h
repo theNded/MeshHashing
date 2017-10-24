@@ -5,43 +5,30 @@
 #ifndef MESH_HASHING_BOUNDING_BOX_H
 #define MESH_HASHING_BOUNDING_BOX_H
 
-//////////////////////
-/// Bonuding Box, used for debugging
-/////////////////////
-struct BBoxGPU {
-  float3* vertices;
-  uint*   vertex_counter;
-};
-
-class BBox {
-private:
-  BBoxGPU gpu_memory_;
-  int max_vertex_count_;
-
+class BoundingBox {
+public:
+  BoundingBox() = default;
+  //~BoundingBox();
   void Alloc(int max_vertex_count);
-
   void Free();
 
-public:
-  BBox();
-
-  ~BBox();
-
   uint vertex_count();
-
-  float3 *vertices() {
-    return gpu_memory_.vertices;
-  }
-
-  void Resize(int amx_vertex_count);
-
+  void Resize(int max_vertex_count);
   void Reset();
 
-  BBoxGPU &gpu_memory() {
-    return gpu_memory_;
+  __device__
+  float3* vertices() {
+    return vertices_;
   }
+  __device__
+  uint* vertex_counter() {
+    return vertex_counter_;
+  }
+private:
+  float3* vertices_;
+  uint*   vertex_counter_;
+
+  int max_vertex_count_;
 };
-
-
 
 #endif //MESH_HASHING_BOUNDING_BOX_H

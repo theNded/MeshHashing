@@ -29,7 +29,6 @@ private:
   Mesh             mesh_;
 
   // Visualization
-  CompactMesh      compact_mesh_;
 
   // Geometry
   CoordinateConverter coordinate_converter_;
@@ -37,8 +36,6 @@ private:
 
   uint             integrated_frame_count_;
   bool             use_fine_gradient_;
-
-  BBox             bbox_;
 
   HashParams hash_params_;
   MeshParams mesh_params_;
@@ -54,7 +51,8 @@ public:
   // configure engines
   void ConfigVisualizingEngineMesh(Light& light,
                                    bool free_viewpoint,
-                                   bool render_global_mesh);
+                                   bool render_global_mesh,
+                                   bool bounding_box);
   void ConfigVisualizingEngineRaycaster(const RayCasterParams& params);
 
   /// Reset and recycle
@@ -72,32 +70,9 @@ public:
     return use_fine_gradient_;
   }
 
-  /// Access for RayCaster
-  HashTable& hash_table() {
-    return hash_table_;
-  }
-  EntryArray& candidate_entries() {
-    return candidate_entries_;
-  }
-  BlockArray& blocks() {
-    return blocks_;
-  }
-  Mesh& mesh() {
-    return mesh_;
-  }
-  CompactMesh& compact_mesh() {
-    return compact_mesh_;
-  }
-
-  BBox& bbox() {
-    return bbox_;
-  }
   CoordinateConverter& converter() {
     return coordinate_converter_;
   }
-
-public:
-  void GetBoundingBoxes();
 };
 
 

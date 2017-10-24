@@ -27,7 +27,7 @@
 #include "visualization/ray_caster.h"
 
 #include "io/config_manager.h"
-#include "core/collect.h"
+#include "core/collect_block_array.h"
 #include "glwrapper.h"
 
 #define DEBUG_
@@ -57,28 +57,11 @@ int main(int argc, char** argv) {
   MainEngine main_engine(config.hash_params,
                          config.mesh_params,
                          config.sdf_params);
-  main_engine.ConfigVisualizingEngineMesh(light, args.free_walk, !args.mesh_range);
+  main_engine.ConfigVisualizingEngineMesh(light, args.free_walk, !args.mesh_range, args.bounding_box);
   if (args.ray_casting) {
     main_engine.ConfigVisualizingEngineRaycaster(config.ray_caster_params);
   }
   main_engine.use_fine_gradient() = args.fine_gradient;
-
-//  gl::Program bbox_program;
-//  bbox_program.Load(kShaderPath + "/line_vertex.glsl", gl::kVertexShader);
-//  bbox_program.Load(kShaderPath + "/line_fragment.glsl", gl::kFragmentShader);
-//  bbox_program.Build();
-//
-//  gl::Args bbox_args(1, true);
-//  bbox_args.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-//                       config.hash_params.value_capacity * 24);
-//  gl::Uniforms bbox_uniforms;
-//  bbox_uniforms.GetLocation(bbox_program.id(), "mvp", gl::kMatrix4f);
-//  bbox_uniforms.GetLocation(bbox_program.id(), "uni_color", gl::kVector3f);
-//
-//  gl::Args traj_args(1);
-//  traj_args.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-//                       30000);
-
 
   cv::VideoWriter writer;
   cv::Mat screen;
@@ -120,27 +103,10 @@ int main(int argc, char** argv) {
     main_engine.Mapping(sensor);
     main_engine.Meshing();
     main_engine.Recycle();
-    //main_engine.GetBoundingBoxes();
-
-
-    /// Set uniform data
     main_engine.Visualizing(cTw);
 
 /////////////////////////////
 
-//    if (args.bounding_box) {
-//      glUseProgram(bbox_program.id());
-//      glm::vec3 col = glm::vec3(1, 0, 0);
-//      bbox_uniforms.Bind("mvp", &mvp, 1);
-//      bbox_uniforms.Bind("uni_color", &col, 1);
-//
-//      bbox_args.BindBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-//                           main_engine.bbox().vertex_count(), main_engine.bbox().vertices());
-//
-//      glEnable(GL_LINE_SMOOTH);
-//      glLineWidth(5.0f);
-//      glDrawArrays(GL_LINES, 0, main_engine.bbox().vertex_count());
-//    }
 
 //    glUseProgram(bbox_program.id());
 //    glm::vec3 col = glm::vec3(1, 0, 0);
@@ -164,9 +130,9 @@ int main(int argc, char** argv) {
 //    out_vtx_base << "(" << frame_count << ", " << stats.z << ")\n";
   }
 
-  if (args.save_mesh) {
-    SavePly(main_engine.compact_mesh(), "../result/" + args.filename_prefix + ".ply");
-  }
+//  if (args.save_mesh) {
+//    SavePly(main_engine.compact_mesh(), "../result/" + args.filename_prefix + ".ply");
+//  }
 
   return 0;
 }
