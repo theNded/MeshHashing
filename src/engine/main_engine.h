@@ -54,7 +54,8 @@ public:
   void ConfigVisualizingEngineMesh(Light& light,
                                    bool free_viewpoint,
                                    bool render_global_mesh,
-                                   bool bounding_box);
+                                   bool bounding_box,
+                                   bool enable_trajectory);
   void ConfigVisualizingEngineRaycaster(const RayCasterParams& params);
   void ConfigLoggingEngine(std::string path, bool enable_video, bool enable_ply);
 

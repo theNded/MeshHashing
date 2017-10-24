@@ -6,6 +6,7 @@
 #define MESH_HASHING_VISUALIZING_ENGINE_H
 
 #include <string>
+#include <visualization/trajectory.h>
 #include "glwrapper.h"
 #include "visualization/compact_mesh.h"
 #include "visualization/ray_caster.h"
@@ -34,17 +35,22 @@ public:
   }
   // Call set_lights before this
   void set_light(Light& light);
-  void BuildMultiLightGeometryProgram(uint max_vertices,
-                                      uint max_triangles,
-                                      bool enable_global_mesh);
-  void BindMultiLightGeometryUniforms();
-  void BindMultiLightGeometryData();
-  void RenderMultiLightGeometry();
+  void BindMainProgram(uint max_vertices,
+                       uint max_triangles,
+                       bool enable_global_mesh);
+  void BindMainUniforms();
+  void BindMainData();
+  void RenderMain();
 
-  void BuildBoundingBoxProgram(uint max_vertices);
-  void BindBoundingBoxUniforms();
+  // At current assume all kinds of data uses the same program
+  void BuildHelperProgram();
+  void BindHelperUniforms();
+  void RenderHelper();
+
+  void InitBoundingBoxData(uint max_vertices);
   void BindBoundingBoxData();
-  void RenderBoundingBox();
+  void InitTrajectoryData(uint max_vertices);
+  void BindTrajectoryData();
 
   void BuildRayCaster(const RayCasterParams& ray_caster_params);
   void RenderRayCaster(float4x4 view, HashTable& hash_table, BlockArray& blocks, CoordinateConverter& converter) ;
@@ -69,6 +75,9 @@ public:
   }
   BoundingBox& bounding_box() {
     return bounding_box_;
+  }
+  Trajectory& trajectory() {
+    return trajectory_;
   }
 
 private:
@@ -102,6 +111,7 @@ private:
   RayCaster   ray_caster_;
   CompactMesh compact_mesh_;
   BoundingBox bounding_box_;
+  Trajectory  trajectory_;
 };
 
 

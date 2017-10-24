@@ -69,6 +69,10 @@ void MainEngine::Visualize(float4x4 view) {
     CollectAllBlockArray(candidate_entries_, hash_table_);
   }
 
+  if (vis_engine_.enable_trajectory()) {
+    vis_engine_.trajectory().AddPose(view);
+  }
+
   int3 timing;
   CompressMesh(candidate_entries_,
                blocks_,
@@ -78,7 +82,6 @@ void MainEngine::Visualize(float4x4 view) {
 
   if (vis_engine_.enable_bounding_box()) {
     vis_engine_.bounding_box().Reset();
-    std::cout << 1 << std::endl;
 
     ExtractBoundingBox(candidate_entries_,
                        vis_engine_.bounding_box(),
@@ -148,18 +151,24 @@ void MainEngine::Reset() {
   candidate_entries_.Reset();
 }
 
-void MainEngine::ConfigVisualizingEngineMesh(Light &light, bool free_viewpoints, bool render_global_mesh, bool enable_bounding_box) {
+void MainEngine::ConfigVisualizingEngineMesh(Light &light, bool free_viewpoints, bool render_global_mesh, bool enable_bounding_box, bool enable_trajectory) {
   vis_engine_.Init("VisEngine", 640, 480);
   vis_engine_.set_interaction_mode(free_viewpoints);
   vis_engine_.set_light(light);
-  vis_engine_.BuildMultiLightGeometryProgram(mesh_params_.max_vertex_count,
-                                             mesh_params_.max_triangle_count,
-                                             render_global_mesh);
+  vis_engine_.BindMainProgram(mesh_params_.max_vertex_count,
+                              mesh_params_.max_triangle_count,
+                              render_global_mesh);
   vis_engine_.compact_mesh().Resize(mesh_params_);
 
+  if (enable_bounding_box || enable_trajectory) {
+    vis_engine_.BuildHelperProgram();
+  }
+
   if (enable_bounding_box) {
-    vis_engine_.BuildBoundingBoxProgram(hash_params_.value_capacity*24);
-    vis_engine_.bounding_box().Resize(hash_params_.value_capacity*24);
+    vis_engine_.InitBoundingBoxData(hash_params_.value_capacity*24);
+  }
+  if (enable_trajectory) {
+    vis_engine_.InitTrajectoryData(10000);
   }
 }
 

@@ -29,7 +29,6 @@ void BoundingBox::Resize(int max_vertex_count) {
 }
 
 void BoundingBox::Reset() {
-  std::cout << "----------" << vertex_counter_ << std::endl;
   checkCudaErrors(cudaMemset(vertex_counter_, 0, sizeof(uint)));
 }
 

@@ -7,11 +7,10 @@
 dataset_type:    4
 
 # -----------
-# RenderMultiLightGeometry options
+# RenderMain options
 # TODO: add light source(s)
 # and free walk view points
 free_walk:       1
-
 # Polygon_mode draw triangle with only lines;
 # otherwise with entire planes
 ploygon_mode:    0
@@ -27,7 +26,7 @@ render_type:     0
 fine_gradient:   1
 
 # Additional settings
-bounding_box:    1
+bounding_box:    0
 ray_casting:     0
 
 # Result saving
@@ -38,4 +37,4 @@ time_profile:    "tum3-nhm"
 memo_profile:    "tum3-nhm"
 
 # Others
-run_frames:     10
+run_frames:     -1

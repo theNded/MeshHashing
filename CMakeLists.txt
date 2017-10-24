@@ -119,9 +119,10 @@ CUDA_ADD_LIBRARY(mesh-hashing-cuda
         ${VH}/meshing/marching_cubes.cu
 
         ${VH}/visualization/compact_mesh.cu
+        ${VH}/visualization/bounding_box.cu
+        ${VH}/visualization/trajectory.cu
         ${VH}/visualization/compress_mesh.cu
         ${VH}/visualization/extract_bounding_box.cu
-        ${VH}/visualization/bounding_box.cu
         ${VH}/visualization/ray_caster.cu)
 TARGET_LINK_LIBRARIES(mesh-hashing-cuda
         ${CUDA_DEPENDENCIES}
@@ -133,6 +134,7 @@ ADD_LIBRARY(mesh-hashing
         ${VH}/engine/main_engine.cc
         ${VH}/engine/logging_engine.cc
         ${VH}/engine/visualizing_engine.cc
+
         ${VH}/io/config_manager.cc
         ${VH}/io/mesh_writer.cc
         ${VH}/sensor/rgbd_local_sequence.cc)

@@ -24,9 +24,9 @@ void VisualizingEngine::Render() {
   glClearColor(1, 1, 1, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-  RenderMultiLightGeometry();
-  if (enable_bounding_box_)
-    RenderBoundingBox();
+  RenderMain();
+  if (enable_bounding_box_ || enable_trajectory_)
+    RenderHelper();
 
   window_.swap_buffer();
   if (window_.get_key(GLFW_KEY_ESCAPE) == GLFW_PRESS ) {
@@ -53,9 +53,9 @@ void VisualizingEngine::set_light(Light& light) {
   light_ = light;
 }
 
-void VisualizingEngine::BuildMultiLightGeometryProgram(uint max_vertices,
-                                                       uint max_triangles,
-                                                       bool enable_global_mesh) {
+void VisualizingEngine::BindMainProgram(uint max_vertices,
+                                        uint max_triangles,
+                                        bool enable_global_mesh) {
   std::stringstream ss;
   ss << light_.light_srcs.size();
 
@@ -83,7 +83,7 @@ void VisualizingEngine::BuildMultiLightGeometryProgram(uint max_vertices,
 };
 
 
-void VisualizingEngine::BindMultiLightGeometryUniforms() {
+void VisualizingEngine::BindMainUniforms() {
   main_uniforms_.Bind("mvp", &mvp_, 1);
   main_uniforms_.Bind("c_T_w", &view_, 1);
   main_uniforms_.Bind("light", light_.light_srcs.data(), light_.light_srcs.size());
@@ -91,7 +91,7 @@ void VisualizingEngine::BindMultiLightGeometryUniforms() {
   main_uniforms_.Bind("light_power", &light_.light_power, 1);
 }
 
-void VisualizingEngine::BindMultiLightGeometryData() {
+void VisualizingEngine::BindMainData() {
   main_args_.BindBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
                         compact_mesh_.vertex_count(), compact_mesh_.vertices());
   main_args_.BindBuffer(1, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
@@ -100,10 +100,10 @@ void VisualizingEngine::BindMultiLightGeometryData() {
                         compact_mesh_.triangle_count(), compact_mesh_.triangles());
 }
 
-void VisualizingEngine::RenderMultiLightGeometry() {
+void VisualizingEngine::RenderMain() {
   glUseProgram(main_program_.id());
-  BindMultiLightGeometryUniforms();
-  BindMultiLightGeometryData();
+  BindMainUniforms();
+  BindMainData();
 
   glEnable(GL_DEPTH_TEST);
   glDepthFunc(GL_LESS);
@@ -112,25 +112,27 @@ void VisualizingEngine::RenderMultiLightGeometry() {
 //  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 }
 
-void VisualizingEngine::BuildBoundingBoxProgram(uint max_vertices) {
+void VisualizingEngine::BuildHelperProgram() {
   helper_program_.Load(kShaderPath + "/line_vertex.glsl", gl::kVertexShader);
   helper_program_.Load(kShaderPath + "/line_fragment.glsl", gl::kFragmentShader);
   helper_program_.Build();
 
-  box_args_.Init(1, true);
-  box_args_.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-                       max_vertices);
-
   helper_uniforms_.GetLocation(helper_program_.id(), "mvp", gl::kMatrix4f);
   helper_uniforms_.GetLocation(helper_program_.id(), "uni_color", gl::kVector3f);
-
-  enable_bounding_box_ = true;
 }
 
-void VisualizingEngine::BindBoundingBoxUniforms() {
+void VisualizingEngine::BindHelperUniforms() {
   glm::vec3 color = glm::vec3(1, 0, 0);
   helper_uniforms_.Bind("mvp", &mvp_, 1);
   helper_uniforms_.Bind("uni_color", &color, 1);
+}
+
+void VisualizingEngine::InitBoundingBoxData(uint max_vertices) {
+  enable_bounding_box_ = true;
+  bounding_box_.Resize(max_vertices);
+  box_args_.Init(1, true);
+  box_args_.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+                       max_vertices);
 }
 
 void VisualizingEngine::BindBoundingBoxData() {
@@ -139,14 +141,40 @@ void VisualizingEngine::BindBoundingBoxData() {
                        bounding_box_.vertices());
 }
 
-void VisualizingEngine::RenderBoundingBox() {
-  glUseProgram(helper_program_.id());
-  BindBoundingBoxUniforms();
-  BindBoundingBoxData();
+void VisualizingEngine::InitTrajectoryData(uint max_vertices) {
+  enable_trajectory_ = true;
+  trajectory_.Init(max_vertices);
+  trajectory_args_.Init(1, true);
+  trajectory_args_.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+                              max_vertices);
+}
 
-  glEnable(GL_LINE_SMOOTH);
-  glLineWidth(5.0f);
-  glDrawArrays(GL_LINES, 0, bounding_box_.vertex_count());
+void VisualizingEngine::BindTrajectoryData() {
+  trajectory_args_.BindBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+                              trajectory_.vertex_count(),
+                              trajectory_.vertices());
+}
+
+void VisualizingEngine::RenderHelper() {
+  if (enable_bounding_box_) {
+    glUseProgram(helper_program_.id());
+    BindHelperUniforms();
+
+    BindBoundingBoxData();
+    glEnable(GL_LINE_SMOOTH);
+    glLineWidth(5.0f);
+    glDrawArrays(GL_LINES, 0, bounding_box_.vertex_count());
+  }
+
+  if (enable_trajectory_) {
+    glUseProgram(helper_program_.id());
+    BindHelperUniforms();
+
+    BindTrajectoryData();
+    glEnable(GL_LINE_SMOOTH);
+    glLineWidth(5.0f);
+    glDrawArrays(GL_LINES, 0, trajectory_.vertex_count());
+  }
 }
 
 void VisualizingEngine::BuildRayCaster(const RayCasterParams &ray_caster_params) {
