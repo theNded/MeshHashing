@@ -131,6 +131,7 @@ TARGET_LINK_LIBRARIES(mesh-hashing-cuda
 ### 3. C++
 ADD_LIBRARY(mesh-hashing
         ${VH}/engine/main_engine.cc
+        ${VH}/engine/logging_engine.cc
         ${VH}/engine/visualizing_engine.cc
         ${VH}/io/config_manager.cc
         ${VH}/io/mesh_writer.cc

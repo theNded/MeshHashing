@@ -113,24 +113,24 @@ void VisualizingEngine::RenderMultiLightGeometry() {
 }
 
 void VisualizingEngine::BuildBoundingBoxProgram(uint max_vertices) {
-  box_program_.Load(kShaderPath + "/line_vertex.glsl", gl::kVertexShader);
-  box_program_.Load(kShaderPath + "/line_fragment.glsl", gl::kFragmentShader);
-  box_program_.Build();
+  helper_program_.Load(kShaderPath + "/line_vertex.glsl", gl::kVertexShader);
+  helper_program_.Load(kShaderPath + "/line_fragment.glsl", gl::kFragmentShader);
+  helper_program_.Build();
 
   box_args_.Init(1, true);
   box_args_.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
                        max_vertices);
 
-  box_uniforms_.GetLocation(box_program_.id(), "mvp", gl::kMatrix4f);
-  box_uniforms_.GetLocation(box_program_.id(), "uni_color", gl::kVector3f);
+  helper_uniforms_.GetLocation(helper_program_.id(), "mvp", gl::kMatrix4f);
+  helper_uniforms_.GetLocation(helper_program_.id(), "uni_color", gl::kVector3f);
 
   enable_bounding_box_ = true;
 }
 
 void VisualizingEngine::BindBoundingBoxUniforms() {
   glm::vec3 color = glm::vec3(1, 0, 0);
-  box_uniforms_.Bind("mvp", &mvp_, 1);
-  box_uniforms_.Bind("uni_color", &color, 1);
+  helper_uniforms_.Bind("mvp", &mvp_, 1);
+  helper_uniforms_.Bind("uni_color", &color, 1);
 }
 
 void VisualizingEngine::BindBoundingBoxData() {
@@ -140,7 +140,7 @@ void VisualizingEngine::BindBoundingBoxData() {
 }
 
 void VisualizingEngine::RenderBoundingBox() {
-  glUseProgram(box_program_.id());
+  glUseProgram(helper_program_.id());
   BindBoundingBoxUniforms();
   BindBoundingBoxData();
 

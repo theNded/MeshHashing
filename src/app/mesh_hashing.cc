@@ -61,16 +61,10 @@ int main(int argc, char** argv) {
   if (args.ray_casting) {
     main_engine.ConfigVisualizingEngineRaycaster(config.ray_caster_params);
   }
-  main_engine.use_fine_gradient() = args.fine_gradient;
-
-  cv::VideoWriter writer;
-  cv::Mat screen;
   if (args.record_video) {
-    writer = cv::VideoWriter("../result/" + args.filename_prefix + ".avi",
-                             CV_FOURCC('X','V','I','D'),
-                             30, cv::Size(config.sensor_params.width * 2,
-                                          config.sensor_params.height * 2));
+    main_engine.ConfigLoggingEngine(".", args.record_video, args.save_mesh);
   }
+  main_engine.use_fine_gradient() = args.fine_gradient;
 
   cv::Mat color, depth;
   float4x4 wTc, cTw;
@@ -103,36 +97,12 @@ int main(int argc, char** argv) {
     main_engine.Mapping(sensor);
     main_engine.Meshing();
     main_engine.Recycle();
-    main_engine.Visualizing(cTw);
+    main_engine.Visualize(cTw);
 
-/////////////////////////////
-
-
-//    glUseProgram(bbox_program.id());
-//    glm::vec3 col = glm::vec3(1, 0, 0);
-//    bbox_uniforms.Bind("mvp", &mvp);
-//    bbox_uniforms.Bind("uni_color", &col);
-//    traj_args.BindBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-//                         vs.size(), vs.data());
-//    glEnable(GL_LINE_SMOOTH);
-//    glLineWidth(5.0f);
-//    glDrawArrays(GL_LINES, 0, vs.size());
-
-
-//    if (args.record_video) {
-//      cv::Mat rgb = window.CaptureRGB();
-//      writer << rgb;
-//    }
-
-
-//    out_trs << "(" << frame_count << ", " << stats.x << ")\n";
-//    out_vtx_our << "(" << frame_count << ", " << stats.y << ")\n";
-//    out_vtx_base << "(" << frame_count << ", " << stats.z << ")\n";
+    main_engine.Log();
   }
 
-//  if (args.save_mesh) {
-//    SavePly(main_engine.compact_mesh(), "../result/" + args.filename_prefix + ".ply");
-//  }
+  main_engine.FinalLog();
 
   return 0;
 }

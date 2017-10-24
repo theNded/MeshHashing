@@ -53,7 +53,7 @@ void MainEngine::Recycle() {
   }
 }
 
-void MainEngine::Visualizing(float4x4 view) {
+void MainEngine::Visualize(float4x4 view) {
   if (vis_engine_.enable_interaction()) {
     vis_engine_.update_view_matrix();
   } else {
@@ -91,6 +91,20 @@ void MainEngine::Visualizing(float4x4 view) {
     vis_engine_.RenderRayCaster(view, hash_table_, blocks_, coordinate_converter_);
   }
 }
+
+void MainEngine::Log() {
+  if (log_engine_.enable_video()) {
+    cv::Mat capture = vis_engine_.Capture();
+    log_engine_.WriteVideo(capture);
+  }
+}
+
+void MainEngine::FinalLog() {
+  if (log_engine_.enable_ply()) {
+    log_engine_.WritePly(vis_engine_.compact_mesh());
+  }
+}
+
 /// Life cycle
 MainEngine::MainEngine(const HashParams& hash_params,
                        const MeshParams &mesh_params,
@@ -151,4 +165,14 @@ void MainEngine::ConfigVisualizingEngineMesh(Light &light, bool free_viewpoints,
 
 void MainEngine::ConfigVisualizingEngineRaycaster(const RayCasterParams &params) {
   vis_engine_.BuildRayCaster(params);
+}
+
+void MainEngine::ConfigLoggingEngine(std::string path, bool enable_video, bool enable_ply) {
+  log_engine_.Init(path);
+  if (enable_video) {
+    log_engine_.ConfigVideoWriter(640, 480);
+  }
+  if (enable_ply) {
+    log_engine_.ConfigPlyWriter();
+  }
 }

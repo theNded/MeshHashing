@@ -12,6 +12,7 @@
 #include "core/mesh.h"
 
 #include "engine/visualizing_engine.h"
+#include "engine/logging_engine.h"
 #include "visualization/compact_mesh.h"
 #include "visualization/bounding_box.h"
 #include "sensor/rgbd_sensor.h"
@@ -19,6 +20,7 @@
 class MainEngine {
 private:
   VisualizingEngine vis_engine_;
+  LoggingEngine     log_engine_;
 
   // Core
   HashTable        hash_table_;
@@ -54,6 +56,7 @@ public:
                                    bool render_global_mesh,
                                    bool bounding_box);
   void ConfigVisualizingEngineRaycaster(const RayCasterParams& params);
+  void ConfigLoggingEngine(std::string path, bool enable_video, bool enable_ply);
 
   /// Reset and recycle
   void Reset();
@@ -61,7 +64,9 @@ public:
   void Mapping(Sensor &sensor);
   void Meshing();
   void Recycle();
-  void Visualizing(float4x4 view);
+  void Visualize(float4x4 view);
+  void Log();
+  void FinalLog();
 
   const uint& frame_count() {
     return integrated_frame_count_;

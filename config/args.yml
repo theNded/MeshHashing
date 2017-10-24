@@ -31,11 +31,11 @@ bounding_box:    1
 ray_casting:     0
 
 # Result saving
-record_video:    0
+record_video:    1
 save_mesh:       1
 filename_prefix: "lounge-new"
 time_profile:    "tum3-nhm"
 memo_profile:    "tum3-nhm"
 
 # Others
-run_frames:     -1
+run_frames:     10

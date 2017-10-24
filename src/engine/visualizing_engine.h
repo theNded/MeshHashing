@@ -29,7 +29,9 @@ public:
   void set_view_matrix(glm::mat4 view);
 
   void Render();
-
+  cv::Mat Capture() {
+    return window_.CaptureRGB();
+  }
   // Call set_lights before this
   void set_light(Light& light);
   void BuildMultiLightGeometryProgram(uint max_vertices,
@@ -59,6 +61,9 @@ public:
   bool enable_bounding_box() {
     return enable_bounding_box_;
   }
+  bool enable_trajectory() {
+    return enable_trajectory_;
+  }
   CompactMesh& compact_mesh() {
     return compact_mesh_;
   }
@@ -71,6 +76,7 @@ private:
   bool enable_global_mesh_ = false;
   bool enable_ray_casting_ = false;
   bool enable_bounding_box_ = false;
+  bool enable_trajectory_   = false;
 
   // Lighting conditions
   Light light_;
@@ -86,9 +92,11 @@ private:
   gl::Uniforms main_uniforms_;
   gl::Args     main_args_;
 
-  gl::Program  box_program_;
-  gl::Uniforms box_uniforms_;
+  gl::Program  helper_program_;
+  gl::Uniforms helper_uniforms_;
+
   gl::Args     box_args_;
+  gl::Args     trajectory_args_;
 
   // Raycaster
   RayCaster   ray_caster_;
