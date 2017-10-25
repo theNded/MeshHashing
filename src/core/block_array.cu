@@ -7,7 +7,10 @@
 /// Device code
 ////////////////////
 __global__
-void BlockArrayResetKernel(Block* blocks, int block_count) {
+void BlockArrayResetKernel(
+    Block* blocks,
+    int block_count
+) {
   const uint block_idx = blockIdx.x * blockDim.x + threadIdx.x;
 
   if (block_idx < block_count) {

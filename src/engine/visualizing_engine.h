@@ -2,8 +2,8 @@
 // Created by wei on 17-10-22.
 //
 
-#ifndef MESH_HASHING_VISUALIZING_ENGINE_H
-#define MESH_HASHING_VISUALIZING_ENGINE_H
+#ifndef ENGINE_VISUALIZING_ENGINE_H
+#define ENGINE_VISUALIZING_ENGINE_H
 
 #include <string>
 #include <visualization/trajectory.h>
@@ -36,10 +36,12 @@ public:
   }
   // Call set_lights before this
   void set_light(Light& light);
-  void BindMainProgram(uint max_vertices,
-                       uint max_triangles,
-                       bool enable_global_mesh,
-                       bool enable_polygon_mode);
+  void BindMainProgram(
+      uint max_vertices,
+      uint max_triangles,
+      bool enable_global_mesh,
+      bool enable_polygon_mode
+  );
   void BindMainUniforms();
   void BindMainData();
   void RenderMain();
@@ -55,7 +57,17 @@ public:
   void BindTrajectoryData();
 
   void BuildRayCaster(const RayCasterParams& ray_caster_params);
-  void RenderRayCaster(float4x4 view, HashTable& hash_table, BlockArray& blocks, GeometryHelper& geometry_helper) ;
+
+  // @method
+  // at @param view look at the @param blocks
+  // find neighbors in @param hash_table
+  // and compute with the @param geometry_helper
+  void RenderRayCaster(
+      float4x4 view,
+      BlockArray& blocks,
+      HashTable& hash_table,
+      GeometryHelper& geometry_helper
+  ) ;
 
   bool enable_interaction() {
     return enable_interaction_;

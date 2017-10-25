@@ -15,10 +15,11 @@
 #include "engine/main_engine.h"
 #include "core/collect_block_array.h"
 
-void MarchingCubes(EntryArray& candidate_entries,
-                   HashTable& hash_table,
-                   BlockArray& blocks,
-                   Mesh& mesh,
-                   bool use_fine_gradient,
-                   GeometryHelper& geoemtry_helper);
+void MarchingCubes(
+    EntryArray& candidate_entries,
+    BlockArray& blocks,
+    Mesh& mesh,
+    HashTable& hash_table,
+    GeometryHelper& geometry_helper,
+    bool enable_sdf_gradient);
 #endif //MESH_HASHING_MARCHING_CUBES_H

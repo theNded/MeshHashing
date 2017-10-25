@@ -2,8 +2,8 @@
 // Created by wei on 17-10-21.
 //
 
-#ifndef MESH_HASHING_ENTRY_ARRAY_H
-#define MESH_HASHING_ENTRY_ARRAY_H
+#ifndef CORE_ENTRY_ARRAY_H
+#define CORE_ENTRY_ARRAY_H
 
 #include "hash_entry.h"
 

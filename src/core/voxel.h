@@ -55,6 +55,11 @@ struct __ALIGN__(8) Voxel {
   }
 
   __host__ __device__
+  int GetVertex(int idx) {
+    return vertex_ptrs[idx];
+  }
+
+  __host__ __device__
   void Clear() {
     ClearSDF();
     ClearTriangle();

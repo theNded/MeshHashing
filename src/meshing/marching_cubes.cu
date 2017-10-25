@@ -1,5 +1,5 @@
 #include "meshing/marching_cubes.h"
-#include "geometry/gradient.h"
+#include "geometry/spatial_query.h"
 #include "visualization/color_util.h"
 //#define REDUCTION
 
@@ -13,9 +13,9 @@
 
 /// Marching Cubes
 __device__
-float3 VertexIntersection(const float3& p1, const float3 p2,
-                          const float&  v1, const float& v2,
-                          const float& isolevel) {
+float3 VertexIntersection(const float3 &p1, const float3 p2,
+                          const float &v1, const float &v2,
+                          const float &isolevel) {
   if (fabs(v1 - isolevel) < 0.008) return p1;
   if (fabs(v2 - isolevel) < 0.008) return p2;
   float mu = (isolevel - v1) / (v2 - v1);
@@ -27,14 +27,18 @@ float3 VertexIntersection(const float3& p1, const float3 p2,
 }
 
 __device__
-inline int AllocateVertexWithMutex(const HashTable &hash_table,
-                                   BlockArray &blocks,
-                                   Mesh& mesh,
-                                   Voxel& voxel,
-                                   uint& vertex_idx,
-                                   const float3& vertex_pos,
-                                   bool use_fine_gradient,
-                                   GeometryHelper& geoemtry_helper) {
+inline int AllocateVertexWithMutex(
+    Voxel &voxel,
+    uint  &vertex_idx,
+    const float3 &vertex_pos,
+    Mesh &mesh,
+
+    BlockArray &blocks,
+
+    const HashTable &hash_table,
+    GeometryHelper &geometry_helper,
+    bool enable_sdf_gradient
+) {
   int ptr = voxel.vertex_ptrs[vertex_idx];
   if (ptr == FREE_PTR) {
     int lock = atomicExch(&voxel.vertex_mutexes[vertex_idx], LOCK_ENTRY);
@@ -46,8 +50,8 @@ inline int AllocateVertexWithMutex(const HashTable &hash_table,
   if (ptr >= 0) {
     voxel.vertex_ptrs[vertex_idx] = ptr;
     mesh.vertex(ptr).pos = vertex_pos;
-    if (use_fine_gradient) {
-      mesh.vertex(ptr).normal = GradientAtPoint(hash_table, blocks, vertex_pos, geoemtry_helper);
+    if (enable_sdf_gradient) {
+      mesh.vertex(ptr).normal = GetSpatialGradient(vertex_pos, blocks, hash_table, geometry_helper);
     }
 
     float sdf;
@@ -55,11 +59,12 @@ inline int AllocateVertexWithMutex(const HashTable &hash_table,
     Stat  stats;
 #endif
     uchar3 color;
-    TrilinearInterpolation(hash_table, blocks, vertex_pos, sdf,
+    GetSpatialValue(vertex_pos, blocks, hash_table, geometry_helper, sdf, color
 #ifdef STATS
-                           stats,
+        , stats,
 #endif
-                           color, geoemtry_helper);
+    );
+
 #ifdef STATS
     float3 val = ValToRGB(stats.duration, 0, 100);
     mesh.vertex(ptr).color = make_float3(val.x, val.y, val.z);
@@ -70,19 +75,11 @@ inline int AllocateVertexWithMutex(const HashTable &hash_table,
 }
 
 __device__
-inline int GetVertex(Voxel& voxel, uint& vertex_idx) {
-  voxel.ResetMutexes();// ???
-
-  // It is guaranteed to be non-negative
-  return voxel.vertex_ptrs[vertex_idx];
-}
-
-__device__
-void RefineMesh(short& prev_cube, short& curr_cube, float d[8], int is_noise_bit[8]) {
+void RefineMesh(short &prev_cube, short &curr_cube, float d[8], int is_noise_bit[8]) {
   float kTr = 0.0075;
 
   /// Step 1: temporal
-  short temporal_diff = curr_cube ^ prev_cube;
+  short temporal_diff = curr_cube ^prev_cube;
   int dist = 0;
   while (temporal_diff) {
     temporal_diff &= (temporal_diff - 1);
@@ -94,7 +91,7 @@ void RefineMesh(short& prev_cube, short& curr_cube, float d[8], int is_noise_bit
   float min_dist = 1e10;
   int min_idx = -1;
   for (int i = 0; i < 6; ++i) {
-    short spatial_diff = curr_cube ^ kRegularCubeIndices[i];
+    short spatial_diff = curr_cube ^kRegularCubeIndices[i];
     short hamming_dist = 0;
     float euclid_dist;
 
@@ -117,7 +114,7 @@ void RefineMesh(short& prev_cube, short& curr_cube, float d[8], int is_noise_bit
   /// Step 3: Valid?
   int noise_bit[3];
   short hamming_dist = 0;
-  short binary_xor = curr_cube ^ kRegularCubeIndices[min_idx];
+  short binary_xor = curr_cube ^kRegularCubeIndices[min_idx];
   for (int j = 0; j < 8; ++j) {
     short mask = (1 << j);
     if (mask & binary_xor) {
@@ -144,31 +141,32 @@ void RefineMesh(short& prev_cube, short& curr_cube, float d[8], int is_noise_bit
 
 __global__
 void MarchingCubesPass1Kernel(
-    HashTable        hash_table,
     EntryArray candidate_entries,
-    BlockArray           blocks,
-    Mesh             mesh,
-    bool                use_fine_gradient,
-    GeometryHelper geoemtry_helper) {
+    BlockArray blocks,
+    Mesh mesh,
+    HashTable hash_table,
+    GeometryHelper geometry_helper,
+    bool enable_sdf_gradient
+) {
 
   const HashEntry &entry = candidate_entries[blockIdx.x];
-  const uint local_idx   = threadIdx.x;
+  const uint local_idx = threadIdx.x;
 
-  int3  voxel_base_pos  = geoemtry_helper.BlockToVoxel(entry.pos);
-  uint3 voxel_local_pos = geoemtry_helper.IdxToVoxelLocalPos(local_idx);
-  int3 voxel_pos        = voxel_base_pos + make_int3(voxel_local_pos);
-  float3 world_pos      = geoemtry_helper.VoxelToWorld(voxel_pos);
+  int3 voxel_base_pos = geometry_helper.BlockToVoxel(entry.pos);
+  uint3 voxel_local_pos = geometry_helper.IdxToVoxelLocalPos(local_idx);
+  int3 voxel_pos = voxel_base_pos + make_int3(voxel_local_pos);
+  float3 world_pos = geometry_helper.VoxelToWorld(voxel_pos);
 
   Voxel &this_voxel = blocks[entry.ptr].voxels[local_idx];
 
   //////////
   /// 1. Read the scalar values, see mc_tables.h
-  const int   kVertexCount = 8;
-  const float kVoxelSize   = geoemtry_helper.voxel_size;
-  const float kThreshold   = 0.2f;
-  const float kIsoLevel    = 0;
+  const int kVertexCount = 8;
+  const float kVoxelSize = geometry_helper.voxel_size;
+  const float kThreshold = 0.2f;
+  const float kIsoLevel = 0;
 
-  float  d[kVertexCount];
+  float d[kVertexCount];
   float3 p[kVertexCount];
 
   short cube_index = 0;
@@ -180,7 +178,12 @@ void MarchingCubesPass1Kernel(
     uint3 offset = make_uint3(kVtxOffset[i]);
     float weight;
 
-    d[i] = GetSDF(hash_table, blocks, entry, voxel_local_pos + offset, weight, geoemtry_helper);
+    GetVoxelValue(entry,
+                  voxel_local_pos + offset,
+                  blocks,
+                  hash_table,
+                  geometry_helper,
+                  d[i], weight);
     if (weight < 20)
       return;
 
@@ -200,7 +203,7 @@ void MarchingCubesPass1Kernel(
 #pragma unroll 1
   for (int i = 0; i < kEdgeCount; ++i) {
     if (kEdgeTable[cube_index] & (1 << i)) {
-      int2  v_idx = kEdgeVertexTable[i];
+      int2 v_idx = kEdgeVertexTable[i];
       uint4 c_idx = kEdgeCubeTable[i];
 
       // Special noise-bit interpolation here: extrapolation
@@ -208,32 +211,35 @@ void MarchingCubesPass1Kernel(
       vertex_pos = VertexIntersection(p[v_idx.x], p[v_idx.y],
                                       d[v_idx.x], d[v_idx.y], kIsoLevel);
 
-      Voxel &voxel = GetVoxelRef(hash_table, blocks, entry,
-                                voxel_local_pos + make_uint3(c_idx.x, c_idx.y, c_idx.z), geoemtry_helper);
-      AllocateVertexWithMutex(hash_table, blocks, mesh,
-                              voxel, c_idx.w, vertex_pos,
-                              use_fine_gradient, geoemtry_helper);
+      Voxel &voxel = GetVoxelRef(entry,
+                                 voxel_local_pos + make_uint3(c_idx.x, c_idx.y, c_idx.z),
+                                 blocks,
+                                 hash_table,
+                                 geometry_helper);
+      AllocateVertexWithMutex(voxel, c_idx.w, vertex_pos, mesh,
+                              blocks, hash_table, geometry_helper,
+                              enable_sdf_gradient);
     }
   }
 }
 
 __global__
 void MarchingCubesPass2Kernel(
-    HashTable        hash_table,
     EntryArray candidate_entries,
-    BlockArray          blocks,
-    Mesh             mesh,
-    bool                use_fine_gradient,
-    GeometryHelper geoemtry_helper) {
-
+    BlockArray blocks,
+    Mesh mesh,
+    HashTable hash_table,
+    GeometryHelper geometry_helper,
+    bool enable_sdf_gradient
+) {
 
   const HashEntry &entry = candidate_entries[blockIdx.x];
-  const uint local_idx   = threadIdx.x;
+  const uint local_idx = threadIdx.x;
 
-  int3  voxel_base_pos  = geoemtry_helper.BlockToVoxel(entry.pos);
-  uint3 voxel_local_pos = geoemtry_helper.IdxToVoxelLocalPos(local_idx);
-  int3 voxel_pos        = voxel_base_pos + make_int3(voxel_local_pos);
-  float3 world_pos      = geoemtry_helper.VoxelToWorld(voxel_pos);
+  int3 voxel_base_pos = geometry_helper.BlockToVoxel(entry.pos);
+  uint3 voxel_local_pos = geometry_helper.IdxToVoxelLocalPos(local_idx);
+  int3 voxel_pos = voxel_base_pos + make_int3(voxel_local_pos);
+  float3 world_pos = geometry_helper.VoxelToWorld(voxel_pos);
 
   Voxel &this_voxel = blocks[entry.ptr].voxels[local_idx];
 
@@ -261,8 +267,9 @@ void MarchingCubesPass2Kernel(
     if (kEdgeTable[this_voxel.curr_cube_idx] & (1 << i)) {
       uint4 c_idx = kEdgeCubeTable[i];
       uint3 voxel_p = voxel_local_pos + make_uint3(c_idx.x, c_idx.y, c_idx.z);
-      Voxel &voxel = GetVoxelRef(hash_table, blocks, entry, voxel_p, geoemtry_helper);
-      vertex_ptr[i] = GetVertex(voxel, c_idx.w);
+      Voxel &voxel  = GetVoxelRef(entry, voxel_p, blocks, hash_table, geometry_helper);
+      vertex_ptr[i] = voxel.GetVertex(c_idx.w);
+      voxel.ResetMutexes();
     }
   }
 
@@ -284,7 +291,7 @@ void MarchingCubesPass2Kernel(
                         make_int3(vertex_ptr[kTriangleTable[this_voxel.curr_cube_idx][t + 0]],
                                   vertex_ptr[kTriangleTable[this_voxel.curr_cube_idx][t + 1]],
                                   vertex_ptr[kTriangleTable[this_voxel.curr_cube_idx][t + 2]]));
-    if (! use_fine_gradient) {
+    if (!enable_sdf_gradient) {
       mesh.ComputeTriangleNormal(mesh.triangle(triangle_ptr));
     }
   }
@@ -294,8 +301,8 @@ void MarchingCubesPass2Kernel(
 __global__
 void RecycleTrianglesKernel(
     EntryArray candidate_entries,
-    BlockArray       blocks,
-    Mesh             mesh) {
+    BlockArray blocks,
+    Mesh mesh) {
   const HashEntry &entry = candidate_entries[blockIdx.x];
 
   const uint local_idx = threadIdx.x;  //inside an SDF block
@@ -319,8 +326,9 @@ void RecycleTrianglesKernel(
 __global__
 void RecycleVerticesKernel(
     EntryArray candidate_entries,
-    BlockArray           blocks,
-    Mesh             mesh) {
+    BlockArray blocks,
+    Mesh mesh
+) {
   const HashEntry &entry = candidate_entries[blockIdx.x];
   const uint local_idx = threadIdx.x;
 
@@ -337,7 +345,6 @@ void RecycleVerticesKernel(
   }
 }
 
-/// Only update Laplacian at current
 #ifdef STATS
 __global__
 void UpdateStatisticsKernel(HashTable        hash_table,
@@ -380,12 +387,14 @@ void UpdateStatisticsKernel(HashTable        hash_table,
 ////////////////////
 /// Host code
 ////////////////////
-void MarchingCubes(EntryArray& candidate_entries,
-                   HashTable& hash_table,
-                   BlockArray& blocks,
-                   Mesh& mesh,
-                   bool use_fine_gradient,
-                   GeometryHelper& geoemtry_helper) {
+void MarchingCubes(
+    EntryArray &candidate_entries,
+    BlockArray &blocks,
+    Mesh &mesh,
+    HashTable &hash_table,
+    GeometryHelper &geometry_helper,
+    bool enable_sdf_gradient
+) {
   uint occupied_block_count = candidate_entries.count();
   LOG(INFO) << "Marching cubes block count: " << occupied_block_count;
   if (occupied_block_count <= 0)
@@ -408,36 +417,38 @@ void MarchingCubes(EntryArray& candidate_entries,
   /// Use divide and conquer to avoid read-write conflict
   Timer timer;
   timer.Tick();
-  MarchingCubesPass1Kernel<<<grid_size, block_size>>>(
-      hash_table,
-          candidate_entries,
+  MarchingCubesPass1Kernel << < grid_size, block_size >> > (
+      candidate_entries,
           blocks,
           mesh,
-          use_fine_gradient,
-          geoemtry_helper);
+          hash_table,
+          geometry_helper,
+          enable_sdf_gradient);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
   double pass1_seconds = timer.Tock();
   LOG(INFO) << "Pass1 duration: " << pass1_seconds;
 
   timer.Tick();
-  MarchingCubesPass2Kernel<<<grid_size, block_size>>>(
-      hash_table,
-          candidate_entries,
+  MarchingCubesPass2Kernel << < grid_size, block_size >> > (
+      candidate_entries,
           blocks,
           mesh,
-          use_fine_gradient,
-          geoemtry_helper);
+          hash_table,
+          geometry_helper,
+          enable_sdf_gradient);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
   double pass2_seconds = timer.Tock();
   LOG(INFO) << "Pass2 duration: " << pass2_seconds;
 
-  RecycleTrianglesKernel<<<grid_size, block_size>>>(candidate_entries, blocks, mesh);
+  RecycleTrianglesKernel << < grid_size, block_size >> > (
+      candidate_entries, blocks, mesh);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 
-  RecycleVerticesKernel<<<grid_size, block_size>>>(candidate_entries, blocks, mesh);
+  RecycleVerticesKernel << < grid_size, block_size >> > (
+      candidate_entries, blocks, mesh);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }

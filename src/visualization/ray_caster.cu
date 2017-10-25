@@ -3,7 +3,8 @@
 #include "color_util.h"
 
 #include "geometry/geometry_helper.h"
-#include "geometry/gradient.h"
+#include "geometry/spatial_query.h"
+#include "geometry/isosurface_intersection.h"
 #include "visualization/ray_caster.h"
 
 //////////
@@ -19,7 +20,7 @@ void CastKernel(const HashTable hash_table,
                 const RayCasterParams ray_caster_params,
                 const float4x4 c_T_w,
                 const float4x4 w_T_c,
-                GeometryHelper geoemtry_helper) {
+                GeometryHelper geometry_helper) {
   const uint x = blockIdx.x * blockDim.x + threadIdx.x;
   const uint y = blockIdx.y * blockDim.y + threadIdx.y;
 
@@ -36,7 +37,7 @@ void CastKernel(const HashTable hash_table,
 
   /// 1. Determine ray direction
   float3 camera_ray_dir = normalize(
-          geoemtry_helper.ImageReprojectToCamera(x, y, 1.0f,
+          geometry_helper.ImageReprojectToCamera(x, y, 1.0f,
                                  ray_caster_params.fx, ray_caster_params.fy,
                                  ray_caster_params.cx, ray_caster_params.cy));
 
@@ -68,12 +69,16 @@ void CastKernel(const HashTable hash_table,
     Stat stats;
 #endif
     /// a voxel surrounded by valid voxels
-    if (  TrilinearInterpolation(hash_table, blocks, world_sample_pos,
-                               sdf,
+    if (GetSpatialValue(world_sample_pos,
+                 blocks,
+                 hash_table,
+                 geometry_helper,
+                 sdf,
+                 color
 #ifdef STATS
-                                 stats,
+        , stats
 #endif
-                                 color, geoemtry_helper)) {
+    )) {
 
       /// Zero crossing exist
       if (prev_sample.weight > 0 // valid previous sample
@@ -83,11 +88,13 @@ void CastKernel(const HashTable hash_table,
         uchar3 interpolated_color;
         /// Find exact zero crossing
         bool is_isosurface_found = BisectionIntersection(
-                hash_table, blocks,
                 world_cam_pos, world_ray_dir,
                 prev_sample.sdf, prev_sample.t,
                 sdf, t,
-                interpolated_t, interpolated_color, geoemtry_helper);
+                blocks,
+                hash_table,
+                geometry_helper,
+                interpolated_t, interpolated_color);
 
         float3 world_pos_isosurface =
                 world_cam_pos + interpolated_t * world_ray_dir;
@@ -104,7 +111,7 @@ void CastKernel(const HashTable hash_table,
             ray_caster_data.depth[pixel_idx] = make_float4(rgb.x, rgb.y, rgb.z, 1.0f);
             //break;
             ray_caster_data.vertex[pixel_idx]
-                    = make_float4(geoemtry_helper.ImageReprojectToCamera(x, y, depth,
+                    = make_float4(geometry_helper.ImageReprojectToCamera(x, y, depth,
                                                          ray_caster_params.fx,
                                                          ray_caster_params.fy,
                                                          ray_caster_params.cx,
@@ -116,7 +123,7 @@ void CastKernel(const HashTable hash_table,
                                   interpolated_color.z / 255.f, 1.0f);
 
             if (ray_caster_params.enable_gradients) {
-              float3 normal = GradientAtPoint(hash_table, blocks, world_pos_isosurface, geoemtry_helper);
+              float3 normal = GetSpatialGradient(world_pos_isosurface, blocks, hash_table, geometry_helper);
               normal = -normal;
               float4 n = c_T_w * make_float4(normal, 0.0f);
               ray_caster_data.normal[pixel_idx]
@@ -194,7 +201,7 @@ void RayCaster::Free() {
 /// Major function, extract surface and normal from the volumes
 void RayCaster::Cast(HashTable& hash_table, BlockArray& blocks,
                      RayCasterData& ray_caster_data,
-                     GeometryHelper& geoemtry_helper,
+                     GeometryHelper& geometry_helper,
                      const float4x4& c_T_w) {
   const uint threads_per_block = 8;
   const float4x4 w_T_c = c_T_w.getInverse();
@@ -209,7 +216,7 @@ void RayCaster::Cast(HashTable& hash_table, BlockArray& blocks,
       hash_table,
           blocks,
           ray_caster_data,
-          ray_caster_params_, c_T_w, w_T_c, geoemtry_helper);
+          ray_caster_params_, c_T_w, w_T_c, geometry_helper);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 

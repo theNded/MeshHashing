@@ -12,17 +12,15 @@ dataset_type:    4
 # 1 - color map (entropy, laplacian, duration, whatever)
 render_type:     0
 
-# If use shaded map, set it to 1
-fine_gradient:   1
-
+enable_sdf_gradient:    1
 enable_polygon_mode:    1
+
 enable_navigation:      1
 enable_global_mesh:     1
 enable_bounding_box:    1
-enable_ray_casting:     1
 enable_trajectory:      1
+enable_ray_casting:     1
 
-# Result saving
 enable_video_recording:  1
 enable_ply_saving:       1
 

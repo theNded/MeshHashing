@@ -1,20 +1,16 @@
 #include <unordered_set>
-#include <vector>
-#include <list>
-#include <glog/logging.h>
 #include <device_launch_parameters.h>
 
 #include "core/hash_table.h"
 
 ////////////////////
-/// class HashTable
-////////////////////
-
-////////////////////
 /// Device code
 ////////////////////
 __global__
-void HashTableResetBucketMutexesKernel(int *bucket_mutexes, uint bucket_count) {
+void HashTableResetBucketMutexesKernel(
+    int *bucket_mutexes,
+    uint bucket_count
+) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
 
   if (idx < bucket_count) {
@@ -23,7 +19,10 @@ void HashTableResetBucketMutexesKernel(int *bucket_mutexes, uint bucket_count) {
 }
 
 __global__
-void HashTableResetHeapKernel(uint *heap, uint value_capacity) {
+void HashTableResetHeapKernel(
+    uint *heap,
+    uint value_capacity
+) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
 
   if (idx < value_capacity) {
@@ -32,7 +31,10 @@ void HashTableResetHeapKernel(uint *heap, uint value_capacity) {
 }
 
 __global__
-void HashTableResetEntriesKernel(HashEntry *entries, uint entry_count) {
+void HashTableResetEntriesKernel(
+    HashEntry *entries,
+    uint entry_count
+) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
 
   if (idx < entry_count) {
@@ -62,14 +64,18 @@ void HashTable::Alloc(const HashParams &params) {
     linked_list_size = params.linked_list_size;
 
     /// Values
-    checkCudaErrors(cudaMalloc(&heap_, sizeof(uint) * params.value_capacity));
-    checkCudaErrors(cudaMalloc(&heap_counter_, sizeof(uint)));
+    checkCudaErrors(cudaMalloc(&heap_,
+                               sizeof(uint) * params.value_capacity));
+    checkCudaErrors(cudaMalloc(&heap_counter_,
+                               sizeof(uint)));
 
     /// Entries
-    checkCudaErrors(cudaMalloc(&entries_, sizeof(HashEntry) * params.entry_count));
+    checkCudaErrors(cudaMalloc(&entries_,
+                               sizeof(HashEntry) * params.entry_count));
 
     /// Mutexes
-    checkCudaErrors(cudaMalloc(&bucket_mutexes_, sizeof(int) * params.bucket_count));
+    checkCudaErrors(cudaMalloc(&bucket_mutexes_,
+                               sizeof(int) * params.bucket_count));
     is_allocated_on_gpu_ = true;
   }
 }

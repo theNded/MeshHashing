@@ -14,6 +14,6 @@
 
 void ExtractBoundingBox(EntryArray& candidate_entries,
                         BoundingBox& bounding_box,
-                        GeometryHelper& geoemtry_helper);
+                        GeometryHelper& geometry_helper);
 
 #endif //MESH_HASHING_EXTRACT_BOUNDING_BOX_H

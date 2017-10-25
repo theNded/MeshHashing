@@ -194,8 +194,8 @@ void VisualizingEngine::BuildRayCaster(const RayCasterParams &ray_caster_params)
 }
 
 void VisualizingEngine::RenderRayCaster(float4x4 view,
-                                        HashTable& hash_table,
                                         BlockArray& blocks,
+                                        HashTable& hash_table,
                                         GeometryHelper& geometry_helper) {
   ray_caster_.Cast(hash_table, blocks, ray_caster_.data() , geometry_helper, view);
   cv::imshow("RayCasting", ray_caster_.surface_image());

@@ -37,7 +37,7 @@ public:
   void Cast(HashTable& hash_table,
             BlockArray& blocks,
             RayCasterData &ray_caster_data,
-            GeometryHelper& geoemtry_helper,
+            GeometryHelper& geometry_helper,
             const float4x4& c_T_w);
 
   const cv::Mat& depth_image() {

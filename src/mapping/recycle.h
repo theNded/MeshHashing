@@ -12,18 +12,34 @@
 #include "core/block_array.h"
 #include "geometry/geometry_helper.h"
 
-void StarveOccupiedBlockArray(EntryArray& candidate_entries,
-                              BlockArray& blocks);
-void CollectGarbageBlockArray(EntryArray& candidate_entries,
-                              BlockArray& blocks,
-                              GeometryHelper& geoemtry_helper);
-
+// @function
+// Enumerate @param candidate_entries
+// operate over correspondent @param blocks
+void StarveOccupiedBlockArray(
+    EntryArray& candidate_entries,
+    BlockArray& blocks
+);
+// @function
+// Enumerate @param candidate_entries
+// operate over correspondent @param blocks
+// set flag for incoming @param candidate_entries
+void CollectGarbageBlockArray(
+    EntryArray& candidate_entries,
+    BlockArray& blocks,
+    GeometryHelper& geometry_helper
+);
 
 // TODO(wei): Check vertex / triangles in detail
-// including garbage collection
-void RecycleGarbageBlockArray(HashTable& hash_table,
-                              EntryArray &candidate_entries,
-                              BlockArray& blocks,
-                              Mesh& mesh);
+// @function
+// Enumerate @param candidate_entries
+// recycle correspondent @param blocks
+//                   and @param mesh
+// also free entry in @param hash_table if needed
+void RecycleGarbageBlockArray(
+    EntryArray &candidate_entries,
+    BlockArray& blocks,
+    Mesh& mesh,
+    HashTable& hash_table
+);
 
 #endif //MESH_HASHING_RECYCLE_H

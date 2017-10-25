@@ -71,7 +71,7 @@ int main(int argc, char** argv) {
                                     args.enable_video_recording,
                                     args.enable_ply_saving);
   }
-  main_engine.use_fine_gradient() = args.fine_gradient;
+  main_engine.enable_sdf_gradient() = args.enable_sdf_gradient;
 
   cv::Mat color, depth;
   float4x4 wTc, cTw;

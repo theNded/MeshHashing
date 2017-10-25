@@ -22,11 +22,13 @@
 
 /// Condition: IsBlockInCameraFrustum
 __global__
-void CollectBlocksInFrustumKernel(HashTable hash_table,
-                                  EntryArray candidate_entries,
-                                  SensorParams sensor_params,
-                                  float4x4 c_T_w,
-                                  GeometryHelper geoemtry_helper) {
+void CollectBlocksInFrustumKernel(
+    HashTable hash_table,
+    SensorParams sensor_params,
+    float4x4     c_T_w,
+    GeometryHelper geometry_helper,
+    EntryArray candidate_entries
+) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
 
   __shared__ int local_counter;
@@ -36,7 +38,7 @@ void CollectBlocksInFrustumKernel(HashTable hash_table,
   int addr_local = -1;
   if (idx < hash_table.entry_count
     && hash_table.entry(idx).ptr != FREE_ENTRY
-    && geoemtry_helper.IsBlockInCameraFrustum(c_T_w, hash_table.entry(idx).pos,
+    && geometry_helper.IsBlockInCameraFrustum(c_T_w, hash_table.entry(idx).pos,
                                         sensor_params)) {
     addr_local = atomicAdd(&local_counter, 1);
   }
@@ -56,8 +58,10 @@ void CollectBlocksInFrustumKernel(HashTable hash_table,
 }
 
 __global__
-void CollectAllBlocksKernel(HashTable hash_table,
-                            EntryArray candidate_entries) {
+void CollectAllBlocksKernel(
+    HashTable hash_table,
+    EntryArray candidate_entries
+) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
 
   __shared__ int local_counter;
@@ -90,7 +94,10 @@ void CollectAllBlocksKernel(HashTable hash_table,
 ///////////////////
 
 /// Compress discrete hash table entries
-void CollectAllBlocks(EntryArray &candidate_entries, HashTable &hash_table) {
+void CollectAllBlocks(
+    HashTable &hash_table,
+    EntryArray &candidate_entries
+) {
   const uint threads_per_block = 256;
 
   uint entry_count = hash_table.entry_count;
@@ -109,10 +116,12 @@ void CollectAllBlocks(EntryArray &candidate_entries, HashTable &hash_table) {
             << candidate_entries.count();
 }
 
-void CollectBlocksInFrustum(HashTable &hash_table,
-                            EntryArray &candidate_entries,
-                            Sensor &sensor,
-                            GeometryHelper &geoemtry_helper) {
+void CollectBlocksInFrustum(
+    HashTable &hash_table,
+    Sensor   &sensor,
+    GeometryHelper &geometry_helper,
+    EntryArray &candidate_entries
+) {
   const uint threads_per_block = 256;
 
   uint entry_count = hash_table.entry_count;
@@ -124,10 +133,10 @@ void CollectBlocksInFrustum(HashTable &hash_table,
   candidate_entries.reset_count();
   CollectBlocksInFrustumKernel <<<grid_size, block_size >>>(
       hash_table,
-          candidate_entries,
           sensor.sensor_params(),
-          sensor.c_T_w(),
-          geoemtry_helper);
+          sensor.cTw(),
+          geometry_helper,
+          candidate_entries);
 
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());

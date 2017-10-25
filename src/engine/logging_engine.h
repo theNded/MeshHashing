@@ -2,8 +2,8 @@
 // Created by wei on 17-10-24.
 //
 
-#ifndef MESH_HASHING_LOGGING_ENGINE_H
-#define MESH_HASHING_LOGGING_ENGINE_H
+#ifndef ENGINE_LOGGING_ENGINE_H
+#define ENGINE_LOGGING_ENGINE_H
 
 #include <string>
 #include <opencv2/opencv.hpp>
@@ -11,7 +11,8 @@
 class LoggingEngine {
 public:
   LoggingEngine() = default;
-  explicit LoggingEngine(std::string path) : base_path_(path) {};
+  explicit LoggingEngine(std::string path)
+      : base_path_(path) {};
   void Init(std::string path);
   ~LoggingEngine();
 

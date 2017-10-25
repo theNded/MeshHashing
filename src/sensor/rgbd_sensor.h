@@ -43,10 +43,10 @@ public:
     wTc_ = wTc;
     cTw_ = wTc_.getInverse();
   }
-  const float4x4& w_T_c() const {
+  const float4x4& wTc() const {
     return wTc_;
   }
-  const float4x4& c_T_w() const {
+  const float4x4& cTw() const {
     return cTw_;
   }
   uint width() const {

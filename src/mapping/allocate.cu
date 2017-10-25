@@ -7,10 +7,9 @@
 __global__
 void AllocBlockArrayKernel(HashTable   hash_table,
                            SensorData  sensor_data,
-                           SensorParams   sensor_params,
-                           float4x4       w_T_c,
-                           const uint* is_streamed_mask,
-                           GeometryHelper geoemtry_helper) {
+                           SensorParams sensor_params,
+                           float4x4     w_T_c,
+                           GeometryHelper geometry_helper) {
 
   const uint x = blockIdx.x * blockDim.x + threadIdx.x;
   const uint y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -22,18 +21,18 @@ void AllocBlockArrayKernel(HashTable   hash_table,
   /// 1. Get observed data
   float depth = tex2D<float>(sensor_data.depth_texture, x, y);
   if (depth == MINF || depth == 0.0f
-      || depth >= geoemtry_helper.sdf_upper_bound)
+      || depth >= geometry_helper.sdf_upper_bound)
     return;
 
-  float truncation = geoemtry_helper.truncate_distance(depth);
-  float near_depth = fminf(geoemtry_helper.sdf_upper_bound, depth - truncation);
-  float far_depth = fminf(geoemtry_helper.sdf_upper_bound, depth + truncation);
+  float truncation = geometry_helper.truncate_distance(depth);
+  float near_depth = fminf(geometry_helper.sdf_upper_bound, depth - truncation);
+  float far_depth = fminf(geometry_helper.sdf_upper_bound, depth + truncation);
   if (near_depth >= far_depth) return;
 
-  float3 camera_pos_near = geoemtry_helper.ImageReprojectToCamera(x, y, near_depth,
+  float3 camera_pos_near = geometry_helper.ImageReprojectToCamera(x, y, near_depth,
                                                             sensor_params.fx, sensor_params.fy,
                                                             sensor_params.cx, sensor_params.cy);
-  float3 camera_pos_far  = geoemtry_helper.ImageReprojectToCamera(x, y, far_depth,
+  float3 camera_pos_far  = geometry_helper.ImageReprojectToCamera(x, y, far_depth,
                                                             sensor_params.fx, sensor_params.fy,
                                                             sensor_params.cx, sensor_params.cy);
 
@@ -42,16 +41,16 @@ void AllocBlockArrayKernel(HashTable   hash_table,
   float3 world_pos_far   = w_T_c * camera_pos_far;
   float3 world_ray_dir = normalize(world_pos_far - world_pos_near);
 
-  int3 block_pos_near = geoemtry_helper.WorldToBlock(world_pos_near);
-  int3 block_pos_far  = geoemtry_helper.WorldToBlock(world_pos_far);
+  int3 block_pos_near = geometry_helper.WorldToBlock(world_pos_near);
+  int3 block_pos_far  = geometry_helper.WorldToBlock(world_pos_far);
   float3 block_step = make_float3(sign(world_ray_dir));
 
   /// 3. Init zig-zag steps
   float3 world_pos_nearest_voxel_center
-      = geoemtry_helper.BlockToWorld(block_pos_near + make_int3(clamp(block_step, 0.0, 1.0f)))
-        - 0.5f * geoemtry_helper.voxel_size;
+      = geometry_helper.BlockToWorld(block_pos_near + make_int3(clamp(block_step, 0.0, 1.0f)))
+        - 0.5f * geometry_helper.voxel_size;
   float3 t = (world_pos_nearest_voxel_center - world_pos_near) / world_ray_dir;
-  float3 dt = (block_step * BLOCK_SIDE_LENGTH * geoemtry_helper.voxel_size) / world_ray_dir;
+  float3 dt = (block_step * BLOCK_SIDE_LENGTH * geometry_helper.voxel_size) / world_ray_dir;
   int3 block_pos_bound = make_int3(make_float3(block_pos_far) + block_step);
 
   if (world_ray_dir.x == 0.0f) {
@@ -72,7 +71,10 @@ void AllocBlockArrayKernel(HashTable   hash_table,
   const uint kMaxIterTime = 1024;
 #pragma unroll 1
   for (uint iter = 0; iter < kMaxIterTime; ++iter) {
-    if (geoemtry_helper.IsBlockInCameraFrustum(w_T_c.getInverse(), block_pos_curr, sensor_params)) {
+    if (geometry_helper.IsBlockInCameraFrustum(
+        w_T_c.getInverse(),
+        block_pos_curr,
+        sensor_params)) {
       /// Disable streaming at current
       // && !isSDFBlockStreamedOut(idCurrentVoxel, hash_table, is_streamed_mask)) {
       hash_table.AllocEntry(block_pos_curr);
@@ -95,7 +97,11 @@ void AllocBlockArrayKernel(HashTable   hash_table,
   }
 }
 
-void AllocBlockArray(HashTable& hash_table, Sensor& sensor, GeometryHelper& geoemtry_helper) {
+void AllocBlockArray(
+    HashTable& hash_table,
+    Sensor& sensor,
+    GeometryHelper& geometry_helper
+) {
   hash_table.ResetMutexes();
 
   const uint threads_per_block = 8;
@@ -107,10 +113,9 @@ void AllocBlockArray(HashTable& hash_table, Sensor& sensor, GeometryHelper& geoe
 
   AllocBlockArrayKernel<<<grid_size, block_size>>>(
       hash_table,
-          sensor.data(),
-          sensor.sensor_params(), sensor.w_T_c(),
-          NULL,
-          geoemtry_helper);
+      sensor.data(),
+      sensor.sensor_params(), sensor.wTc(),
+      geometry_helper);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }

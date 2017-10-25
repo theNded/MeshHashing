@@ -18,7 +18,7 @@ void LoadRuntimeParams(std::string path, RuntimeParams& params) {
   params.enable_navigation   = (int)fs["enable_navigation"];
   params.enable_polygon_mode = (int)fs["enable_ploygon_mode"];
   params.enable_global_mesh = (int)fs["enable_global_mesh"];
-  params.fine_gradient = (int)fs["fine_gradient"];
+  params.enable_sdf_gradient = (int)fs["enable_sdf_gradient"];
   params.render_type   = (int)fs["render_type"];
 
   params.enable_bounding_box  = (int)fs["enable_bounding_box"];

@@ -12,11 +12,19 @@
 #include "sensor/rgbd_sensor.h"
 #include "geometry/geometry_helper.h"
 
-void UpdateBlockArray(EntryArray& candidate_entries,
-                      HashTable&  hash_table,
-                      BlockArray& blocks,
-                      Mesh& mesh,
-                      Sensor &sensor,
-                      GeometryHelper& geoemtry_helper);
+// @function
+// Enumerate @param candidate_entries
+// change the value of @param blocks
+// according to the existing @param mesh
+//                 and input @param sensor data
+// with the help of hash_table and geometry_helper
+void UpdateBlockArray(
+    EntryArray& candidate_entries,
+    BlockArray& blocks,
+    Mesh& mesh,
+    Sensor& sensor,
+    HashTable& hash_table,
+    GeometryHelper& geometry_helper
+);
 
 #endif //MESH_HASHING_FUSE_H

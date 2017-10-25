@@ -8,7 +8,7 @@
 #include "core/common.h"
 #include "core/voxel.h"
 
-#include "extern/cuda/helper_math.h"
+#include <helper_math.h>
 
 // Typically Block is a 8x8x8 voxel array
 struct __ALIGN__(8) Block {

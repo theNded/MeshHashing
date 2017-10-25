@@ -106,7 +106,6 @@ public:
     vertices[vertex_ptrs.z].normal = n;
   }
 #endif // __CUDACC__
-
   MeshParams mesh_params_;
 
 };

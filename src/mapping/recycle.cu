@@ -13,9 +13,10 @@
 #include "helper_math.h"
 
 __global__
-void StarveOccupiedBlockArrayKernel(EntryArray candidate_entries,
-                                    BlockArray blocks) {
-
+void StarveOccupiedBlocksKernel(
+    EntryArray candidate_entries,
+    BlockArray blocks
+) {
   const uint idx = blockIdx.x;
   const HashEntry& entry = candidate_entries[idx];
   float weight = blocks[entry.ptr].voxels[threadIdx.x].weight;
@@ -25,9 +26,11 @@ void StarveOccupiedBlockArrayKernel(EntryArray candidate_entries,
 
 /// Collect dead voxels
 __global__
-void CollectGarbageBlockArrayKernel(EntryArray candidate_entries,
-                                    BlockArray blocks,
-                                    GeometryHelper geoemtry_helper) {
+void CollectGarbageBlockArrayKernel(
+    EntryArray candidate_entries,
+    BlockArray blocks,
+    GeometryHelper geometry_helper
+) {
 
   const uint idx = blockIdx.x;
   const HashEntry& entry = candidate_entries[idx];
@@ -63,7 +66,7 @@ void CollectGarbageBlockArrayKernel(EntryArray candidate_entries,
     float max_weight = shared_max_weight[threadIdx.x];
 
     // TODO(wei): check this weird reference
-    float t = geoemtry_helper.truncate_distance(5.0f);
+    float t = geometry_helper.truncate_distance(5.0f);
 
     // TODO(wei): add || valid_triangles == 0 when memory leak is dealt with
     candidate_entries.flag(idx) =
@@ -73,10 +76,12 @@ void CollectGarbageBlockArrayKernel(EntryArray candidate_entries,
 
 /// !!! Their mesh not recycled
 __global__
-void RecycleGarbageBlockArrayTrianglesKernel(HashTable hash_table,
-                                             EntryArray candidate_entries,
-                                             BlockArray blocks,
-                                             Mesh       mesh) {
+void RecycleGarbageTrianglesKernel(
+    EntryArray candidate_entries,
+    BlockArray blocks,
+    Mesh       mesh,
+    HashTable  hash_table
+) {
   const uint idx = blockIdx.x;
   if (candidate_entries.flag(idx) == 0) return;
 
@@ -97,10 +102,12 @@ void RecycleGarbageBlockArrayTrianglesKernel(HashTable hash_table,
 }
 
 __global__
-void RecycleGarbageBlockArrayVerticesKernel(HashTable        hash_table,
-                                            EntryArray candidate_entries,
-                                            BlockArray           blocks,
-                                            Mesh             mesh) {
+void RecycleGarbageVerticesKernel(
+    EntryArray candidate_entries,
+    BlockArray       blocks,
+    Mesh             mesh,
+    HashTable        hash_table
+) {
   if (candidate_entries.flag(blockIdx.x) == 0) return;
   const HashEntry &entry = candidate_entries[blockIdx.x];
   const uint local_idx = threadIdx.x;
@@ -133,8 +140,10 @@ void RecycleGarbageBlockArrayVerticesKernel(HashTable        hash_table,
   }
 }
 
-void StarveOccupiedBlockArray(EntryArray& candidate_entries,
-                              BlockArray& blocks) {
+void StarveOccupiedBlockArray(
+    EntryArray& candidate_entries,
+    BlockArray& blocks
+) {
   const uint threads_per_block = BLOCK_SIZE;
 
   uint processing_block_count = candidate_entries.count();
@@ -144,14 +153,16 @@ void StarveOccupiedBlockArray(EntryArray& candidate_entries,
   const dim3 grid_size(processing_block_count, 1);
   const dim3 block_size(threads_per_block, 1);
 
-  StarveOccupiedBlockArrayKernel<<<grid_size, block_size >>>(candidate_entries, blocks);
+  StarveOccupiedBlocksKernel<<<grid_size, block_size >>>(candidate_entries, blocks);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }
 
-void CollectGarbageBlockArray(EntryArray& candidate_entries,
-                              BlockArray& blocks,
-                              GeometryHelper& geoemtry_helper) {
+void CollectGarbageBlockArray(
+    EntryArray& candidate_entries,
+    BlockArray& blocks,
+    GeometryHelper& geometry_helper
+) {
   const uint threads_per_block = BLOCK_SIZE / 2;
 
   uint processing_block_count = candidate_entries.count();
@@ -164,17 +175,19 @@ void CollectGarbageBlockArray(EntryArray& candidate_entries,
   CollectGarbageBlockArrayKernel <<<grid_size, block_size >>>(
       candidate_entries,
           blocks,
-          geoemtry_helper);
+          geometry_helper);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }
 
 // TODO(wei): Check vertex / triangles in detail
 // including garbage collection
-void RecycleGarbageBlockArray(HashTable& hash_table,
-                              EntryArray &candidate_entries,
-                              BlockArray& blocks,
-                              Mesh& mesh) {
+void RecycleGarbageBlockArray(
+    EntryArray &candidate_entries,
+    BlockArray& blocks,
+    Mesh&      mesh,
+    HashTable& hash_table
+) {
   const uint threads_per_block = BLOCK_SIZE;
 
   uint processing_block_count = candidate_entries.count();
@@ -184,13 +197,13 @@ void RecycleGarbageBlockArray(HashTable& hash_table,
   const dim3 grid_size(processing_block_count, 1);
   const dim3 block_size(threads_per_block, 1);
 
-  RecycleGarbageBlockArrayTrianglesKernel <<<grid_size, block_size >>>(
-      hash_table, candidate_entries, blocks, mesh);
+  RecycleGarbageTrianglesKernel <<<grid_size, block_size >>>(
+      candidate_entries, blocks, mesh, hash_table);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 
-  RecycleGarbageBlockArrayVerticesKernel <<<grid_size, block_size >>>(
-      hash_table, candidate_entries, blocks, mesh);
+  RecycleGarbageVerticesKernel <<<grid_size, block_size >>>(
+      candidate_entries, blocks, mesh, hash_table);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }

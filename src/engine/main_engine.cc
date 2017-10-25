@@ -3,14 +3,14 @@
 //
 
 #include "engine/main_engine.h"
+
+#include "core/collect_block_array.h"
 #include "mapping/allocate.h"
 #include "mapping/update.h"
 #include "mapping/recycle.h"
-#include "core/collect_block_array.h"
+#include "meshing/marching_cubes.h"
 #include "visualization/compress_mesh.h"
 #include "visualization/extract_bounding_box.h"
-#include "meshing/marching_cubes.h"
-
 
 ////////////////////
 /// Host code
@@ -21,26 +21,27 @@ void MainEngine::Mapping(Sensor &sensor) {
                   geometry_helper_);
 
   CollectBlocksInFrustum(hash_table_,
-                         candidate_entries_,
                          sensor,
-                         geometry_helper_);
+                         geometry_helper_,
+                         candidate_entries_);
 
   UpdateBlockArray(candidate_entries_,
-                   hash_table_,
                    blocks_,
                    mesh_,
                    sensor,
+                   hash_table_,
                    geometry_helper_);
   integrated_frame_count_ ++;
 }
 
 void MainEngine::Meshing() {
   MarchingCubes(candidate_entries_,
-                hash_table_,
                 blocks_,
                 mesh_,
-                use_fine_gradient_,
-                geometry_helper_);
+                hash_table_,
+                geometry_helper_,
+                enable_sdf_gradient_);
+
 }
 
 void MainEngine::Recycle() {
@@ -54,10 +55,10 @@ void MainEngine::Recycle() {
                              blocks_,
                              geometry_helper_);
     hash_table_.ResetMutexes();
-    RecycleGarbageBlockArray(hash_table_,
-                             candidate_entries_,
+    RecycleGarbageBlockArray(candidate_entries_,
                              blocks_,
-                             mesh_);
+                             mesh_,
+                             hash_table_);
   }
 }
 
@@ -75,7 +76,7 @@ void MainEngine::Visualize(float4x4 view) {
   }
 
   if (vis_engine_.enable_global_mesh()) {
-    CollectAllBlocks(candidate_entries_, hash_table_);
+    CollectAllBlocks(hash_table_, candidate_entries_);
   } // else CollectBlocksInFrustum
 
   int3 timing;
@@ -100,8 +101,8 @@ void MainEngine::Visualize(float4x4 view) {
 
   if (vis_engine_.enable_ray_casting()) {
     vis_engine_.RenderRayCaster(view,
-                                hash_table_,
                                 blocks_,
+                                hash_table_,
                                 geometry_helper_);
   }
 }

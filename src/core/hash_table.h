@@ -2,8 +2,8 @@
 // Created by wei on 17-4-28.
 //
 
-#ifndef VH_HASH_TABLE_H
-#define VH_HASH_TABLE_H
+#ifndef CORE_HASH_TABLE_H
+#define CORE_HASH_TABLE_H
 
 #include "helper_cuda.h"
 #include "helper_math.h"

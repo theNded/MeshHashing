@@ -3,8 +3,8 @@
 //
 // MainEngine: managing HashTable<Block> and might be other structs later
 
-#ifndef VH_MAP_H
-#define VH_MAP_H
+#ifndef ENGINE_MAIN_ENGINE_H
+#define ENGINE_MAIN_ENGINE_H
 
 #include "core/hash_table.h"
 #include "core/block_array.h"
@@ -23,19 +23,28 @@ public:
   MainEngine(
       const HashParams& hash_params,
       const MeshParams& mesh_params,
-      const VolumeParams&  sdf_params);
+      const VolumeParams& sdf_params
+  );
   ~MainEngine();
   void Reset();
 
   // configure engines
-  void ConfigVisualizingEngineMesh(Light& light,
-                                   bool enable_navigation,
-                                   bool enable_global_mesh,
-                                   bool enable_bounding_box,
-                                   bool enable_trajectory,
-                                   bool enable_polygon_mode);
-  void ConfigVisualizingEngineRaycaster(const RayCasterParams& params);
-  void ConfigLoggingEngine(std::string path, bool enable_video, bool enable_ply);
+  void ConfigVisualizingEngineMesh(
+      Light& light,
+      bool enable_navigation,
+      bool enable_global_mesh,
+      bool enable_bounding_box,
+      bool enable_trajectory,
+      bool enable_polygon_mode
+  );
+  void ConfigVisualizingEngineRaycaster(
+      const RayCasterParams& params
+  );
+  void ConfigLoggingEngine(
+      std::string path,
+      bool enable_video,
+      bool enable_ply
+  );
 
   void Mapping(Sensor &sensor);
   void Meshing();
@@ -47,8 +56,8 @@ public:
   const int& frame_count() {
     return integrated_frame_count_;
   }
-  bool& use_fine_gradient() {
-    return use_fine_gradient_;
+  bool& enable_sdf_gradient() {
+    return enable_sdf_gradient_;
   }
 
   GeometryHelper& geometry_helper() {
@@ -72,7 +81,7 @@ private:
   GeometryHelper geometry_helper_;
 
   int             integrated_frame_count_;
-  bool            use_fine_gradient_;
+  bool            enable_sdf_gradient_;
 
   HashParams hash_params_;
   MeshParams mesh_params_;

@@ -10,7 +10,10 @@
 /// Device code
 ////////////////////
 __global__
-void EntryArrayResetKernel(HashEntry* entries, uint entry_count) {
+void EntryArrayResetKernel(
+    HashEntry* entries,
+    uint entry_count
+) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (idx < entry_count) {
     entries[idx].Clear();

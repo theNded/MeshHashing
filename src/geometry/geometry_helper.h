@@ -178,7 +178,8 @@ struct GeometryHelper {
 /// View frustum test
   __host__ __device__
   inline
-  bool IsPointInCameraFrustum(const float4x4 &c_T_w, const float3 &world_pos,
+  bool IsPointInCameraFrustum(const float4x4 &c_T_w,
+                              const float3 &world_pos,
                               const SensorParams &sensor_params) {
     float3 camera_pos = c_T_w * world_pos;
     float2 uv = CameraProjectToImagef(camera_pos,
@@ -199,7 +200,8 @@ struct GeometryHelper {
 
   __host__ __device__
   inline
-  bool IsBlockInCameraFrustum(float4x4 c_T_w, const int3 &block_pos,
+  bool IsBlockInCameraFrustum(float4x4 c_T_w,
+                              const int3 &block_pos,
                               const SensorParams &sensor_params) {
     float3 world_pos = VoxelToWorld(BlockToVoxel(block_pos))
                        + voxel_size * 0.5f * (BLOCK_SIDE_LENGTH - 1.0f);

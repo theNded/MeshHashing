@@ -9,8 +9,14 @@
 #include "geometry/geometry_helper.h"
 #include "sensor/rgbd_sensor.h"
 
-void AllocBlockArray(HashTable& hash_table,
-                     Sensor& sensor,
-                     GeometryHelper& geoemtry_helper);
+// @function
+// See what entries of @param hash_table
+// was affected by @param sensor
+// with the help of @param geometry_helper
+void AllocBlockArray(
+    HashTable& hash_table,
+    Sensor& sensor,
+    GeometryHelper& geometry_helper
+);
 
 #endif //MESH_HASHING_ALLOCATE_H

@@ -7,8 +7,8 @@
 /// Update it ONLY in hash_table
 // TODO(wei): put rigid transform elsewhere
 
-#ifndef VH_PARAMS_H
-#define VH_PARAMS_H
+#ifndef CORE_PARAMS_H
+#define CORE_PARAMS_H
 
 #include "core/common.h"
 #include <matrix.h>
@@ -83,7 +83,7 @@ struct RuntimeParams {
 
   bool enable_polygon_mode;
   bool enable_global_mesh;
-  bool fine_gradient;
+  bool enable_sdf_gradient;
   bool render_type;
 
   bool enable_bounding_box;
