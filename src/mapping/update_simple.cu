@@ -1,7 +1,7 @@
 #include <device_launch_parameters.h>
 
 #include "core/block_array.h"
-#include "mapping/update.h"
+#include "mapping/update_simple.h"
 #include "engine/main_engine.h"
 #include "sensor/rgbd_sensor.h"
 #include "geometry/spatial_query.h"
@@ -10,10 +10,9 @@
 /// Device code
 ////////////////////
 __global__
-void UpdateBlockArrayKernel(
+void UpdateBlocksSimpleKernel(
     EntryArray candidate_entries,
     BlockArray blocks,
-    Mesh mesh,
     SensorData sensor_data,
     SensorParams sensor_params,
     float4x4 c_T_w,
@@ -44,52 +43,7 @@ void UpdateBlockArrayKernel(
   if (depth == MINF || depth == 0.0f || depth >= geometry_helper.sdf_upper_bound)
     return;
 
-  /// 4. SDF computation
-  float3 dp = geometry_helper.ImageReprojectToCamera(image_pos.x, image_pos.y, depth,
-                                                     sensor_params.fx, sensor_params.fy, sensor_params.cx,
-                                                     sensor_params.cy);
-  float3 dpw = c_T_w.getInverse() * dp;
-
-  /// Solve (I + \sum \lambda nn^T + ... )x = (dp + \sum \lambda nn^Tv)
-  float3x3 A = float3x3::getIdentity();
-  float3 b = dpw;
-  float wd = (1.0f - geometry_helper.NormalizeDepth(depth,
-                                                    sensor_params.min_depth_range,
-                                                    sensor_params.max_depth_range));
-  float wn = 0.5f;
-  bool addition = false;
-  for (int i = 0; i < N_VERTEX; ++i) {
-    if (this_voxel.vertex_ptrs[i] > 0) {
-      addition = true;
-      Vertex vtx = mesh.vertex(this_voxel.vertex_ptrs[i]);
-      float3 v = vtx.pos;
-      float3 n = vtx.normal;
-      wn += dot(c_T_w * n, normalize(-dp));
-      float3x3 nnT = float3x3(n.x * n.x, n.x * n.y, n.x * n.z,
-                              n.y * n.x, n.y * n.y, n.y * n.z,
-                              n.z * n.x, n.z * n.y, n.z * n.z);
-
-      float dist = length(dpw - v);
-      float wdist = dist / geometry_helper.voxel_size;
-      float ww = expf(-wdist * wdist);
-      A = A + nnT * ww;
-      b = b + nnT * v * ww;
-    }
-  }
-
-  // Best estimation for dp
-  if (addition) {
-    dpw = A.getInverse() * b;
-  }
-  dp = c_T_w * dpw;
-  //float3 np = normalize(-dp);
-
-  //printf("%f %f %f\n", np.x, np.y, np.z)
-
-  //float sdf = dot(normalize(-dp), camera_pos - dp);
   float sdf = depth - camera_pos.z;
-  //uchar weight = (uchar)fmax(1.0f, kVolumeParams.weight_sample * wn * wd);
-
   float weight = (uchar) fmax(geometry_helper.weight_sample * 1.5f *
                               (1.0f - geometry_helper.NormalizeDepth(depth,
                                                                      sensor_params.min_depth_range,
@@ -118,9 +72,8 @@ void UpdateBlockArrayKernel(
   this_voxel.Update(delta);
 }
 
-void UpdateBlockArray(EntryArray &candidate_entries,
+void UpdateBlocksSimple(EntryArray &candidate_entries,
                       BlockArray &blocks,
-                      Mesh &mesh,
                       Sensor &sensor,
                       HashTable &hash_table,
                       GeometryHelper &geometry_helper) {
@@ -132,10 +85,9 @@ void UpdateBlockArray(EntryArray &candidate_entries,
 
   const dim3 grid_size(compacted_entry_count, 1);
   const dim3 block_size(threads_per_block, 1);
-  UpdateBlockArrayKernel << < grid_size, block_size >> > (
+  UpdateBlocksSimpleKernel << < grid_size, block_size >> > (
       candidate_entries,
           blocks,
-          mesh,
           sensor.data(),
           sensor.sensor_params(),
           sensor.cTw(),

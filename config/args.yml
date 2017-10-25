@@ -15,11 +15,11 @@ render_type:     0
 enable_sdf_gradient:    1
 enable_polygon_mode:    1
 
-enable_navigation:      1
+enable_navigation:      0
 enable_global_mesh:     1
-enable_bounding_box:    1
-enable_trajectory:      1
-enable_ray_casting:     1
+enable_bounding_box:    0
+enable_trajectory:      0
+enable_ray_casting:     0
 
 enable_video_recording:  1
 enable_ply_saving:       1

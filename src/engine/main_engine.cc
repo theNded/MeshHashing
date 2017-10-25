@@ -6,7 +6,7 @@
 
 #include "core/collect_block_array.h"
 #include "mapping/allocate.h"
-#include "mapping/update.h"
+#include "mapping/update_simple.h"
 #include "mapping/recycle.h"
 #include "meshing/marching_cubes.h"
 #include "visualization/compress_mesh.h"
@@ -25,12 +25,11 @@ void MainEngine::Mapping(Sensor &sensor) {
                          geometry_helper_,
                          candidate_entries_);
 
-  UpdateBlockArray(candidate_entries_,
-                   blocks_,
-                   mesh_,
-                   sensor,
-                   hash_table_,
-                   geometry_helper_);
+  UpdateBlocksSimple(candidate_entries_,
+                     blocks_,
+                     sensor,
+                     hash_table_,
+                     geometry_helper_);
   integrated_frame_count_ ++;
 }
 

@@ -114,7 +114,8 @@ CUDA_ADD_LIBRARY(mesh-hashing-cuda
         ${VH}/sensor/preprocess.cu
 
         ${VH}/mapping/allocate.cu
-        ${VH}/mapping/update.cu
+        ${VH}/mapping/update_simple.cu
+        ${VH}/mapping/update_probabilistic.cu
         ${VH}/mapping/recycle.cu
 
         ${VH}/meshing/marching_cubes.cu
