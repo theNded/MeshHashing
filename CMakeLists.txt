@@ -148,32 +148,12 @@ TARGET_LINK_LIBRARIES(mesh-hashing
         gl-util)
 
 #----------
-## Unit tests
-### CUDA - OpenGL intergration
-ADD_EXECUTABLE(cuda_gl_interp src/util/cuda_gl_interp.cc)
-TARGET_LINK_LIBRARIES(cuda_gl_interp
-        mesh-hashing
-        -lopencv_core -lopencv_highgui
-        ${GLOG_LIBRARIES})
-
-ADD_EXECUTABLE(block_visualizer src/util/block_visualizer.cc
-        src/util/timer.h
-        src/util/video_clip.cc)
-TARGET_LINK_LIBRARIES(block_visualizer
-        mesh-hashing
-        ${OpenCV_LIBRARIES}
-        ${GLOG_LIBRARIES})
-
-ADD_EXECUTABLE(video_clip src/util/video_clip.cc)
-TARGET_LINK_LIBRARIES(video_clip
-        -lopencv_core -lopencv_highgui)
-
 ### Loop over
 MESSAGE(STATUS ${GLOG_LIBRARIES})
-ADD_EXECUTABLE(mesh_hashing
+ADD_EXECUTABLE(reconstruction
         src/app/reconstruction.cc)
-SET_TARGET_PROPERTIES(mesh_hashing PROPERTIES COMPILE_DEFINITIONS USE_CUDA)
-TARGET_LINK_LIBRARIES(mesh_hashing
+SET_TARGET_PROPERTIES(reconstruction PROPERTIES COMPILE_DEFINITIONS USE_CUDA)
+TARGET_LINK_LIBRARIES(reconstruction
         mesh-hashing
         -lopencv_core -lopencv_highgui
         ${GLOG_LIBRARIES})
@@ -181,7 +161,7 @@ TARGET_LINK_LIBRARIES(mesh_hashing
 ### An ORB app
 OPTION(WITH_ORBSLAM2 "Build with orb slam" ON)
 if (WITH_ORBSLAM2)
-    SET(ORB_SLAM2_PATH ../../opensource/orb_slam2)
+    SET(ORB_SLAM2_PATH ${VH}/extern/orb_slam2)
     MESSAGE(STATUS "Build with ORB-SLAM2")
 
     FIND_PACKAGE(Pangolin REQUIRED)
@@ -198,4 +178,5 @@ if (WITH_ORBSLAM2)
             ${Pangolin_LIBRARIES}
             -lopencv_core -lopencv_highgui
             ${GLOG_LIBRARIES})
+    SET_TARGET_PROPERTIES(rgbd_orb PROPERTIES COMPILE_DEFINITIONS USE_CUDA)
 endif(WITH_ORBSLAM2)

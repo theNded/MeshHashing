@@ -28,19 +28,16 @@
 
 #include <System.h>
 #include <glog/logging.h>
+#include <sensor/rgbd_data_provider.h>
 
-#include "../core/params.h"
+#include "core/params.h"
 #include "io/config_manager.h"
 #include "engine/main_engine.h"
 #include "sensor/rgbd_sensor.h"
-#include "../visualization/ray_caster.h"
-#include "../opengl/args.h"
-#include "../opengl/uniforms.h"
-#include "../opengl/program.h"
-#include "../opengl/window.h"
-#include "../opengl/camera.h"
+#include "visualization/ray_caster.h"
+#include "glwrapper.h"
 
-static const std::string orb_configs[] = {
+const std::string orb_configs[] = {
     "../config/ORB/ICL.yaml",
     "../config/ORB/TUM1.yaml",
     "../config/ORB/TUM2.yaml",
@@ -50,9 +47,16 @@ static const std::string orb_configs[] = {
     "../config/ORB/PKU.yaml"
 };
 
-std::string path_to_vocabulary = "../../../opensource/orb_slam2/Vocabulary/ORBvoc.bin";
+std::string path_to_vocabulary = "../src/extern/orb_slam2/Vocabulary/ORBvoc.bin";
 
-extern void SetConstantVolumeParams(const VolumeParams& params);
+Light light = {
+    {
+        glm::vec3(0, -2, 0),
+        glm::vec3(4, -2, 0)
+    },
+    glm::vec3(1, 1, 1),
+    3.0f
+};
 
 float4x4 MatTofloat4x4(cv::Mat m) {
   float4x4 T;
@@ -69,198 +73,66 @@ int main(int argc, char **argv) {
   LoadRuntimeParams("../config/args.yml", args);
 
   ConfigManager config;
-  DataManager   rgbd_data;
+  RGBDDataProvider   rgbd_local_sequence;
 
   DatasetType dataset_type = DatasetType(args.dataset_type);
   config.LoadConfig(dataset_type);
-  rgbd_data.LoadDataset(dataset_type);
-  gl::Window window("Mesh", config.sensor_params.width, config.sensor_params.height);
-  gl::Camera camera(window.width(), window.height());
-  camera.SwitchInteraction(true);
-  glm::mat4 p = camera.projection();
-  glm::mat4 m = glm::mat4(1.0f);
-  m[1][1] = -1;
-  m[2][2] = -1;
-
-  gl::Program program;
-  gl::Uniforms uniforms;
-  if (args.render_type == 0) {
-    program.Build("../shader/mesh_vn_vertex.glsl",
-                  "../shader/mesh_vn_fragment.glsl");
-  } else {
-    program.Build("../shader/mesh_vc_vertex.glsl",
-                  "../shader/mesh_vc_fragment.glsl");
-  }
-  uniforms.GetLocation(program.id(), "mvp", gl::kMatrix4f);
-  if (args.render_type == 0) {
-    uniforms.GetLocation(program.id(), "view_mat", gl::kMatrix4f);
-    uniforms.GetLocation(program.id(), "model_mat", gl::kMatrix4f);
-  }
-
-  gl::Args glargs(3, true);
-  glargs.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-                    config.mesh_params.max_vertex_count);
-  glargs.InitBuffer(1, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-                    config.mesh_params.max_vertex_count);
-  glargs.InitBuffer(2, {GL_ARRAY_BUFFER, sizeof(int), 3, GL_INT},
-                    config.mesh_params.max_triangle_count);
-
-  gl::Program bbox_program("../shader/line_vertex.glsl",
-                           "../shader/line_fragment.glsl");
-  gl::Args bbox_args(1, true);
-  bbox_args.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-                       config.hash_params.value_capacity * 24);
-  gl::Uniforms bbox_uniforms;
-  bbox_uniforms.GetLocation(bbox_program.id(), "mvp", gl::kMatrix4f);
-  bbox_uniforms.GetLocation(bbox_program.id(), "uni_color", gl::kVector3f);
-
-  gl::Args traj_args(1);
-  traj_args.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-                       30000);
-
-  SetConstantVolumeParams(config.sdf_params);
-  MainEngine       map(config.hash_params, config.mesh_params,
-                "../result/3dv/" + args.time_profile + ".txt",
-                "../result/3dv/" + args.memo_profile + ".txt");
+  rgbd_local_sequence.LoadDataset(dataset_type);
   Sensor    sensor(config.sensor_params);
-  RayCaster ray_caster(config.ray_caster_params);
 
-  map.use_fine_gradient()       = args.fine_gradient;
-
-  cv::VideoWriter writer;
-  cv::Mat screen;
-  if (args.enable_video_recording) {
-    writer = cv::VideoWriter(args.filename_prefix + ".avi",
-                             CV_FOURCC('X','V','I','D'),
-                             30, cv::Size(config.sensor_params.width,
-                                          config.sensor_params.height));
-    screen = cv::Mat(config.sensor_params.height,
-                     config.sensor_params.width,
-                     CV_8UC3);
+  MainEngine main_engine(config.hash_params,
+                         config.mesh_params,
+                         config.sdf_params);
+  main_engine.ConfigVisualizingEngineMesh(light,
+                                          args.enable_navigation,
+                                          args.enable_global_mesh,
+                                          args.enable_bounding_box,
+                                          args.enable_trajectory,
+                                          args.enable_polygon_mode);
+  if (args.enable_ray_casting) {
+    main_engine.ConfigVisualizingEngineRaycaster(config.ray_caster_params);
   }
+  if (args.enable_video_recording) {
+    main_engine.ConfigLoggingEngine(".",
+                                    args.enable_video_recording,
+                                    args.enable_ply_saving);
+  }
+  main_engine.use_fine_gradient() = args.fine_gradient;
 
-  ORB_SLAM2::System SLAM(path_to_vocabulary,
+  ORB_SLAM2::System orb_slam_engine(path_to_vocabulary,
                          orb_configs[dataset_type],
                          ORB_SLAM2::System::RGBD,
                          true);
 
+  double tframe;
   cv::Mat color, depth;
   float4x4 wTc, cTw;
-  double tframe;
-
   int frame_count = 0;
-  while (rgbd_data.ProvideData(depth, color, wTc)) {
-    if (args.run_frames > 0
-        && frame_count ++ > args.run_frames)
+  while (rgbd_local_sequence.ProvideData(depth, color, wTc)) {
+    frame_count ++;
+    if (args.run_frames > 0 && frame_count > args.run_frames)
       break;
-
-    sensor.Process(depth, color); // abandon wTc
 
     cv::Mat color_slam = color.clone();
     cv::Mat depth_slam = depth.clone();
-    cv::Mat cTw_orb = SLAM.TrackRGBD(color_slam, depth_slam, tframe);
+    cv::Mat cTw_orb = orb_slam_engine.TrackRGBD(color_slam, depth_slam, tframe);
     if (cTw_orb.empty()) continue;
-
     cTw = MatTofloat4x4(cTw_orb);
     wTc = cTw.getInverse();
+
+    sensor.Process(depth, color); // abandon wTc
     sensor.set_transform(wTc);
+    cTw = wTc.getInverse();
 
-    map.Mapping(sensor);
-    map.MarchingCubes();
+    main_engine.Mapping(sensor);
+    main_engine.Meshing();
+    main_engine.Visualize(cTw);
 
-    if (args.ray_casting) {
-      ray_caster.Cast(map, cTw);
-      cv::imshow("RayCasting", ray_caster.normal_image());
-      cv::waitKey(1);
-    }
-
-    if (! args.enable_global_mesh) {
-      map.CollectAllBlockArray();
-    }
-    int3 stats;
-    map.CompressMesh(stats);
-
-
-    glClearColor(1, 1, 1, 1);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    glUseProgram(program.id());
-
-    /// Set uniform data
-    glm::mat4 view;
-    cTw = cTw.getTranspose();
-    for (int i = 0; i < 4; ++i)
-      for (int j = 0; j < 4; ++j)
-        view[i][j] = cTw.entries2[i][j];
-    view = m * view * glm::inverse(m);
-    if (args.enable_navigation) {
-      camera.SetView(window);
-      view = camera.view();
-    }
-    glm::mat4 mvp = p * view * m;
-    uniforms.Bind("mvp", &mvp);
-    if (args.render_type == 0) {
-      uniforms.Bind("view_mat", &view);
-      uniforms.Bind("model_mat", &m);
-    }
-
-    /// Set args data
-    if (args.render_type == 0) {
-      glargs.BindBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-                        map.compact_mesh().vertex_count(), map.compact_mesh().vertices());
-      glargs.BindBuffer(1, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-                        map.compact_mesh().vertex_count(), map.compact_mesh().normals());
-      glargs.BindBuffer(2, {GL_ELEMENT_ARRAY_BUFFER, sizeof(int), 3, GL_INT},
-                        map.compact_mesh().triangle_count(), map.compact_mesh().triangles());
-    } else {
-      glargs.BindBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-                        map.compact_mesh().vertex_count(), map.compact_mesh().vertices());
-      glargs.BindBuffer(1, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-                        map.compact_mesh().vertex_count(), map.compact_mesh().colors());
-      glargs.BindBuffer(2, {GL_ELEMENT_ARRAY_BUFFER, sizeof(int), 3, GL_INT},
-                        map.compact_mesh().triangle_count(), map.compact_mesh().triangles());
-    }
-
-    // If render meshing only:
-    if (args.ploygon_mode) {
-      glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-    }
-
-    /// NOTE: Use GL_UNSIGNED_INT instead of GL_INT, otherwise it won't work
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-    glDrawElements(GL_TRIANGLES, map.compact_mesh().triangle_count() * 3, GL_UNSIGNED_INT, 0);
-
-    if (args.enable_bounding_box) {
-      glUseProgram(bbox_program.id());
-      glm::vec3 col = glm::vec3(1, 0, 0);
-      bbox_uniforms.Bind("mvp", &mvp);
-      bbox_uniforms.Bind("uni_color", &col);
-
-      bbox_args.BindBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-                           map.bbox().vertex_count(), map.bbox().vertices());
-
-      glEnable(GL_LINE_SMOOTH);
-      glLineWidth(5.0f);
-      glDrawArrays(GL_LINES, 0, map.bbox().vertex_count());
-    }
-
-    window.swap_buffer();
-    glfwPollEvents();
-
-    if (window.get_key(GLFW_KEY_ESCAPE) == GLFW_PRESS ) {
-      exit(0);
-    }
-    if (args.enable_video_recording) {
-      cv::Mat rgb = window.CaptureRGB();
-      cv::flip(rgb, rgb, 0);
-      writer << rgb;
-    }
+    main_engine.Log();
+    main_engine.Recycle();
   }
 
-  if (args.enable_ply_saving) {
-    map.SaveObj(args.filename_prefix + ".obj");
-  }
-
-  SLAM.Shutdown();
+  main_engine.FinalLog();
+  orb_slam_engine.Shutdown();
   return 0;
 }
