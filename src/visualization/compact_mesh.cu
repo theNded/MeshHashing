@@ -9,8 +9,6 @@
 ////////////////////
 
 /// Life cycle
-CompactMesh::CompactMesh() {}
-
 //CompactMesh::~CompactMesh() {
 //  Free();
 //}

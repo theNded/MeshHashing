@@ -11,6 +11,13 @@ VisualizingEngine::VisualizingEngine(std::string window_name, int width, int hei
   Init(window_name, width, height);
 }
 
+VisualizingEngine::~VisualizingEngine() {
+  ray_caster_.Free();
+  compact_mesh_.Free();
+  bounding_box_.Free();
+  trajectory_.Free();
+}
+
 void VisualizingEngine::Init(std::string window_name, int width, int height) {
   window_.Init(window_name, width, height);
   camera_.set_perspective(width, height);
@@ -178,11 +185,14 @@ void VisualizingEngine::RenderHelper() {
 }
 
 void VisualizingEngine::BuildRayCaster(const RayCasterParams &ray_caster_params) {
-  ray_caster_.Init(ray_caster_params);
   enable_ray_casting_ = true;
+  ray_caster_.Init(ray_caster_params);
 }
 
-void VisualizingEngine::RenderRayCaster(float4x4 view, HashTable& hash_table, BlockArray& blocks, CoordinateConverter& converter) {
+void VisualizingEngine::RenderRayCaster(float4x4 view,
+                                        HashTable& hash_table,
+                                        BlockArray& blocks,
+                                        CoordinateConverter& converter) {
   ray_caster_.Cast(hash_table, blocks, converter, view);
   cv::imshow("RayCasting", ray_caster_.surface_image());
   cv::waitKey(1);

@@ -12,8 +12,13 @@
 
 class CompactMesh {
 public:
-  CompactMesh();
+  CompactMesh() = default;
   //~CompactMesh();
+  void Alloc(const MeshParams& mesh_params);
+  void Free();
+
+  void Resize(const MeshParams &mesh_params);
+  void Reset();
 
   uint vertex_count();
   uint triangle_count();
@@ -54,11 +59,6 @@ public:
   uint* vertex_counter() {
     return vertex_counter_;
   }
-  void Alloc(const MeshParams& mesh_params);
-  void Free();
-
-  void Resize(const MeshParams &mesh_params);
-  void Reset();
 
 private:
   int*      vertex_remapper_;

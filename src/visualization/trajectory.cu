@@ -16,6 +16,10 @@ void Trajectory::Init(uint max_vertex_count) {
   checkCudaErrors(cudaMalloc(&vertices_, sizeof(float3) * max_vertex_count));
 }
 
+void Trajectory::Free() {
+  checkCudaErrors(cudaFree(vertices_));
+}
+
 void Trajectory::AddPose(float4x4 wTc) {
   float3 curr_position = make_float3(wTc.m14, wTc.m24, wTc.m34);
   if (vertex_count_ == -1) {

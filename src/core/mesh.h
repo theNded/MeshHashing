@@ -19,8 +19,8 @@ public:
   // __host__ ~Mesh();
 
   __host__ void Alloc(const MeshParams &mesh_params);
-  __host__ void Free();
   __host__ void Resize(const MeshParams &mesh_params);
+  __host__ void Free();
   __host__ void Reset();
 
   const MeshParams& params() {
@@ -88,8 +88,8 @@ public:
   __device__
   void AssignTriangle(Triangle& triangle, int3 vertex_ptrs) {
     triangle.vertex_ptrs = vertex_ptrs;
-    atomicAdd(&vertices[vertex_ptrs.y].ref_count, 1);
     atomicAdd(&vertices[vertex_ptrs.x].ref_count, 1);
+    atomicAdd(&vertices[vertex_ptrs.y].ref_count, 1);
     atomicAdd(&vertices[vertex_ptrs.z].ref_count, 1);
   }
 

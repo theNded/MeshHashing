@@ -14,6 +14,8 @@ public:
   Trajectory() = default;
   explicit Trajectory(uint max_vertex_count);
   void Init(uint max_vertex_count);
+  void Free();
+
   void AddPose(float4x4 wTc);
   std::vector<float3> MakeFrustum(float4x4 wTc);
 

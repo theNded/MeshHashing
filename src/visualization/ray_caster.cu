@@ -169,7 +169,7 @@ void RayCaster::Init(const RayCasterParams& params) {
   initialized_ = true;
 }
 
-RayCaster::~RayCaster() {
+void RayCaster::Free() {
   if (initialized_) {
     checkCudaErrors(cudaFree(gpu_memory_.depth_image));
     checkCudaErrors(cudaFree(gpu_memory_.vertex_image));

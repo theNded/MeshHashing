@@ -8,7 +8,7 @@
 #include "visualization/compact_mesh.h"
 
 
-//CollectAllBlockArray(candidate_entries_, hash_table_);
+//CollectAllBlocks(candidate_entries_, hash_table_);
 //int3 stats;
 //CompressMesh(stats);
 void SaveObj(CompactMesh& compact_mesh, std::string path) {

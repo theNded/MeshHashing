@@ -24,6 +24,7 @@ public:
   VisualizingEngine() = default;
   void Init(std::string, int width, int height);
   VisualizingEngine(std::string window_name, int width, int height);
+  ~VisualizingEngine();
 
   void set_interaction_mode(bool is_free);
   void update_view_matrix();

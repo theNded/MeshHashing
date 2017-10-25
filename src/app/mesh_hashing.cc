@@ -78,7 +78,6 @@ int main(int argc, char** argv) {
     sensor.set_transform(wTc);
     cTw = wTc.getInverse();
 
-
     main_engine.Mapping(sensor);
     main_engine.Meshing();
     main_engine.Recycle();

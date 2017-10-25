@@ -22,10 +22,10 @@
 
 /// Condition: IsBlockInCameraFrustum
 __global__
-void CollectInFrustumBlockArrayKernel(HashTable        hash_table,
+void CollectBlocksInFrustumKernel(HashTable hash_table,
                                   EntryArray candidate_entries,
-                                  SensorParams        sensor_params,
-                                  float4x4            c_T_w,
+                                  SensorParams sensor_params,
+                                  float4x4 c_T_w,
                                   CoordinateConverter converter) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -56,7 +56,7 @@ void CollectInFrustumBlockArrayKernel(HashTable        hash_table,
 }
 
 __global__
-void CollectAllBlockArrayKernel(HashTable        hash_table,
+void CollectAllBlocksKernel(HashTable hash_table,
                             EntryArray candidate_entries) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -90,7 +90,7 @@ void CollectAllBlockArrayKernel(HashTable        hash_table,
 ///////////////////
 
 /// Compress discrete hash table entries
-void CollectAllBlockArray(EntryArray& candidate_entries, HashTable& hash_table) {
+void CollectAllBlocks(EntryArray &candidate_entries, HashTable &hash_table) {
   const uint threads_per_block = 256;
 
   uint entry_count = hash_table.entry_count;
@@ -99,7 +99,7 @@ void CollectAllBlockArray(EntryArray& candidate_entries, HashTable& hash_table) 
   const dim3 block_size(threads_per_block, 1);
 
   candidate_entries.reset_count();
-  CollectAllBlockArrayKernel<<<grid_size, block_size >>>(
+  CollectAllBlocksKernel <<<grid_size, block_size >>>(
           hash_table,
           candidate_entries);
   checkCudaErrors(cudaDeviceSynchronize());
@@ -109,10 +109,10 @@ void CollectAllBlockArray(EntryArray& candidate_entries, HashTable& hash_table) 
             << candidate_entries.count();
 }
 
-void CollectInFrustumBlockArray(HashTable& hash_table,
-                                EntryArray& candidate_entries,
-                                Sensor &sensor,
-                                CoordinateConverter& converter) {
+void CollectBlocksInFrustum(HashTable &hash_table,
+                            EntryArray &candidate_entries,
+                            Sensor &sensor,
+                            CoordinateConverter &converter) {
   const uint threads_per_block = 256;
 
   uint entry_count = hash_table.entry_count;
@@ -122,7 +122,7 @@ void CollectInFrustumBlockArray(HashTable& hash_table,
   const dim3 block_size(threads_per_block, 1);
 
   candidate_entries.reset_count();
-  CollectInFrustumBlockArrayKernel<<<grid_size, block_size >>>(
+  CollectBlocksInFrustumKernel <<<grid_size, block_size >>>(
       hash_table,
           candidate_entries,
           sensor.sensor_params(),

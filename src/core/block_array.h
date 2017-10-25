@@ -22,10 +22,10 @@ public:
   //__host__ ~BlockArray();
 
   __host__ void Alloc(uint block_count);
+  __host__ void Resize(uint block_count);
   __host__ void Free();
 
   __host__ void Reset();
-  __host__ void Resize(uint block_count);
 
   __host__ __device__ Block& operator[] (uint i) {
     return blocks_[i];

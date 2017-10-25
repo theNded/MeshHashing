@@ -42,7 +42,7 @@ public:
   RayCaster() = default;
   void Init(const RayCasterParams& params);
   RayCaster(const RayCasterParams& params);
-  ~RayCaster(void);
+  void Free();
 
   void Cast(HashTable& hash_table, BlockArray& blocks, CoordinateConverter& converter, const float4x4& c_T_w);
 

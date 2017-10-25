@@ -10,10 +10,10 @@
 #include "sensor/rgbd_sensor.h"
 #include "geometry/coordinate_utils.h"
 
-void CollectAllBlockArray(EntryArray& candidate_entries, HashTable& hash_table);
-void CollectInFrustumBlockArray(HashTable& hash_table,
-                                EntryArray& candidate_entries,
-                                Sensor &sensor,
-                                CoordinateConverter& converter);
+void CollectAllBlocks(EntryArray &candidate_entries, HashTable &hash_table);
+void CollectBlocksInFrustum(HashTable &hash_table,
+                            EntryArray &candidate_entries,
+                            Sensor &sensor,
+                            CoordinateConverter &converter);
 
 #endif //MESH_HASHING_COLLECT_H

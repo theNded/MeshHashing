@@ -16,9 +16,14 @@
 /// Host code
 ////////////////////
 void MainEngine::Mapping(Sensor &sensor) {
-  AllocBlockArray(hash_table_, sensor, coordinate_converter_);
+  AllocBlockArray(hash_table_,
+                  sensor,
+                  coordinate_converter_);
 
-  CollectInFrustumBlockArray(hash_table_, candidate_entries_, sensor, coordinate_converter_);
+  CollectBlocksInFrustum(hash_table_,
+                         candidate_entries_,
+                         sensor,
+                         coordinate_converter_);
 
   UpdateBlockArray(candidate_entries_,
                    hash_table_,
@@ -49,10 +54,14 @@ void MainEngine::Recycle() {
                              blocks_,
                              coordinate_converter_);
     hash_table_.ResetMutexes();
-    RecycleGarbageBlockArray(hash_table_, candidate_entries_, blocks_, mesh_);
+    RecycleGarbageBlockArray(hash_table_,
+                             candidate_entries_,
+                             blocks_,
+                             mesh_);
   }
 }
 
+// view: world -> camera
 void MainEngine::Visualize(float4x4 view) {
   if (vis_engine_.enable_interaction()) {
     vis_engine_.update_view_matrix();
@@ -66,12 +75,8 @@ void MainEngine::Visualize(float4x4 view) {
   }
 
   if (vis_engine_.enable_global_mesh()) {
-    CollectAllBlockArray(candidate_entries_, hash_table_);
-  }
-
-  if (vis_engine_.enable_trajectory()) {
-    vis_engine_.trajectory().AddPose(view);
-  }
+    CollectAllBlocks(candidate_entries_, hash_table_);
+  } // else CollectBlocksInFrustum
 
   int3 timing;
   CompressMesh(candidate_entries_,
@@ -87,11 +92,17 @@ void MainEngine::Visualize(float4x4 view) {
                        vis_engine_.bounding_box(),
                        coordinate_converter_);
   }
+  if (vis_engine_.enable_trajectory()) {
+    vis_engine_.trajectory().AddPose(view.getInverse());
+  }
 
   vis_engine_.Render();
 
   if (vis_engine_.enable_ray_casting()) {
-    vis_engine_.RenderRayCaster(view, hash_table_, blocks_, coordinate_converter_);
+    vis_engine_.RenderRayCaster(view,
+                                hash_table_,
+                                blocks_,
+                                coordinate_converter_);
   }
 }
 
@@ -121,7 +132,6 @@ MainEngine::MainEngine(const HashParams& hash_params,
   blocks_.Resize(hash_params.value_capacity);
 
   mesh_.Resize(mesh_params);
-  //bbox_.Resize(hash_params.value_capacity * 24);
 
   coordinate_converter_.voxel_size = sdf_params.voxel_size;
   coordinate_converter_.truncation_distance_scale =
@@ -151,13 +161,17 @@ void MainEngine::Reset() {
   candidate_entries_.Reset();
 }
 
-void MainEngine::ConfigVisualizingEngineMesh(Light &light, bool free_viewpoints, bool render_global_mesh, bool enable_bounding_box, bool enable_trajectory) {
+void MainEngine::ConfigVisualizingEngineMesh(Light &light,
+                                             bool enable_navigation,
+                                             bool enable_global_mesh,
+                                             bool enable_bounding_box,
+                                             bool enable_trajectory) {
   vis_engine_.Init("VisEngine", 640, 480);
-  vis_engine_.set_interaction_mode(free_viewpoints);
+  vis_engine_.set_interaction_mode(enable_navigation);
   vis_engine_.set_light(light);
   vis_engine_.BindMainProgram(mesh_params_.max_vertex_count,
                               mesh_params_.max_triangle_count,
-                              render_global_mesh);
+                              enable_global_mesh);
   vis_engine_.compact_mesh().Resize(mesh_params_);
 
   if (enable_bounding_box || enable_trajectory) {

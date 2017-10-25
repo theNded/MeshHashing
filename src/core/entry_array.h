@@ -14,12 +14,12 @@ public:
   // __host__ ~EntryArray();
 
   __host__ void Alloc(uint entry_count);
+  __host__ void Resize(uint entry_count);
   __host__ void Free();
 
   __host__ uint count();
   __host__ void reset_count();
 
-  __host__ void Resize(uint entry_count);
   __host__ void Reset();
 
   __host__ __device__
