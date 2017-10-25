@@ -129,7 +129,7 @@ int main(int argc, char **argv) {
 
   cv::VideoWriter writer;
   cv::Mat screen;
-  if (args.record_video) {
+  if (args.enable_video_recording) {
     writer = cv::VideoWriter(args.filename_prefix + ".avi",
                              CV_FOURCC('X','V','I','D'),
                              30, cv::Size(config.sensor_params.width,
@@ -174,7 +174,7 @@ int main(int argc, char **argv) {
       cv::waitKey(1);
     }
 
-    if (! args.mesh_range) {
+    if (! args.enable_global_mesh) {
       map.CollectAllBlockArray();
     }
     int3 stats;
@@ -193,7 +193,7 @@ int main(int argc, char **argv) {
       for (int j = 0; j < 4; ++j)
         view[i][j] = cTw.entries2[i][j];
     view = m * view * glm::inverse(m);
-    if (args.free_walk) {
+    if (args.enable_navigation) {
       camera.SetView(window);
       view = camera.view();
     }
@@ -230,7 +230,7 @@ int main(int argc, char **argv) {
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     glDrawElements(GL_TRIANGLES, map.compact_mesh().triangle_count() * 3, GL_UNSIGNED_INT, 0);
 
-    if (args.bounding_box) {
+    if (args.enable_bounding_box) {
       glUseProgram(bbox_program.id());
       glm::vec3 col = glm::vec3(1, 0, 0);
       bbox_uniforms.Bind("mvp", &mvp);
@@ -250,14 +250,14 @@ int main(int argc, char **argv) {
     if (window.get_key(GLFW_KEY_ESCAPE) == GLFW_PRESS ) {
       exit(0);
     }
-    if (args.record_video) {
+    if (args.enable_video_recording) {
       cv::Mat rgb = window.CaptureRGB();
       cv::flip(rgb, rgb, 0);
       writer << rgb;
     }
   }
 
-  if (args.save_mesh) {
+  if (args.enable_ply_saving) {
     map.SaveObj(args.filename_prefix + ".obj");
   }
 

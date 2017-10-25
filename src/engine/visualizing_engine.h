@@ -38,7 +38,8 @@ public:
   void set_light(Light& light);
   void BindMainProgram(uint max_vertices,
                        uint max_triangles,
-                       bool enable_global_mesh);
+                       bool enable_global_mesh,
+                       bool enable_polygon_mode);
   void BindMainUniforms();
   void BindMainData();
   void RenderMain();
@@ -54,13 +55,16 @@ public:
   void BindTrajectoryData();
 
   void BuildRayCaster(const RayCasterParams& ray_caster_params);
-  void RenderRayCaster(float4x4 view, HashTable& hash_table, BlockArray& blocks, CoordinateConverter& converter) ;
+  void RenderRayCaster(float4x4 view, HashTable& hash_table, BlockArray& blocks, GeometryHelper& geometry_helper) ;
 
   bool enable_interaction() {
     return enable_interaction_;
   }
   bool enable_global_mesh() {
     return enable_global_mesh_;
+  }
+  bool enable_polygon_mode() {
+    return enable_polygon_mode_;
   }
   bool enable_ray_casting() {
     return enable_ray_casting_;
@@ -87,6 +91,7 @@ private:
   bool enable_ray_casting_ = false;
   bool enable_bounding_box_ = false;
   bool enable_trajectory_   = false;
+  bool enable_polygon_mode_ = false;
 
   // Lighting conditions
   Light light_;

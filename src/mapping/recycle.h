@@ -10,13 +10,13 @@
 #include "core/mesh.h"
 #include "core/entry_array.h"
 #include "core/block_array.h"
-#include "geometry/coordinate_utils.h"
+#include "geometry/geometry_helper.h"
 
 void StarveOccupiedBlockArray(EntryArray& candidate_entries,
                               BlockArray& blocks);
 void CollectGarbageBlockArray(EntryArray& candidate_entries,
                               BlockArray& blocks,
-                              CoordinateConverter& converter);
+                              GeometryHelper& geoemtry_helper);
 
 
 // TODO(wei): Check vertex / triangles in detail

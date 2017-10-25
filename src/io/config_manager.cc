@@ -15,17 +15,18 @@ void LoadRuntimeParams(std::string path, RuntimeParams& params) {
   cv::FileStorage fs(path, cv::FileStorage::READ);
   params.dataset_type  = (int)fs["dataset_type"];
 
-  params.free_walk     = (int)fs["free_walk"];
-  params.ploygon_mode     = (int)fs["ploygon_mode"];
-  params.mesh_range = (int)fs["mesh_range"];
+  params.enable_navigation   = (int)fs["enable_navigation"];
+  params.enable_polygon_mode = (int)fs["enable_ploygon_mode"];
+  params.enable_global_mesh = (int)fs["enable_global_mesh"];
   params.fine_gradient = (int)fs["fine_gradient"];
   params.render_type   = (int)fs["render_type"];
 
-  params.bounding_box  = (int)fs["bounding_box"];
-  params.ray_casting   = (int)fs["ray_casting"];
+  params.enable_bounding_box  = (int)fs["enable_bounding_box"];
+  params.enable_trajectory  = (int)fs["enable_trajectory"];
+  params.enable_ray_casting   = (int)fs["enable_ray_casting"];
 
-  params.record_video  = (int)fs["record_video"];
-  params.save_mesh     = (int)fs["save_mesh"];
+  params.enable_video_recording  = (int)fs["enable_video_recording"];
+  params.enable_ply_saving     = (int)fs["enable_ply_saving"];
   params.filename_prefix = (std::string)fs["filename_prefix"];
   params.time_profile    = (std::string)fs["time_profile"];
   params.memo_profile    = (std::string)fs["memo_profile"];

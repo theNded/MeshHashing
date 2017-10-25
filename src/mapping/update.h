@@ -10,13 +10,13 @@
 #include "core/entry_array.h"
 #include "core/mesh.h"
 #include "sensor/rgbd_sensor.h"
-#include "geometry/coordinate_utils.h"
+#include "geometry/geometry_helper.h"
 
 void UpdateBlockArray(EntryArray& candidate_entries,
                       HashTable&  hash_table,
                       BlockArray& blocks,
                       Mesh& mesh,
                       Sensor &sensor,
-                      CoordinateConverter& converter);
+                      GeometryHelper& geoemtry_helper);
 
 #endif //MESH_HASHING_FUSE_H

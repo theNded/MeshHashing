@@ -8,7 +8,7 @@
 
 int main() {
   Renderer renderer("Block", 640, 480);
-  renderer.free_walk() = true;
+  renderer.enable_navigation() = true;
 
   std::ifstream in("../result/statistics/(1,1,5).txt");
   int block_side_length, block_voxel_count;

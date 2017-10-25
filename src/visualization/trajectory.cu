@@ -43,7 +43,7 @@ void Trajectory::AddPose(float4x4 wTc) {
     vertex_count_++;
 
     frustum_ = MakeFrustum(wTc);
-    for (int i = 0; i < frustum_.size(); ++i) {
+    for (size_t i = 0; i < frustum_.size(); ++i) {
       checkCudaErrors(cudaMemcpy(vertices_ + vertex_count_ + i,
                                  &frustum_[i],
                                  sizeof(float3),

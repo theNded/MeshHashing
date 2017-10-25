@@ -62,7 +62,8 @@ void VisualizingEngine::set_light(Light& light) {
 
 void VisualizingEngine::BindMainProgram(uint max_vertices,
                                         uint max_triangles,
-                                        bool enable_global_mesh) {
+                                        bool enable_global_mesh,
+                                        bool enable_polygon_mode) {
   std::stringstream ss;
   ss << light_.light_srcs.size();
 
@@ -87,6 +88,7 @@ void VisualizingEngine::BindMainProgram(uint max_vertices,
                         max_triangles);
 
   enable_global_mesh_ = enable_global_mesh;
+  enable_polygon_mode_ = enable_polygon_mode;
 };
 
 
@@ -115,8 +117,10 @@ void VisualizingEngine::RenderMain() {
   glEnable(GL_DEPTH_TEST);
   glDepthFunc(GL_LESS);
   /// NOTE: Use GL_UNSIGNED_INT instead of GL_INT, otherwise it won't work
+  if (enable_polygon_mode_) {
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+  }
   glDrawElements(GL_TRIANGLES, compact_mesh_.triangle_count() * 3, GL_UNSIGNED_INT, 0);
-//  glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 }
 
 void VisualizingEngine::BuildHelperProgram() {
@@ -192,8 +196,8 @@ void VisualizingEngine::BuildRayCaster(const RayCasterParams &ray_caster_params)
 void VisualizingEngine::RenderRayCaster(float4x4 view,
                                         HashTable& hash_table,
                                         BlockArray& blocks,
-                                        CoordinateConverter& converter) {
-  ray_caster_.Cast(hash_table, blocks, ray_caster_.data() , converter, view);
+                                        GeometryHelper& geometry_helper) {
+  ray_caster_.Cast(hash_table, blocks, ray_caster_.data() , geometry_helper, view);
   cv::imshow("RayCasting", ray_caster_.surface_image());
   cv::waitKey(1);
 }

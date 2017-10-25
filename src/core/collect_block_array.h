@@ -8,12 +8,12 @@
 #include "core/entry_array.h"
 #include "core/hash_table.h"
 #include "sensor/rgbd_sensor.h"
-#include "geometry/coordinate_utils.h"
+#include "geometry/geometry_helper.h"
 
 void CollectAllBlocks(EntryArray &candidate_entries, HashTable &hash_table);
 void CollectBlocksInFrustum(HashTable &hash_table,
                             EntryArray &candidate_entries,
                             Sensor &sensor,
-                            CoordinateConverter &converter);
+                            GeometryHelper &geoemtry_helper);
 
 #endif //MESH_HASHING_COLLECT_H

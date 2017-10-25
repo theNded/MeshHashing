@@ -11,7 +11,7 @@
 #include "core/common.h"
 #include "core/params.h"
 #include "core/hash_entry.h"
-#include "geometry/coordinate_utils.h"
+#include "geometry/geometry_helper.h"
 
 class HashTable {
 public:

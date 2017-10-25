@@ -10,10 +10,10 @@
 
 #include "visualization/bounding_box.h"
 #include "visualization/extract_bounding_box.h"
-#include "geometry/coordinate_utils.h"
+#include "geometry/geometry_helper.h"
 
 void ExtractBoundingBox(EntryArray& candidate_entries,
                         BoundingBox& bounding_box,
-                        CoordinateConverter& converter);
+                        GeometryHelper& geoemtry_helper);
 
 #endif //MESH_HASHING_EXTRACT_BOUNDING_BOX_H

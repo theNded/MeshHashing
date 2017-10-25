@@ -79,17 +79,19 @@ struct SensorParams {
 struct RuntimeParams {
   int  dataset_type;
 
-  bool free_walk;
-  bool ploygon_mode;
-  bool mesh_range;
+  bool enable_navigation;
+
+  bool enable_polygon_mode;
+  bool enable_global_mesh;
   bool fine_gradient;
   bool render_type;
 
-  bool bounding_box;
-  bool ray_casting;
+  bool enable_bounding_box;
+  bool enable_trajectory;
+  bool enable_ray_casting;
 
-  bool record_video;
-  bool save_mesh;
+  bool enable_video_recording;
+  bool enable_ply_saving;
 
   std::string filename_prefix;
   std::string time_profile;

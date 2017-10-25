@@ -9,7 +9,7 @@
 #include "core/params.h"
 #include "core/hash_table.h"
 #include "core/block_array.h"
-#include "geometry/coordinate_utils.h"
+#include "geometry/geometry_helper.h"
 #include "sensor/rgbd_sensor.h"
 
 struct RayCasterSample {
@@ -37,7 +37,7 @@ public:
   void Cast(HashTable& hash_table,
             BlockArray& blocks,
             RayCasterData &ray_caster_data,
-            CoordinateConverter& converter,
+            GeometryHelper& geoemtry_helper,
             const float4x4& c_T_w);
 
   const cv::Mat& depth_image() {

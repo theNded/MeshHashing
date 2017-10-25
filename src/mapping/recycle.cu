@@ -27,7 +27,7 @@ void StarveOccupiedBlockArrayKernel(EntryArray candidate_entries,
 __global__
 void CollectGarbageBlockArrayKernel(EntryArray candidate_entries,
                                     BlockArray blocks,
-                                    CoordinateConverter converter) {
+                                    GeometryHelper geoemtry_helper) {
 
   const uint idx = blockIdx.x;
   const HashEntry& entry = candidate_entries[idx];
@@ -63,7 +63,7 @@ void CollectGarbageBlockArrayKernel(EntryArray candidate_entries,
     float max_weight = shared_max_weight[threadIdx.x];
 
     // TODO(wei): check this weird reference
-    float t = converter.truncate_distance(5.0f);
+    float t = geoemtry_helper.truncate_distance(5.0f);
 
     // TODO(wei): add || valid_triangles == 0 when memory leak is dealt with
     candidate_entries.flag(idx) =
@@ -151,7 +151,7 @@ void StarveOccupiedBlockArray(EntryArray& candidate_entries,
 
 void CollectGarbageBlockArray(EntryArray& candidate_entries,
                               BlockArray& blocks,
-                              CoordinateConverter& converter) {
+                              GeometryHelper& geoemtry_helper) {
   const uint threads_per_block = BLOCK_SIZE / 2;
 
   uint processing_block_count = candidate_entries.count();
@@ -164,7 +164,7 @@ void CollectGarbageBlockArray(EntryArray& candidate_entries,
   CollectGarbageBlockArrayKernel <<<grid_size, block_size >>>(
       candidate_entries,
           blocks,
-          converter);
+          geoemtry_helper);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }

@@ -26,7 +26,7 @@ void CollectBlocksInFrustumKernel(HashTable hash_table,
                                   EntryArray candidate_entries,
                                   SensorParams sensor_params,
                                   float4x4 c_T_w,
-                                  CoordinateConverter converter) {
+                                  GeometryHelper geoemtry_helper) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
 
   __shared__ int local_counter;
@@ -36,7 +36,7 @@ void CollectBlocksInFrustumKernel(HashTable hash_table,
   int addr_local = -1;
   if (idx < hash_table.entry_count
     && hash_table.entry(idx).ptr != FREE_ENTRY
-    && converter.IsBlockInCameraFrustum(c_T_w, hash_table.entry(idx).pos,
+    && geoemtry_helper.IsBlockInCameraFrustum(c_T_w, hash_table.entry(idx).pos,
                                         sensor_params)) {
     addr_local = atomicAdd(&local_counter, 1);
   }
@@ -112,7 +112,7 @@ void CollectAllBlocks(EntryArray &candidate_entries, HashTable &hash_table) {
 void CollectBlocksInFrustum(HashTable &hash_table,
                             EntryArray &candidate_entries,
                             Sensor &sensor,
-                            CoordinateConverter &converter) {
+                            GeometryHelper &geoemtry_helper) {
   const uint threads_per_block = 256;
 
   uint entry_count = hash_table.entry_count;
@@ -127,7 +127,7 @@ void CollectBlocksInFrustum(HashTable &hash_table,
           candidate_entries,
           sensor.sensor_params(),
           sensor.c_T_w(),
-          converter);
+          geoemtry_helper);
 
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());

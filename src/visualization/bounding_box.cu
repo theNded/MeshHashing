@@ -5,7 +5,7 @@
 #include "bounding_box.h"
 #include "core/common.h"
 #include "core/entry_array.h"
-#include "geometry/coordinate_utils.h"
+#include "geometry/geometry_helper.h"
 #include "helper_cuda.h"
 
 //BoundingBox::~BoundingBox() {

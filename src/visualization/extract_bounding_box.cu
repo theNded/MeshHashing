@@ -8,7 +8,7 @@
 #include "visualization/bounding_box.h"
 #include "visualization/extract_bounding_box.h"
 
-#include "geometry/coordinate_utils.h"
+#include "geometry/geometry_helper.h"
 
 #include "helper_cuda.h"
 
@@ -34,17 +34,16 @@ __global__
 void ExtractBoundingBoxKernel(
     EntryArray    candidate_entries,
     BoundingBox   bounding_box,
-    CoordinateConverter converter) {
+    GeometryHelper geoemtry_helper) {
   const uint idx = blockIdx.x * blockDim.x + threadIdx.x;
   HashEntry& entry = candidate_entries[idx];
 
-  int3 voxel_base_pos   = converter.BlockToVoxel(entry.pos);
-  float3 world_base_pos = converter.VoxelToWorld(voxel_base_pos)
-                          - make_float3(0.5f) * converter.voxel_size;
+  int3 voxel_base_pos   = geoemtry_helper.BlockToVoxel(entry.pos);
+  float3 world_base_pos = geoemtry_helper.VoxelToWorld(voxel_base_pos)
+                          - make_float3(0.5f) * geoemtry_helper.voxel_size;
 
-  float s = converter.voxel_size * BLOCK_SIDE_LENGTH;
+  float s = geoemtry_helper.voxel_size * BLOCK_SIDE_LENGTH;
   int addr = atomicAdd(bounding_box.vertex_counter(), 24);
-  printf("%d\n", addr);
   for (int i = 0; i < 24; i ++) {
     bounding_box.vertices()[addr + i]
         = world_base_pos + s * make_float3(kEdgeOffsets[i]);
@@ -53,7 +52,7 @@ void ExtractBoundingBoxKernel(
 
 void ExtractBoundingBox(EntryArray& candidate_entries,
                         BoundingBox& bounding_box,
-                        CoordinateConverter& converter) {
+                        GeometryHelper& geoemtry_helper) {
   bounding_box.Reset();
   int occupied_block_count = candidate_entries.count();
   if (occupied_block_count <= 0) return;
@@ -65,7 +64,7 @@ void ExtractBoundingBox(EntryArray& candidate_entries,
     const dim3 block_size(threads_per_block, 1);
 
     ExtractBoundingBoxKernel <<< grid_size, block_size >>> (
-        candidate_entries, bounding_box, converter);
+        candidate_entries, bounding_box, geoemtry_helper);
     checkCudaErrors(cudaDeviceSynchronize());
     checkCudaErrors(cudaGetLastError());
   }

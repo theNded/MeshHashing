@@ -32,7 +32,8 @@ public:
                                    bool enable_navigation,
                                    bool enable_global_mesh,
                                    bool enable_bounding_box,
-                                   bool enable_trajectory);
+                                   bool enable_trajectory,
+                                   bool enable_polygon_mode);
   void ConfigVisualizingEngineRaycaster(const RayCasterParams& params);
   void ConfigLoggingEngine(std::string path, bool enable_video, bool enable_ply);
 
@@ -43,15 +44,15 @@ public:
   void Log();
   void FinalLog();
 
-  const uint& frame_count() {
+  const int& frame_count() {
     return integrated_frame_count_;
   }
   bool& use_fine_gradient() {
     return use_fine_gradient_;
   }
 
-  CoordinateConverter& converter() {
-    return coordinate_converter_;
+  GeometryHelper& geometry_helper() {
+    return geometry_helper_;
   }
 
 private:
@@ -68,10 +69,10 @@ private:
   Mesh             mesh_;
 
   // Geometry
-  CoordinateConverter coordinate_converter_;
+  GeometryHelper geometry_helper_;
 
-  uint             integrated_frame_count_;
-  bool             use_fine_gradient_;
+  int             integrated_frame_count_;
+  bool            use_fine_gradient_;
 
   HashParams hash_params_;
   MeshParams mesh_params_;

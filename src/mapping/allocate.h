@@ -6,11 +6,11 @@
 #define MESH_HASHING_ALLOCATE_H
 
 #include "core/hash_table.h"
-#include "geometry/coordinate_utils.h"
+#include "geometry/geometry_helper.h"
 #include "sensor/rgbd_sensor.h"
 
 void AllocBlockArray(HashTable& hash_table,
                      Sensor& sensor,
-                     CoordinateConverter& converter);
+                     GeometryHelper& geoemtry_helper);
 
 #endif //MESH_HASHING_ALLOCATE_H

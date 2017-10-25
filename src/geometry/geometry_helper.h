@@ -22,7 +22,7 @@
 
 /// World <-> Voxel
 
-struct CoordinateConverter {
+struct GeometryHelper {
   float voxel_size;
   float truncation_distance;
   float truncation_distance_scale;

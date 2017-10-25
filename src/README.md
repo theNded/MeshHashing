@@ -42,3 +42,7 @@ Read and write images/data/map/mesh
 
 ## Util
 Backup garbages here.
+
+## TODO
+- Separate .cu && .cc (functions and methods)
+- Integrate stats

@@ -20,5 +20,5 @@ void MarchingCubes(EntryArray& candidate_entries,
                    BlockArray& blocks,
                    Mesh& mesh,
                    bool use_fine_gradient,
-                   CoordinateConverter& converter);
+                   GeometryHelper& geoemtry_helper);
 #endif //MESH_HASHING_MARCHING_CUBES_H

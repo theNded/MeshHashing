@@ -2,7 +2,7 @@
 #include <glog/logging.h>
 #include "color_util.h"
 
-#include "geometry/coordinate_utils.h"
+#include "geometry/geometry_helper.h"
 #include "geometry/gradient.h"
 #include "visualization/ray_caster.h"
 
@@ -19,7 +19,7 @@ void CastKernel(const HashTable hash_table,
                 const RayCasterParams ray_caster_params,
                 const float4x4 c_T_w,
                 const float4x4 w_T_c,
-                CoordinateConverter converter) {
+                GeometryHelper geoemtry_helper) {
   const uint x = blockIdx.x * blockDim.x + threadIdx.x;
   const uint y = blockIdx.y * blockDim.y + threadIdx.y;
 
@@ -36,7 +36,7 @@ void CastKernel(const HashTable hash_table,
 
   /// 1. Determine ray direction
   float3 camera_ray_dir = normalize(
-          converter.ImageReprojectToCamera(x, y, 1.0f,
+          geoemtry_helper.ImageReprojectToCamera(x, y, 1.0f,
                                  ray_caster_params.fx, ray_caster_params.fy,
                                  ray_caster_params.cx, ray_caster_params.cy));
 
@@ -64,11 +64,16 @@ void CastKernel(const HashTable hash_table,
     float3 world_sample_pos = world_cam_pos + t * world_ray_dir;
     float  sdf;
     uchar3 color;
+#ifdef STATS
     Stat stats;
-
+#endif
     /// a voxel surrounded by valid voxels
     if (  TrilinearInterpolation(hash_table, blocks, world_sample_pos,
-                               sdf, stats, color, converter)) {
+                               sdf,
+#ifdef STATS
+                                 stats,
+#endif
+                                 color, geoemtry_helper)) {
 
       /// Zero crossing exist
       if (prev_sample.weight > 0 // valid previous sample
@@ -82,7 +87,7 @@ void CastKernel(const HashTable hash_table,
                 world_cam_pos, world_ray_dir,
                 prev_sample.sdf, prev_sample.t,
                 sdf, t,
-                interpolated_t, interpolated_color, converter);
+                interpolated_t, interpolated_color, geoemtry_helper);
 
         float3 world_pos_isosurface =
                 world_cam_pos + interpolated_t * world_ray_dir;
@@ -99,7 +104,7 @@ void CastKernel(const HashTable hash_table,
             ray_caster_data.depth[pixel_idx] = make_float4(rgb.x, rgb.y, rgb.z, 1.0f);
             //break;
             ray_caster_data.vertex[pixel_idx]
-                    = make_float4(converter.ImageReprojectToCamera(x, y, depth,
+                    = make_float4(geoemtry_helper.ImageReprojectToCamera(x, y, depth,
                                                          ray_caster_params.fx,
                                                          ray_caster_params.fy,
                                                          ray_caster_params.cx,
@@ -111,7 +116,7 @@ void CastKernel(const HashTable hash_table,
                                   interpolated_color.z / 255.f, 1.0f);
 
             if (ray_caster_params.enable_gradients) {
-              float3 normal = GradientAtPoint(hash_table, blocks, world_pos_isosurface, converter);
+              float3 normal = GradientAtPoint(hash_table, blocks, world_pos_isosurface, geoemtry_helper);
               normal = -normal;
               float4 n = c_T_w * make_float4(normal, 0.0f);
               ray_caster_data.normal[pixel_idx]
@@ -140,7 +145,9 @@ void CastKernel(const HashTable hash_table,
 
       /// No zero crossing || not good
       prev_sample.sdf = sdf;
+#ifdef STATS
       prev_sample.entropy = stats.entropy;
+#endif
       prev_sample.t = t;
       prev_sample.weight = 1;
     }
@@ -187,7 +194,7 @@ void RayCaster::Free() {
 /// Major function, extract surface and normal from the volumes
 void RayCaster::Cast(HashTable& hash_table, BlockArray& blocks,
                      RayCasterData& ray_caster_data,
-                     CoordinateConverter& converter,
+                     GeometryHelper& geoemtry_helper,
                      const float4x4& c_T_w) {
   const uint threads_per_block = 8;
   const float4x4 w_T_c = c_T_w.getInverse();
@@ -202,7 +209,7 @@ void RayCaster::Cast(HashTable& hash_table, BlockArray& blocks,
       hash_table,
           blocks,
           ray_caster_data,
-          ray_caster_params_, c_T_w, w_T_c, converter);
+          ray_caster_params_, c_T_w, w_T_c, geoemtry_helper);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 
