@@ -13,17 +13,26 @@
 //}
 
 void BoundingBox::Alloc(int max_vertex_count) {
-  checkCudaErrors(cudaMalloc(&vertex_counter_, sizeof(uint)));
-  checkCudaErrors(cudaMalloc(&vertices_, sizeof(float3) * max_vertex_count));
+  if (!is_allocated_on_gpu_) {
+    checkCudaErrors(cudaMalloc(&vertex_counter_, sizeof(uint)));
+    checkCudaErrors(cudaMalloc(&vertices_, sizeof(float3) * max_vertex_count));
+    is_allocated_on_gpu_ = true;
+  }
 }
 
 void BoundingBox::Free() {
-  checkCudaErrors(cudaFree(vertex_counter_));
-  checkCudaErrors(cudaFree(vertices_));
+  if (is_allocated_on_gpu_) {
+    checkCudaErrors(cudaFree(vertex_counter_));
+    checkCudaErrors(cudaFree(vertices_));
+    is_allocated_on_gpu_ = false;
+  }
 }
 
 void BoundingBox::Resize(int max_vertex_count) {
   max_vertex_count_ = max_vertex_count;
+  if (is_allocated_on_gpu_) {
+    Free();
+  }
   Alloc(max_vertex_count);
   Reset();
 }

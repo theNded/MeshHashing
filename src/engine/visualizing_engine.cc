@@ -150,7 +150,7 @@ void VisualizingEngine::BindBoundingBoxData() {
 
 void VisualizingEngine::InitTrajectoryData(uint max_vertices) {
   enable_trajectory_ = true;
-  trajectory_.Init(max_vertices);
+  trajectory_.Alloc(max_vertices);
   trajectory_args_.Init(1, true);
   trajectory_args_.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
                               max_vertices);
@@ -186,14 +186,14 @@ void VisualizingEngine::RenderHelper() {
 
 void VisualizingEngine::BuildRayCaster(const RayCasterParams &ray_caster_params) {
   enable_ray_casting_ = true;
-  ray_caster_.Init(ray_caster_params);
+  ray_caster_.Alloc(ray_caster_params);
 }
 
 void VisualizingEngine::RenderRayCaster(float4x4 view,
                                         HashTable& hash_table,
                                         BlockArray& blocks,
                                         CoordinateConverter& converter) {
-  ray_caster_.Cast(hash_table, blocks, converter, view);
+  ray_caster_.Cast(hash_table, blocks, ray_caster_.data() , converter, view);
   cv::imshow("RayCasting", ray_caster_.surface_image());
   cv::waitKey(1);
 }

@@ -27,7 +27,7 @@ fine_gradient:   1
 
 # Additional settings
 bounding_box:    0
-ray_casting:     0
+ray_casting:     1
 
 # Result saving
 record_video:    1

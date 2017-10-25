@@ -22,7 +22,7 @@ public:
   uint      value_capacity;
   uint      linked_list_size;
 
-  __host__ HashTable();
+  __host__ HashTable() = default;
   __host__ explicit HashTable(const HashParams &params);
   // ~HashTable();
   __host__ void Alloc(const HashParams &params);
@@ -41,6 +41,7 @@ public:
   // Device part //
 
 private:
+  bool  is_allocated_on_gpu_ = false;
   // @param array
   uint      *heap_;             /// index to free values
   // @param read-write element

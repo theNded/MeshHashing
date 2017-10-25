@@ -25,6 +25,8 @@ public:
     return vertex_counter_;
   }
 private:
+  bool  is_allocated_on_gpu_ = false;
+
   float3* vertices_;
   uint*   vertex_counter_;
 

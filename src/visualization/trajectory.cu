@@ -7,17 +7,23 @@
 #include "trajectory.h"
 
 Trajectory::Trajectory(uint max_vertex_count) {
-  Init(max_vertex_count);
+  Alloc(max_vertex_count);
 }
 
 // Free()
-void Trajectory::Init(uint max_vertex_count) {
-  max_vertex_count_ = max_vertex_count;
-  checkCudaErrors(cudaMalloc(&vertices_, sizeof(float3) * max_vertex_count));
+void Trajectory::Alloc(uint max_vertex_count) {
+  if (! is_allocated_on_gpu_) {
+    max_vertex_count_ = max_vertex_count;
+    checkCudaErrors(cudaMalloc(&vertices_, sizeof(float3) * max_vertex_count));
+    is_allocated_on_gpu_ = true;
+  }
 }
 
 void Trajectory::Free() {
-  checkCudaErrors(cudaFree(vertices_));
+  if (is_allocated_on_gpu_) {
+    checkCudaErrors(cudaFree(vertices_));
+    is_allocated_on_gpu_ = true;
+  }
 }
 
 void Trajectory::AddPose(float4x4 wTc) {

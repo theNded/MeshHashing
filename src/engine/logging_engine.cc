@@ -9,6 +9,11 @@ void LoggingEngine::Init(std::string path) {
   base_path_ = path;
 }
 
+LoggingEngine::~LoggingEngine() {
+  if (video_writer_.isOpened())
+    video_writer_.release();
+}
+
 void LoggingEngine::ConfigVideoWriter(int width, int height) {
   enable_video_ = true;
   video_writer_.open(base_path_ + "/video.avi",

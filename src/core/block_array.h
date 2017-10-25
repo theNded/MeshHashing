@@ -10,7 +10,7 @@
 // Pre-allocated blocks to store the map
 class BlockArray {
 public:
-  __host__ BlockArray();
+  __host__ BlockArray() = default;
   __host__ explicit BlockArray(uint block_count);
 
   // We have to pass VALUE instead of REFERENCE to GPU,
@@ -33,7 +33,9 @@ public:
   __host__ __device__ const Block&operator[] (uint i) const {
     return blocks_[i];
   }
+
 private:
+  bool is_allocated_on_gpu_ = false;
   // @param array
   Block*  blocks_;
   // @param const element

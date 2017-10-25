@@ -9,7 +9,7 @@
 
 class EntryArray {
 public:
-  __host__ EntryArray();
+  __host__ EntryArray() = default;
   __host__ explicit EntryArray(uint entry_count);
   // __host__ ~EntryArray();
 
@@ -34,6 +34,7 @@ public:
   }
 
 private:
+  bool      is_allocated_on_gpu_ = false;
   // @param const element
   uint       entry_count_;
   // @param array

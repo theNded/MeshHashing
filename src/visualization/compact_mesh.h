@@ -61,6 +61,7 @@ public:
   }
 
 private:
+  bool  is_allocated_on_gpu_ = false;
   int*      vertex_remapper_;
 
   // They are decoupled so as to be separately assigned to the rendering pipeline

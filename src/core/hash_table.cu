@@ -43,10 +43,6 @@ void HashTableResetEntriesKernel(HashEntry *entries, uint entry_count) {
 ////////////////////
 /// Host code
 ////////////////////
-
-/// Life cycle
-HashTable::HashTable() {}
-
 HashTable::HashTable(const HashParams &params) {
   Alloc(params);
   Reset();
@@ -57,30 +53,37 @@ HashTable::HashTable(const HashParams &params) {
 //}
 
 void HashTable::Alloc(const HashParams &params) {
-  /// Parameters
-  bucket_count = params.bucket_count;
-  bucket_size = params.bucket_size;
-  entry_count = params.entry_count;
-  value_capacity = params.value_capacity;
-  linked_list_size = params.linked_list_size;
+  if (!is_allocated_on_gpu_) {
+    /// Parameters
+    bucket_count = params.bucket_count;
+    bucket_size = params.bucket_size;
+    entry_count = params.entry_count;
+    value_capacity = params.value_capacity;
+    linked_list_size = params.linked_list_size;
 
-  /// Values
-  checkCudaErrors(cudaMalloc(&heap_, sizeof(uint) * params.value_capacity));
-  checkCudaErrors(cudaMalloc(&heap_counter_, sizeof(uint)));
+    /// Values
+    checkCudaErrors(cudaMalloc(&heap_, sizeof(uint) * params.value_capacity));
+    checkCudaErrors(cudaMalloc(&heap_counter_, sizeof(uint)));
 
-  /// Entries
-  checkCudaErrors(cudaMalloc(&entries_, sizeof(HashEntry) * params.entry_count));
+    /// Entries
+    checkCudaErrors(cudaMalloc(&entries_, sizeof(HashEntry) * params.entry_count));
 
-  /// Mutexes
-  checkCudaErrors(cudaMalloc(&bucket_mutexes_, sizeof(int) * params.bucket_count));
+    /// Mutexes
+    checkCudaErrors(cudaMalloc(&bucket_mutexes_, sizeof(int) * params.bucket_count));
+    is_allocated_on_gpu_ = true;
+  }
 }
 
 void HashTable::Free() {
-  checkCudaErrors(cudaFree(heap_));
-  checkCudaErrors(cudaFree(heap_counter_));
+  if (is_allocated_on_gpu_) {
+    checkCudaErrors(cudaFree(heap_));
+    checkCudaErrors(cudaFree(heap_counter_));
 
-  checkCudaErrors(cudaFree(entries_));
-  checkCudaErrors(cudaFree(bucket_mutexes_));
+    checkCudaErrors(cudaFree(entries_));
+    checkCudaErrors(cudaFree(bucket_mutexes_));
+
+    is_allocated_on_gpu_ = false;
+  }
 }
 
 void HashTable::Resize(const HashParams &params) {

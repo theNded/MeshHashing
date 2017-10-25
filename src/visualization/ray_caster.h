@@ -19,32 +19,26 @@ struct RayCasterSample {
   uint   weight;
 };
 
-struct __ALIGN__(8) RayCasterDataGPU {
-  float4 *depth_image;
-  float4 *vertex_image;
-  float4 *normal_image;
-  float4 *color_image;
-  float4 *surface_image;
+struct RayCasterData {
+  float4 *depth;
+  float4 *vertex;
+  float4 *normal;
+  float4 *color;
+  float4 *surface;
 };
 
 class RayCaster {
-private:
-  bool initialized_ = false;
-  RayCasterDataGPU gpu_memory_;
-  RayCasterParams  ray_caster_params_;
-
-  cv::Mat          depth_image_;
-  cv::Mat          normal_image_;
-  cv::Mat          color_image_;
-  cv::Mat          surface_image_;
-
 public:
   RayCaster() = default;
-  void Init(const RayCasterParams& params);
+  void Alloc(const RayCasterParams &params);
   RayCaster(const RayCasterParams& params);
   void Free();
 
-  void Cast(HashTable& hash_table, BlockArray& blocks, CoordinateConverter& converter, const float4x4& c_T_w);
+  void Cast(HashTable& hash_table,
+            BlockArray& blocks,
+            RayCasterData &ray_caster_data,
+            CoordinateConverter& converter,
+            const float4x4& c_T_w);
 
   const cv::Mat& depth_image() {
     return depth_image_;
@@ -58,11 +52,11 @@ public:
   const cv::Mat& surface_image() {
     return surface_image_;
   }
-  const RayCasterDataGPU& gpu_memory() {
-    return gpu_memory_;
-  }
   const RayCasterParams& ray_caster_params() const {
     return ray_caster_params_;
+  }
+  RayCasterData& data() {
+    return ray_caster_data_;
   }
 
   /// To write images into a video, use this function
@@ -82,6 +76,17 @@ public:
     }
     return mat3b;
   }
+
+private:
+  bool is_allocated_on_gpu_ = false;
+  RayCasterParams  ray_caster_params_;
+
+  cv::Mat depth_image_;
+  cv::Mat normal_image_;
+  cv::Mat color_image_;
+  cv::Mat surface_image_;
+
+  RayCasterData ray_caster_data_;
 };
 
 #endif //VH_RAY_CASTER_H

@@ -13,6 +13,7 @@ public:
   LoggingEngine() = default;
   explicit LoggingEngine(std::string path) : base_path_(path) {};
   void Init(std::string path);
+  ~LoggingEngine();
 
   void ConfigVideoWriter(int width, int height);
   void ConfigPlyWriter();
@@ -22,15 +23,15 @@ public:
   bool enable_video() {
     return enable_video_;
   }
-
   bool enable_ply() {
     return enable_ply_;
   }
 private:
-  bool enable_video_;
-  bool enable_ply_;
+  bool enable_video_ = false;
+  bool enable_ply_ = false;
 
   std::string base_path_;
+  std::string prefix_;
   cv::VideoWriter video_writer_;
 };
 

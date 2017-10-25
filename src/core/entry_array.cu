@@ -22,15 +22,6 @@ void EntryArrayResetKernel(HashEntry* entries, uint entry_count) {
 ////////////////////
 /// Life cycle
 __host__
-EntryArray::EntryArray() {
-  entry_count_ = 0;
-
-  entries_ = NULL;
-  flags_ = NULL;
-  counter_ = NULL;
-}
-
-__host__
 EntryArray::EntryArray(uint entry_count) {
   Resize(entry_count);
 }
@@ -40,26 +31,32 @@ EntryArray::EntryArray(uint entry_count) {
 
 __host__
 void EntryArray::Alloc(uint entry_count) {
-  entry_count_ = entry_count;
-  checkCudaErrors(cudaMalloc(&entries_, sizeof(HashEntry) * entry_count));
-  checkCudaErrors(cudaMalloc(&counter_, sizeof(int)));
-  checkCudaErrors(cudaMalloc(&flags_, sizeof(uchar) * entry_count));
+  if (! is_allocated_on_gpu_) {
+    entry_count_ = entry_count;
+    checkCudaErrors(cudaMalloc(&entries_, sizeof(HashEntry) * entry_count));
+    checkCudaErrors(cudaMalloc(&counter_, sizeof(int)));
+    checkCudaErrors(cudaMalloc(&flags_, sizeof(uchar) * entry_count));
+    is_allocated_on_gpu_ = true;
+  }
 }
 
 __host__
 void EntryArray::Free() {
-  checkCudaErrors(cudaFree(entries_));
-  checkCudaErrors(cudaFree(counter_));
-  checkCudaErrors(cudaFree(flags_));
-  entry_count_ = 0;
-  entries_ = NULL;
-  flags_ = NULL;
-  counter_ = NULL;
+  if (is_allocated_on_gpu_) {
+    checkCudaErrors(cudaFree(entries_));
+    checkCudaErrors(cudaFree(counter_));
+    checkCudaErrors(cudaFree(flags_));
+    entry_count_ = 0;
+    entries_ = NULL;
+    flags_ = NULL;
+    counter_ = NULL;
+    is_allocated_on_gpu_ = false;
+  }
 }
 
 __host__
 void EntryArray::Resize(uint entry_count) {
-  if (entries_ != NULL) {
+  if (is_allocated_on_gpu_) {
     Free();
   }
   Alloc(entry_count);

@@ -19,12 +19,6 @@ void BlockArrayResetKernel(Block* blocks, int block_count) {
 /// Host code
 //////////////////////
 __host__
-BlockArray::BlockArray() {
-  block_count_ = 0;
-  blocks_ = NULL;
-}
-
-__host__
 BlockArray::BlockArray(uint block_count) {
   Resize(block_count);
 }
@@ -35,20 +29,26 @@ BlockArray::BlockArray(uint block_count) {
 
 __host__
 void BlockArray::Alloc(uint block_count) {
-  block_count_ = block_count;
-  checkCudaErrors(cudaMalloc(&blocks_, sizeof(Block) * block_count));
+  if (! is_allocated_on_gpu_) {
+    block_count_ = block_count;
+    checkCudaErrors(cudaMalloc(&blocks_, sizeof(Block) * block_count));
+    is_allocated_on_gpu_ = true;
+  }
 }
 
 __host__
 void BlockArray::Free() {
-  block_count_ = 0;
-  checkCudaErrors(cudaFree(blocks_));
-  blocks_ = NULL;
+  if (is_allocated_on_gpu_) {
+    checkCudaErrors(cudaFree(blocks_));
+    block_count_ = 0;
+    blocks_ = NULL;
+    is_allocated_on_gpu_ = false;
+  }
 }
 
 __host__
 void BlockArray::Resize(uint block_count) {
-  if (blocks_) {
+  if (is_allocated_on_gpu_) {
     Free();
   }
   Alloc(block_count);

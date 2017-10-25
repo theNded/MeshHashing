@@ -35,39 +35,47 @@ void MeshResetTrianglesKernel(uint* triangle_heap, Triangle* triangles, int max_
 ////////////////////
 /// Host code
 ////////////////////
-__host__ Mesh::Mesh() {}
-
 // Mesh::~Mesh() {
   //Free();
 //}
 
 __host__
 void Mesh::Alloc(const MeshParams &mesh_params) {
-  checkCudaErrors(cudaMalloc(&vertex_heap_,
-                             sizeof(uint) * mesh_params.max_vertex_count));
-  checkCudaErrors(cudaMalloc(&vertex_heap_counter_, sizeof(uint)));
-  checkCudaErrors(cudaMalloc(&vertices,
-                             sizeof(Vertex) * mesh_params.max_vertex_count));
+  if (!is_allocated_on_gpu_) {
+    checkCudaErrors(cudaMalloc(&vertex_heap_,
+                               sizeof(uint) * mesh_params.max_vertex_count));
+    checkCudaErrors(cudaMalloc(&vertex_heap_counter_, sizeof(uint)));
+    checkCudaErrors(cudaMalloc(&vertices,
+                               sizeof(Vertex) * mesh_params.max_vertex_count));
 
-  checkCudaErrors(cudaMalloc(&triangle_heap_,
-                             sizeof(uint) * mesh_params.max_triangle_count));
-  checkCudaErrors(cudaMalloc(&triangle_heap_counter_, sizeof(uint)));
-  checkCudaErrors(cudaMalloc(&triangles,
-                             sizeof(Triangle) * mesh_params.max_triangle_count));
+    checkCudaErrors(cudaMalloc(&triangle_heap_,
+                               sizeof(uint) * mesh_params.max_triangle_count));
+    checkCudaErrors(cudaMalloc(&triangle_heap_counter_, sizeof(uint)));
+    checkCudaErrors(cudaMalloc(&triangles,
+                               sizeof(Triangle) * mesh_params.max_triangle_count));
+    is_allocated_on_gpu_ = true;
+  }
 }
 
 void Mesh::Free() {
-  checkCudaErrors(cudaFree(vertex_heap_));
-  checkCudaErrors(cudaFree(vertex_heap_counter_));
-  checkCudaErrors(cudaFree(vertices));
+  if (is_allocated_on_gpu_) {
+    checkCudaErrors(cudaFree(vertex_heap_));
+    checkCudaErrors(cudaFree(vertex_heap_counter_));
+    checkCudaErrors(cudaFree(vertices));
 
-  checkCudaErrors(cudaFree(triangle_heap_));
-  checkCudaErrors(cudaFree(triangle_heap_counter_));
-  checkCudaErrors(cudaFree(triangles));
+    checkCudaErrors(cudaFree(triangle_heap_));
+    checkCudaErrors(cudaFree(triangle_heap_counter_));
+    checkCudaErrors(cudaFree(triangles));
+
+    is_allocated_on_gpu_ = false;
+  }
 }
 
 void Mesh::Resize(const MeshParams &mesh_params) {
   mesh_params_ = mesh_params;
+  if (is_allocated_on_gpu_) {
+    Free();
+  }
   Alloc(mesh_params);
   Reset();
 }

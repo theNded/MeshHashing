@@ -13,7 +13,7 @@ class Trajectory {
 public:
   Trajectory() = default;
   explicit Trajectory(uint max_vertex_count);
-  void Init(uint max_vertex_count);
+  void Alloc(uint max_vertex_count);
   void Free();
 
   void AddPose(float4x4 wTc);
@@ -27,6 +27,7 @@ public:
   }
 
 private:
+  bool is_allocated_on_gpu_ = false;
   uint max_vertex_count_;
   int vertex_count_ = -1;
   float3 prev_position_;

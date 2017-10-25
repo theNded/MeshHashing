@@ -15,7 +15,7 @@
 
 class Mesh {
 public:
-  __host__ Mesh();
+  __host__ Mesh() = default;
   // __host__ ~Mesh();
 
   __host__ void Alloc(const MeshParams &mesh_params);
@@ -38,6 +38,7 @@ public:
   __host__ uint triangle_heap_count();
 
 private:
+  bool is_allocated_on_gpu_ = false;
   uint*     vertex_heap_;
   uint*     vertex_heap_counter_;
   Vertex*   vertices;
