@@ -2,7 +2,7 @@
 // Created by wei on 17-10-21.
 //
 
-#include "rgbd_local_sequence.h"
+#include "rgbd_data_provider.h"
 #include <glog/logging.h>
 
 const std::string kConfigPaths[] = {
@@ -15,18 +15,18 @@ const std::string kConfigPaths[] = {
     "../config/PKU.yml"
 };
 
-void RGBDLocalSequence::LoadDataset(DatasetType dataset_type) {
+void RGBDDataProvider::LoadDataset(DatasetType dataset_type) {
   std::string config_path = kConfigPaths[dataset_type];
   cv::FileStorage fs(config_path, cv::FileStorage::READ);
   std::string dataset_path = (std::string)fs["dataset_path"];
   LoadDataset(dataset_path, dataset_type);
 }
 
-void RGBDLocalSequence::LoadDataset(Dataset dataset) {
+void RGBDDataProvider::LoadDataset(Dataset dataset) {
   LoadDataset(dataset.path, dataset.type);
 }
 
-void RGBDLocalSequence::LoadDataset(std::string dataset_path,
+void RGBDDataProvider::LoadDataset(std::string dataset_path,
                               DatasetType dataset_type) {
   switch (dataset_type) {
     case ICL:
@@ -53,7 +53,7 @@ void RGBDLocalSequence::LoadDataset(std::string dataset_path,
   }
 }
 
-bool RGBDLocalSequence::ProvideData(cv::Mat &depth,
+bool RGBDDataProvider::ProvideData(cv::Mat &depth,
                               cv::Mat &color) {
   if (frame_id > depth_image_list.size()) {
     LOG(ERROR) << "All images provided!";
@@ -70,7 +70,7 @@ bool RGBDLocalSequence::ProvideData(cv::Mat &depth,
   // TODO: Network situation
 }
 
-bool RGBDLocalSequence::ProvideData(cv::Mat &depth,
+bool RGBDDataProvider::ProvideData(cv::Mat &depth,
                               cv::Mat &color,
                               float4x4 &wTc) {
   if (frame_id >= depth_image_list.size()) {

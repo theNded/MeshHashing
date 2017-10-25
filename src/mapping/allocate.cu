@@ -6,7 +6,7 @@
 
 __global__
 void AllocBlockArrayKernel(HashTable   hash_table,
-                           SensorDataGPU  sensor_data,
+                           SensorData  sensor_data,
                            SensorParams   sensor_params,
                            float4x4       w_T_c,
                            const uint* is_streamed_mask,
@@ -107,7 +107,7 @@ void AllocBlockArray(HashTable& hash_table, Sensor& sensor, GeometryHelper& geoe
 
   AllocBlockArrayKernel<<<grid_size, block_size>>>(
       hash_table,
-          sensor.gpu_memory(),
+          sensor.data(),
           sensor.sensor_params(), sensor.w_T_c(),
           NULL,
           geoemtry_helper);

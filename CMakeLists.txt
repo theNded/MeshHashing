@@ -111,6 +111,7 @@ CUDA_ADD_LIBRARY(mesh-hashing-cuda
         ${VH}/core/collect_block_array.cu
 
         ${VH}/sensor/rgbd_sensor.cu
+        ${VH}/sensor/preprocess.cu
 
         ${VH}/mapping/allocate.cu
         ${VH}/mapping/update.cu
@@ -118,6 +119,7 @@ CUDA_ADD_LIBRARY(mesh-hashing-cuda
 
         ${VH}/meshing/marching_cubes.cu
 
+        ${VH}/visualization/colorize.cu
         ${VH}/visualization/compact_mesh.cu
         ${VH}/visualization/bounding_box.cu
         ${VH}/visualization/trajectory.cu
@@ -137,7 +139,8 @@ ADD_LIBRARY(mesh-hashing
 
         ${VH}/io/config_manager.cc
         ${VH}/io/mesh_writer.cc
-        ${VH}/sensor/rgbd_local_sequence.cc)
+
+        ${VH}/sensor/rgbd_data_provider.cc)
         #${VH}/tool/cpp/debugger.cc)
 SET_TARGET_PROPERTIES(mesh-hashing PROPERTIES COMPILE_DEFINITIONS USE_CUDA)
 TARGET_LINK_LIBRARIES(mesh-hashing
@@ -168,7 +171,7 @@ TARGET_LINK_LIBRARIES(video_clip
 ### Loop over
 MESSAGE(STATUS ${GLOG_LIBRARIES})
 ADD_EXECUTABLE(mesh_hashing
-        src/app/mesh_hashing.cc)
+        src/app/reconstruction.cc)
 SET_TARGET_PROPERTIES(mesh_hashing PROPERTIES COMPILE_DEFINITIONS USE_CUDA)
 TARGET_LINK_LIBRARIES(mesh_hashing
         mesh-hashing
@@ -188,7 +191,7 @@ if (WITH_ORBSLAM2)
             ${ORB_SLAM2_PATH}/include
             ${EIGEN3_INCLUDE_DIR})
     LINK_DIRECTORIES(${ORB_SLAM2_PATH}/lib)
-    ADD_EXECUTABLE(rgbd_orb src/app/rgbd_orb.cc)
+    ADD_EXECUTABLE(rgbd_orb src/app/orb_slam.cc)
     TARGET_LINK_LIBRARIES(rgbd_orb
             mesh-hashing
             ORB_SLAM2

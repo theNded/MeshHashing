@@ -8,12 +8,17 @@
 #include <opencv2/opencv.hpp>
 #include <helper_cuda.h>
 #include "core/params.h"
+#include "sensor/preprocess.h"
 
-/// At first get rid of CUDARGBDAdaptor and RGBDSensor, use it directly
-struct SensorDataGPU {
-  /// Raw data
-  float*		depth_image;
-  float4*		color_image;
+/// At first get rid of CUDARGBDAdaptor and Sensor, use it directly
+struct SensorData {
+  /// sensor data raw
+  short*  depth_buffer;
+  uchar4* color_buffer;
+
+  /// Reformatted data
+  float*		depth_data;
+  float4*		color_data;
 
   /// Texture-binded data
   cudaArray*	depth_array;
@@ -21,58 +26,51 @@ struct SensorDataGPU {
 
   cudaTextureObject_t depth_texture;
   cudaTextureObject_t color_texture;
-
   cudaChannelFormatDesc depth_channel_desc;
   cudaChannelFormatDesc color_channel_desc;
 };
 
 class Sensor {
-private:
-  /// sensor data
-  SensorDataGPU	gpu_memory_;
-  SensorParams	sensor_params_;
-
-  float4x4      w_T_c_; // camera -> world
-  float4x4      c_T_w_;
-
-  /// sensor data cpu
-  float4* colored_depth_image_;
-  short*  depth_imagebuffer_;
-  uchar*  color_imagebuffer_;
-
-  void DepthCPUtoGPU(cv::Mat &depth);
-  void ColorCPUtoGPU(cv::Mat &color);
-
 public:
-  Sensor(SensorParams &params);
+  Sensor() = default;
+  explicit Sensor(SensorParams &params);
   ~Sensor();
+  void BindCUDATexture();
 
-  void BindGPUTexture();
   int Process(cv::Mat &depth, cv::Mat &color);
-  float4* ColorizeDepthImage() const;
 
-  void set_transform(float4x4 w_T_c) {
-    w_T_c_ = w_T_c;
-    c_T_w_ = w_T_c_.getInverse();
+  void set_transform(float4x4 wTc) {
+    wTc_ = wTc;
+    cTw_ = wTc_.getInverse();
   }
   const float4x4& w_T_c() const {
-    return w_T_c_;
+    return wTc_;
   }
   const float4x4& c_T_w() const {
-    return c_T_w_;
+    return cTw_;
   }
   uint width() const {
-    return sensor_params_.width;
+    return params_.width;
   }
   uint height() const {
-    return sensor_params_.height;
+    return params_.height;
   }
-  const SensorDataGPU& gpu_memory() {
-    return gpu_memory_;
+  const SensorData& data() {
+    return data_;
   }
   const SensorParams& sensor_params() {
-    return sensor_params_;
+    return params_;
   }
+
+private:
+  bool is_allocated_on_gpu_ = false;
+
+  /// sensor data
+  SensorData	  data_;
+  SensorParams	params_;
+
+  float4x4      wTc_; // camera -> world
+  float4x4      cTw_;
 };
 
 #endif //VH_SENSOR_H

@@ -18,8 +18,9 @@ These structs are designed to be usable on both CPU and GPU. The protocols for a
 
 ### engine
 Higher level wrappers for the data structures in `core`, basically
-- **map_engine**, managing **hash_table**, **blocks**, and **mesh**
-- **sensor_engine**, managing data from sensors
+- **main_engine**, managing **hash_table**, **blocks**, and **mesh**
+- **visualizing_engine**, manage **compact_mesh**, **bounding_box**, and **trajectory**
+- **logging_engine**, record profiles, etc
 
 ## Function
 ### fusion
@@ -45,4 +46,6 @@ Backup garbages here.
 
 ## TODO
 - Separate .cu && .cc (functions and methods)
-- Integrate stats
+- Integrate statistics
+- Involve time profile
+- Minor argument configurations

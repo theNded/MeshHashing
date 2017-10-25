@@ -7,7 +7,7 @@
 
 #include "io/config_manager.h"
 
-struct RGBDLocalSequence {
+struct RGBDDataProvider {
   /// Read from Disk
   size_t frame_id = 0;
   std::vector<std::string> depth_image_list;

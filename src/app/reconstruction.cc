@@ -22,7 +22,7 @@
 #include <meshing/marching_cubes.h>
 #include <visualization/compress_mesh.h>
 
-#include "sensor/rgbd_local_sequence.h"
+#include "sensor/rgbd_data_provider.h"
 #include "sensor/rgbd_sensor.h"
 #include "visualization/ray_caster.h"
 
@@ -47,7 +47,7 @@ int main(int argc, char** argv) {
   LoadRuntimeParams("../config/args.yml", args);
 
   ConfigManager config;
-  RGBDLocalSequence rgbd_local_sequence;
+  RGBDDataProvider rgbd_local_sequence;
 
   DatasetType dataset_type = DatasetType(args.dataset_type);
   config.LoadConfig(dataset_type);

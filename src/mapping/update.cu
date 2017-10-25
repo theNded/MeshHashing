@@ -14,7 +14,7 @@ void UpdateBlockArrayKernel(EntryArray candidate_entries,
                         HashTable        hash_table,
                         BlockArray          blocks,
                         Mesh             mesh,
-                        SensorDataGPU       sensor_data,
+                        SensorData       sensor_data,
                         SensorParams        sensor_params,
                         float4x4            c_T_w,
                         GeometryHelper geoemtry_helper) {
@@ -107,7 +107,7 @@ void UpdateBlockArrayKernel(EntryArray candidate_entries,
   delta.sdf = sdf;
   delta.weight = weight;
 
-  if (sensor_data.color_image) {
+  if (sensor_data.color_data) {
     float4 color = tex2D<float4>(sensor_data.color_texture, image_pos.x, image_pos.y);
     delta.color = make_uchar3(255 * color.x, 255 * color.y, 255 * color.z);
   } else {
@@ -135,7 +135,7 @@ void UpdateBlockArray(EntryArray& candidate_entries,
           hash_table,
           blocks,
           mesh,
-          sensor.gpu_memory(),
+          sensor.data(),
           sensor.sensor_params(), sensor.c_T_w(),
               geoemtry_helper);
   checkCudaErrors(cudaDeviceSynchronize());
