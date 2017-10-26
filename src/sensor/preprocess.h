@@ -10,16 +10,20 @@
 #include "core/params.h"
 
 __host__
-void ConvertDepthFormat(cv::Mat& depth_img,
-                        short* depth_buffer,
-                        float* depth_data,
-                        SensorParams& params);
+void ConvertDepthFormat(
+    cv::Mat& depth_img,
+    short* depth_buffer,
+    float* depth_data,
+    SensorParams& params
+);
 
 __host__
-void ConvertColorFormat(cv::Mat &color_img,
-                        uchar4* color_buffer,
-                        float4* color_data,
-                        SensorParams& params);
+void ConvertColorFormat(
+    cv::Mat &color_img,
+    uchar4* color_buffer,
+    float4* color_data,
+    SensorParams& params
+);
 
 
 

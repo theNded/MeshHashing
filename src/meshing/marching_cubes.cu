@@ -184,7 +184,7 @@ void MarchingCubesPass1Kernel(
                   hash_table,
                   geometry_helper,
                   d[i], weight);
-    if (weight < 5.0f)
+    if (weight < 0.5f)
       return;
 
     if (fabs(d[i]) > kThreshold) return;

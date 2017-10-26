@@ -15,7 +15,7 @@ void UpdateBlocksSimpleKernel(
     BlockArray blocks,
     SensorData sensor_data,
     SensorParams sensor_params,
-    float4x4 c_T_w,
+    float4x4 cTw,
     HashTable hash_table,
     GeometryHelper geometry_helper) {
 
@@ -29,7 +29,7 @@ void UpdateBlocksSimpleKernel(
   Voxel &this_voxel = blocks[entry.ptr].voxels[local_idx];
   /// 2. Project to camera
   float3 world_pos = geometry_helper.VoxelToWorld(voxel_pos);
-  float3 camera_pos = c_T_w * world_pos;
+  float3 camera_pos = cTw * world_pos;
   uint2 image_pos = make_uint2(
       geometry_helper.CameraProjectToImagei(camera_pos,
                                             sensor_params.fx, sensor_params.fy,
@@ -44,11 +44,12 @@ void UpdateBlocksSimpleKernel(
     return;
 
   float sdf = depth - camera_pos.z;
-  float weight = (uchar) fmax(geometry_helper.weight_sample * 1.5f *
-                              (1.0f - geometry_helper.NormalizeDepth(depth,
-                                                                     sensor_params.min_depth_range,
-                                                                     sensor_params.max_depth_range)),
-                              1.0f);
+  float normalized_depth = geometry_helper.NormalizeDepth(
+      depth,
+      sensor_params.min_depth_range,
+      sensor_params.max_depth_range
+  );
+  float weight = (1.0f - normalized_depth);
   float truncation = geometry_helper.truncate_distance(depth);
   if (sdf <= -truncation)
     return;

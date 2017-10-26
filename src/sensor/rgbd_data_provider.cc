@@ -15,7 +15,9 @@ const std::string kConfigPaths[] = {
     "../config/PKU.yml"
 };
 
-void RGBDDataProvider::LoadDataset(DatasetType dataset_type) {
+void RGBDDataProvider::LoadDataset(
+    DatasetType dataset_type
+) {
   std::string config_path = kConfigPaths[dataset_type];
   cv::FileStorage fs(config_path, cv::FileStorage::READ);
   std::string dataset_path = (std::string)fs["dataset_path"];
@@ -26,8 +28,10 @@ void RGBDDataProvider::LoadDataset(Dataset dataset) {
   LoadDataset(dataset.path, dataset.type);
 }
 
-void RGBDDataProvider::LoadDataset(std::string dataset_path,
-                              DatasetType dataset_type) {
+void RGBDDataProvider::LoadDataset(
+    std::string dataset_path,
+    DatasetType dataset_type
+) {
   switch (dataset_type) {
     case ICL:
       LoadICL(dataset_path, depth_image_list, color_image_list, wTcs);
@@ -53,8 +57,10 @@ void RGBDDataProvider::LoadDataset(std::string dataset_path,
   }
 }
 
-bool RGBDDataProvider::ProvideData(cv::Mat &depth,
-                              cv::Mat &color) {
+bool RGBDDataProvider::ProvideData(
+    cv::Mat &depth,
+    cv::Mat &color
+) {
   if (frame_id > depth_image_list.size()) {
     LOG(ERROR) << "All images provided!";
     return false;
