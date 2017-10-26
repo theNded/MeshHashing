@@ -54,23 +54,30 @@ int main(int argc, char** argv) {
   rgbd_local_sequence.LoadDataset(dataset_type);
   Sensor    sensor(config.sensor_params);
 
-  MainEngine main_engine(config.hash_params,
-                         config.mesh_params,
-                         config.sdf_params);
-  main_engine.ConfigVisualizingEngineMesh(light,
-                                          args.enable_navigation,
-                                          args.enable_global_mesh,
-                                          args.enable_bounding_box,
-                                          args.enable_trajectory,
-                                          args.enable_polygon_mode);
-  if (args.enable_ray_casting) {
-    main_engine.ConfigVisualizingEngineRaycaster(config.ray_caster_params);
-  }
-  if (args.enable_video_recording) {
-    main_engine.ConfigLoggingEngine(".",
-                                    args.enable_video_recording,
-                                    args.enable_ply_saving);
-  }
+  MainEngine main_engine(
+      config.hash_params,
+      config.sdf_params,
+      config.mesh_params,
+      config.sensor_params,
+      config.ray_caster_params
+  );
+
+  main_engine.ConfigVisualizingEngine(
+      light,
+      args.enable_navigation,
+      args.enable_global_mesh,
+      args.enable_bounding_box,
+      args.enable_trajectory,
+      args.enable_polygon_mode,
+      args.enable_ray_casting
+  );
+
+  main_engine.ConfigLoggingEngine(
+      ".",
+      args.enable_video_recording,
+      args.enable_ply_saving
+
+  );
   main_engine.enable_sdf_gradient() = args.enable_sdf_gradient;
 
   cv::Mat color, depth;

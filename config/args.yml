@@ -24,9 +24,9 @@ enable_ray_casting:     0
 enable_video_recording:  1
 enable_ply_saving:       1
 
-filename_prefix: "lounge-new"
+filename_prefix: "copyroom_test"
 time_profile:    "tum3-nhm"
 memo_profile:    "tum3-nhm"
 
 # Others
-run_frames:     -1
+run_frames:     100

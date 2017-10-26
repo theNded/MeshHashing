@@ -37,8 +37,6 @@ struct __ALIGN__(16) VolumeParams {
 
   uint  weight_sample;              // 10,  TODO(wei): change it dynamically!
   uint  weight_upper_bound;         // 255
-
-  uint2 padding;
 };
 
 struct RayCasterParams {

@@ -25,11 +25,15 @@ void MainEngine::Mapping(Sensor &sensor) {
                          geometry_helper_,
                          candidate_entries_);
 
-  UpdateBlocksSimple(candidate_entries_,
-                     blocks_,
-                     sensor,
-                     hash_table_,
-                     geometry_helper_);
+  if (! map_engine_.enable_input_refine()) {
+    UpdateBlocksSimple(candidate_entries_,
+                       blocks_,
+                       sensor,
+                       hash_table_,
+                       geometry_helper_);
+  } else {
+    // Build, Solve, Update
+  }
   integrated_frame_count_ ++;
 }
 
@@ -120,12 +124,19 @@ void MainEngine::FinalLog() {
 }
 
 /// Life cycle
-MainEngine::MainEngine(const HashParams& hash_params,
-                       const MeshParams &mesh_params,
-                       const VolumeParams &sdf_params) {
+MainEngine::MainEngine(
+    const HashParams& hash_params,
+    const VolumeParams &sdf_params,
+    const MeshParams &mesh_params,
+    const SensorParams &sensor_params,
+    const RayCasterParams &ray_caster_params
+) {
+
   hash_params_ = hash_params;
-  mesh_params_ = mesh_params;
   volume_params_ = sdf_params;
+  mesh_params_ = mesh_params;
+  sensor_params_ = sensor_params;
+  ray_caster_params_ = ray_caster_params;
 
   hash_table_.Resize(hash_params);
   candidate_entries_.Resize(hash_params.entry_count);
@@ -161,12 +172,23 @@ void MainEngine::Reset() {
   candidate_entries_.Reset();
 }
 
-void MainEngine::ConfigVisualizingEngineMesh(Light &light,
-                                             bool enable_navigation,
-                                             bool enable_global_mesh,
-                                             bool enable_bounding_box,
-                                             bool enable_trajectory,
-                                             bool enable_polygon_mode) {
+void MainEngine::ConfigMappingEngine(
+    bool enable_input_refine
+) {
+  map_engine_.Init(sensor_params_.width,
+                   sensor_params_.height,
+                   enable_input_refine);
+}
+
+void MainEngine::ConfigVisualizingEngine(
+    Light &light,
+    bool enable_navigation,
+    bool enable_global_mesh,
+    bool enable_bounding_box,
+    bool enable_trajectory,
+    bool enable_polygon_mode,
+    bool enable_ray_caster
+) {
   vis_engine_.Init("VisEngine", 640, 480);
   vis_engine_.set_interaction_mode(enable_navigation);
   vis_engine_.set_light(light);
@@ -186,13 +208,17 @@ void MainEngine::ConfigVisualizingEngineMesh(Light &light,
   if (enable_trajectory) {
     vis_engine_.InitTrajectoryData(10000);
   }
+
+  if (enable_ray_caster) {
+    vis_engine_.BuildRayCaster(ray_caster_params_);
+  }
 }
 
-void MainEngine::ConfigVisualizingEngineRaycaster(const RayCasterParams &params) {
-  vis_engine_.BuildRayCaster(params);
-}
-
-void MainEngine::ConfigLoggingEngine(std::string path, bool enable_video, bool enable_ply) {
+void MainEngine::ConfigLoggingEngine(
+    std::string path,
+    bool enable_video,
+    bool enable_ply
+) {
   log_engine_.Init(path);
   if (enable_video) {
     log_engine_.ConfigVideoWriter(640, 480);

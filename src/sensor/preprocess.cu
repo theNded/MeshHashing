@@ -8,11 +8,13 @@
 #define MINF __int_as_float(0xff800000)
 
 __global__
-void ConvertDepthFormatKernel(float *dst, short *src,
-                         uint width, uint height,
-                         float range_factor,
-                         float min_depth_range,
-                         float max_depth_range) {
+void ConvertDepthFormatKernel(
+    float *dst, short *src,
+    uint width, uint height,
+    float range_factor,
+    float min_depth_range,
+    float max_depth_range
+) {
   const int x = blockIdx.x * blockDim.x + threadIdx.x;
   const int y = blockIdx.y * blockDim.y + threadIdx.y;
 

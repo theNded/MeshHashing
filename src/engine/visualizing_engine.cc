@@ -41,29 +41,34 @@ void VisualizingEngine::Render() {
   }
 }
 
-void VisualizingEngine::set_interaction_mode(bool enable_interaction) {
+void VisualizingEngine::set_interaction_mode(
+    bool enable_interaction
+) {
   enable_interaction_ = enable_interaction;
   camera_.SwitchInteraction(enable_interaction);
 }
+
 void VisualizingEngine::update_view_matrix() {
   camera_.UpdateView(window_);
   view_ = camera_.view();
   mvp_ = camera_.mvp();
 }
+
 void VisualizingEngine::set_view_matrix(glm::mat4 view) {
   view_ = camera_.model() * view * glm::inverse(camera_.model());
   mvp_ = camera_.projection() * view_ * camera_.model();
 }
 
-
 void VisualizingEngine::set_light(Light& light) {
   light_ = light;
 }
 
-void VisualizingEngine::BindMainProgram(uint max_vertices,
-                                        uint max_triangles,
-                                        bool enable_global_mesh,
-                                        bool enable_polygon_mode) {
+void VisualizingEngine::BindMainProgram(
+    uint max_vertices,
+    uint max_triangles,
+    bool enable_global_mesh,
+    bool enable_polygon_mode
+) {
   std::stringstream ss;
   ss << light_.light_srcs.size();
 
@@ -138,7 +143,9 @@ void VisualizingEngine::BindHelperUniforms() {
   helper_uniforms_.Bind("uni_color", &color, 1);
 }
 
-void VisualizingEngine::InitBoundingBoxData(uint max_vertices) {
+void VisualizingEngine::InitBoundingBoxData(
+    uint max_vertices
+) {
   enable_bounding_box_ = true;
   bounding_box_.Resize(max_vertices);
   box_args_.Init(1, true);
@@ -152,7 +159,9 @@ void VisualizingEngine::BindBoundingBoxData() {
                        bounding_box_.vertices());
 }
 
-void VisualizingEngine::InitTrajectoryData(uint max_vertices) {
+void VisualizingEngine::InitTrajectoryData(
+    uint max_vertices
+) {
   enable_trajectory_ = true;
   trajectory_.Alloc(max_vertices);
   trajectory_args_.Init(1, true);
@@ -188,15 +197,19 @@ void VisualizingEngine::RenderHelper() {
   }
 }
 
-void VisualizingEngine::BuildRayCaster(const RayCasterParams &ray_caster_params) {
+void VisualizingEngine::BuildRayCaster(
+    const RayCasterParams &ray_caster_params
+) {
   enable_ray_casting_ = true;
   ray_caster_.Alloc(ray_caster_params);
 }
 
-void VisualizingEngine::RenderRayCaster(float4x4 view,
-                                        BlockArray& blocks,
-                                        HashTable& hash_table,
-                                        GeometryHelper& geometry_helper) {
+void VisualizingEngine::RenderRayCaster(
+    float4x4 view,
+    BlockArray& blocks,
+    HashTable& hash_table,
+    GeometryHelper& geometry_helper
+) {
   ray_caster_.Cast(hash_table, blocks, ray_caster_.data() , geometry_helper, view);
   cv::imshow("RayCasting", ray_caster_.surface_image());
   cv::waitKey(1);

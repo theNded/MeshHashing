@@ -55,10 +55,10 @@ public:
   uint height() const {
     return params_.height;
   }
-  const SensorData& data() {
+  const SensorData& data() const {
     return data_;
   }
-  const SensorParams& sensor_params() {
+  const SensorParams& sensor_params() const {
     return params_;
   }
 

@@ -118,6 +118,8 @@ CUDA_ADD_LIBRARY(mesh-hashing-cuda
         ${VH}/mapping/update_probabilistic.cu
         ${VH}/mapping/recycle.cu
 
+        ${VH}/optimize/linear_equations.cu
+
         ${VH}/meshing/marching_cubes.cu
 
         ${VH}/visualization/colorize.cu
@@ -135,6 +137,7 @@ TARGET_LINK_LIBRARIES(mesh-hashing-cuda
 ### 3. C++
 ADD_LIBRARY(mesh-hashing
         ${VH}/engine/main_engine.cc
+        ${VH}/engine/mapping_engine.cc
         ${VH}/engine/logging_engine.cc
         ${VH}/engine/visualizing_engine.cc
 

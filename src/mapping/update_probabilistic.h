@@ -12,19 +12,28 @@
 #include "sensor/rgbd_sensor.h"
 #include "geometry/geometry_helper.h"
 
+#include "optimize/linear_equations.h"
+
 // @function
 // Enumerate @param candidate_entries
 // change the value of @param blocks
 // according to the existing @param mesh
 //                 and input @param sensor data
 // with the help of hash_table and geometry_helper
-void RefineSensorData(
+void BuildSensorDataEquation(
     EntryArray &candidate_entries,
     BlockArray &blocks,
     Mesh &mesh,
     Sensor &sensor,
     HashTable &hash_table,
-    GeometryHelper &geometry_helper
+    GeometryHelper &geometry_helper,
+    SensorLinearEquations &linear_equations
+);
+
+void SolveSensorDataEquation(
+    SensorLinearEquations& linear_equations,
+    Sensor& sensor,
+    GeometryHelper& geometry_helper
 );
 
 #endif //MESH_HASHING_UPDATE_PROBABILISTIC_H
