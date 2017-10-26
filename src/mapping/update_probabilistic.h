@@ -30,12 +30,6 @@ void BuildSensorDataEquation(
     SensorLinearEquations &linear_equations
 );
 
-void SolveSensorDataEquation(
-    SensorLinearEquations& linear_equations,
-    Sensor& sensor,
-    GeometryHelper& geometry_helper
-);
-
 void UpdateBlocksBayesian(
     EntryArray &candidate_entries,
     BlockArray &blocks,

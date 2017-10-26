@@ -6,6 +6,8 @@
 #define MESH_HASHING_LINEAR_LEAST_SQUARES_H
 
 #include "core/common.h"
+#include "sensor/rgbd_sensor.h"
+#include "geometry/geometry_helper.h"
 #include "helper_math.h"
 #include "matrix.h"
 
@@ -41,5 +43,10 @@ private:
   int  height_;
 };
 
+void SolveSensorDataEquation(
+    SensorLinearEquations& linear_equations,
+    Sensor& sensor,
+    GeometryHelper& geometry_helper
+);
 
 #endif //MESH_HASHING_LINEAR_LEAST_SQUARES_H

@@ -42,10 +42,15 @@ struct __ALIGN__(8) Voxel {
   int vertex_mutexes[N_VERTEX];  // 3
   int triangle_ptrs [N_TRIANGLE];// 5
 
-  #ifdef STATS
+#ifdef STATS
   Stat   stats;
-  #endif
+#endif
   short curr_cube_idx, prev_cube_idx;
+
+//#ifdef PRIMAL_DUAL
+  float  x, x_bar;
+  float3 p;
+//#endif
 
   __host__ __device__
   void ResetMutexes() {

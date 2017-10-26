@@ -50,10 +50,10 @@ Stat  &stats,
 
 #pragma unroll 1
   for (int i = 0; i < 8; ++i) {
-    float3 mask = make_float3((i&4)>0, (i&2)>0, (i&1)>0);
+    float3 mask = make_float3((i & 4) > 0, (i & 2) > 0, (i & 1) > 0);
     // 0 --> 1 - r, 1 --> r
     float3 r = (make_float3(1.0f) - mask) * (make_float3(1.0) - ratio)
-             + (mask) * ratio;
+               + (mask) * ratio;
     v = GetVoxel(pos_corner + mask * offset, blocks, hash_table, geometry_helper);
     if (v.weight < EPSILON) return false;
     v_color = make_float3(v.color.x, v.color.y, v.color.z);
@@ -74,56 +74,56 @@ inline float3 GetSpatialGradient(
     const HashTable &hash_table,
     GeometryHelper &geometry_helper
 ) {
-  const float voxelSize = geometry_helper.voxel_size;
-  float3 offset = make_float3(voxelSize, voxelSize, voxelSize);
+  const float voxel_size = geometry_helper.voxel_size;
+  float3 offset = make_float3(voxel_size, voxel_size, voxel_size);
 
   /// negative
   float distn00;
   uchar3 colorn00;
   GetSpatialValue(pos - make_float3(0.5f * offset.x, 0.0f, 0.0f),
-                         blocks,
-                         hash_table,
-                         geometry_helper,
-                         distn00, colorn00);
+                  blocks,
+                  hash_table,
+                  geometry_helper,
+                  distn00, colorn00);
   float dist0n0;
   uchar3 color0n0;
   GetSpatialValue(pos - make_float3(0.0f, 0.5f * offset.y, 0.0f),
-                         blocks,
-                         hash_table,
-                         geometry_helper,
-                         dist0n0, color0n0);
+                  blocks,
+                  hash_table,
+                  geometry_helper,
+                  dist0n0, color0n0);
 
   float dist00n;
   uchar3 color00n;
   GetSpatialValue(pos - make_float3(0.0f, 0.0f, 0.5f * offset.z),
-                         blocks,
-                         hash_table,
-                         geometry_helper,
-                         dist00n, color00n);
+                  blocks,
+                  hash_table,
+                  geometry_helper,
+                  dist00n, color00n);
 
   /// positive
   float distp00;
   uchar3 colorp00;
   GetSpatialValue(pos + make_float3(0.5f * offset.x, 0.0f, 0.0f),
-                         blocks,
-                         hash_table,
-                         geometry_helper,
-                         distp00, colorp00);
+                  blocks,
+                  hash_table,
+                  geometry_helper,
+                  distp00, colorp00);
   float dist0p0;
   uchar3 color0p0;
   GetSpatialValue(pos + make_float3(0.0f, 0.5f * offset.y, 0.0f),
-                         blocks,
-                         hash_table,
-                         geometry_helper,
-                         dist0p0, color0p0);
+                  blocks,
+                  hash_table,
+                  geometry_helper,
+                  dist0p0, color0p0);
 
   float dist00p;
   uchar3 color00p;
   GetSpatialValue(pos + make_float3(0.0f, 0.0f, 0.5f * offset.z),
-                         blocks,
-                         hash_table,
-                         geometry_helper,
-                         dist00p, color00p);
+                  blocks,
+                  hash_table,
+                  geometry_helper,
+                  dist00p, color00p);
 
   float3 grad = make_float3((distp00 - distn00) / offset.x,
                             (dist0p0 - dist0n0) / offset.y,

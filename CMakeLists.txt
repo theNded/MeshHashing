@@ -119,6 +119,7 @@ CUDA_ADD_LIBRARY(mesh-hashing-cuda
         ${VH}/mapping/recycle.cu
 
         ${VH}/optimize/linear_equations.cu
+        ${VH}/optimize/primal_dual.cu
 
         ${VH}/meshing/marching_cubes.cu
 

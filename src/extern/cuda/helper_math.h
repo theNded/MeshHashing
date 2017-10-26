@@ -1485,4 +1485,7 @@ inline __host__ __device__ bool operator==(const int3 &a, const int3 &b) {
 inline __host__ __device__ bool operator==(const uint3 &a, const uint3 &b) {
   return a.x == b.x && a.y == b.y && a.z == b.z;
 }
+inline __host__ __device__ int3 operator%(int3 a, int b) {
+  return make_int3(a.x%b, a.y%b, a.z%b);
+}
 #endif
