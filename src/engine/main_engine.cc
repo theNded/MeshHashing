@@ -2,6 +2,7 @@
 // Created by wei on 17-10-22.
 //
 
+#include <mapping/update_probabilistic.h>
 #include "engine/main_engine.h"
 
 #include "core/collect_block_array.h"
@@ -32,7 +33,31 @@ void MainEngine::Mapping(Sensor &sensor) {
                        hash_table_,
                        geometry_helper_);
   } else {
-    // Build, Solve, Update
+    map_engine_.linear_equations().Reset();
+    BuildSensorDataEquation(
+        candidate_entries_,
+        blocks_,
+        mesh_,
+        sensor,
+        hash_table_,
+        geometry_helper_,
+        map_engine_.linear_equations()
+    );
+
+    SolveSensorDataEquation(
+        map_engine_.linear_equations(),
+        sensor,
+        geometry_helper_
+    );
+
+    UpdateBlocksBayesian(
+        candidate_entries_,
+        blocks_,
+        sensor,
+        map_engine_.linear_equations(),
+        hash_table_,
+        geometry_helper_
+    );
   }
   integrated_frame_count_ ++;
 }

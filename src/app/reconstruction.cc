@@ -62,6 +62,9 @@ int main(int argc, char** argv) {
       config.ray_caster_params
   );
 
+  main_engine.ConfigMappingEngine(
+      true
+  );
   main_engine.ConfigVisualizingEngine(
       light,
       args.enable_navigation,

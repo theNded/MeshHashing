@@ -24,14 +24,14 @@ public:
   void atomicAddfloat3x3(int idx, float3x3& dA) {
 #pragma unroll 1
     for (int i = 0; i < 9; ++i) {
-      atomicAdd(&(A[i].entries[idx]), dA.entries[i]);
+      atomicAdd(&(A[idx].entries[i]), dA.entries[i]);
     }
   }
   __device__
-  void atomicAddfloat3(int i, float3& db) {
-    atomicAdd(&b[i].x, db.x);
-    atomicAdd(&b[i].y, db.y);
-    atomicAdd(&b[i].z, db.z);
+  void atomicAddfloat3(int idx, float3& db) {
+    atomicAdd(&b[idx].x, db.x);
+    atomicAdd(&b[idx].y, db.y);
+    atomicAdd(&b[idx].z, db.z);
   }
 #endif
 
