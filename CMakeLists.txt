@@ -95,7 +95,9 @@ ADD_LIBRARY(gl-util
         ${GL_WRAPPER}/src/window.cc
         ${GL_WRAPPER}/src//uniforms.cc
         ${GL_WRAPPER}/src/camera.cc)
-SET_TARGET_PROPERTIES(gl-util PROPERTIES COMPILE_DEFINITIONS USE_CUDA)
+SET_TARGET_PROPERTIES(gl-util
+        PROPERTIES
+        COMPILE_DEFINITIONS USE_CUDA_GL)
 TARGET_LINK_LIBRARIES(gl-util
         ${OPENGL_DEPENDENCIES}
         ${GLOG_LIBRARIES})
@@ -130,10 +132,11 @@ CUDA_ADD_LIBRARY(mesh-hashing-cuda
         ${VH}/visualization/compress_mesh.cu
         ${VH}/visualization/extract_bounding_box.cu
         ${VH}/visualization/ray_caster.cu)
+
 TARGET_LINK_LIBRARIES(mesh-hashing-cuda
         ${CUDA_DEPENDENCIES}
-        -lopencv_core -lopencv_highgui -lopencv_imgproc
-        ${GLOG_LIBRARIES})
+        ${GLOG_LIBRARIES}
+        -lopencv_core -lopencv_highgui -lopencv_imgproc)
 
 ### 3. C++
 ADD_LIBRARY(mesh-hashing
@@ -147,7 +150,9 @@ ADD_LIBRARY(mesh-hashing
 
         ${VH}/sensor/rgbd_data_provider.cc)
         #${VH}/tool/cpp/debugger.cc)
-SET_TARGET_PROPERTIES(mesh-hashing PROPERTIES COMPILE_DEFINITIONS USE_CUDA)
+SET_TARGET_PROPERTIES(mesh-hashing
+        PROPERTIES
+        COMPILE_DEFINITIONS USE_CUDA_GL)
 TARGET_LINK_LIBRARIES(mesh-hashing
         mesh-hashing-cuda
         gl-util)
@@ -155,9 +160,10 @@ TARGET_LINK_LIBRARIES(mesh-hashing
 #----------
 ### Loop over
 MESSAGE(STATUS ${GLOG_LIBRARIES})
-ADD_EXECUTABLE(reconstruction
-        src/app/reconstruction.cc)
-SET_TARGET_PROPERTIES(reconstruction PROPERTIES COMPILE_DEFINITIONS USE_CUDA)
+ADD_EXECUTABLE(reconstruction src/app/reconstruction.cc)
+SET_TARGET_PROPERTIES(reconstruction
+        PROPERTIES
+        COMPILE_DEFINITIONS USE_CUDA_GL)
 TARGET_LINK_LIBRARIES(reconstruction
         mesh-hashing
         -lopencv_core -lopencv_highgui
@@ -176,12 +182,14 @@ if (WITH_ORBSLAM2)
             ${ORB_SLAM2_PATH}/include
             ${EIGEN3_INCLUDE_DIR})
     LINK_DIRECTORIES(${ORB_SLAM2_PATH}/lib)
-    ADD_EXECUTABLE(rgbd_orb src/app/orb_slam.cc)
-    TARGET_LINK_LIBRARIES(rgbd_orb
+    ADD_EXECUTABLE(orb_slam2 src/app/orb_slam2.cc)
+    TARGET_LINK_LIBRARIES(orb_slam2
             mesh-hashing
             ORB_SLAM2
-            ${Pangolin_LIBRARIES}
             -lopencv_core -lopencv_highgui
+            ${Pangolin_LIBRARIES}
             ${GLOG_LIBRARIES})
-    SET_TARGET_PROPERTIES(rgbd_orb PROPERTIES COMPILE_DEFINITIONS USE_CUDA)
+    SET_TARGET_PROPERTIES(orb_slam2
+            PROPERTIES
+            COMPILE_DEFINITIONS USE_CUDA_GL)
 endif(WITH_ORBSLAM2)
