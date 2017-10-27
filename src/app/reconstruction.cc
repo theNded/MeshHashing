@@ -33,15 +33,15 @@
 #define DEBUG_
 
 Light light = {
-  {
-      glm::vec3(0, -2, 0),
-      glm::vec3(4, -2, 0)
-  },
-  glm::vec3(1, 1, 1),
-  3.0f
+    {
+        glm::vec3(0, -2, 0),
+        glm::vec3(4, -2, 0)
+    },
+    glm::vec3(1, 1, 1),
+    3.0f
 };
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
   /// Use this to substitute tedious argv parsing
   RuntimeParams args;
   LoadRuntimeParams("../config/args.yml", args);
@@ -52,7 +52,7 @@ int main(int argc, char** argv) {
   DatasetType dataset_type = DatasetType(args.dataset_type);
   config.LoadConfig(dataset_type);
   rgbd_local_sequence.LoadDataset(dataset_type);
-  Sensor    sensor(config.sensor_params);
+  Sensor sensor(config.sensor_params);
 
   MainEngine main_engine(
       config.hash_params,
@@ -85,8 +85,8 @@ int main(int argc, char** argv) {
   float4x4 wTc, cTw;
   int frame_count = 0;
   while (rgbd_local_sequence.ProvideData(depth, color, wTc)) {
-    frame_count ++;
-    if (args.run_frames > 0 &&  frame_count > args.run_frames)
+    frame_count++;
+    if (args.run_frames > 0 && frame_count > args.run_frames)
       break;
 
     // Preprocess data
@@ -96,7 +96,8 @@ int main(int argc, char** argv) {
 
     main_engine.Mapping(sensor);
     main_engine.Meshing();
-    main_engine.Visualize(cTw);
+    if (main_engine.Visualize(cTw))
+      break;
 
     main_engine.Log();
     main_engine.Recycle();

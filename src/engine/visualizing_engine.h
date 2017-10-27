@@ -30,7 +30,7 @@ public:
   void update_view_matrix();
   void set_view_matrix(glm::mat4 view);
 
-  void Render();
+    int Render();
   cv::Mat Capture() {
     return window_.CaptureRGB();
   }

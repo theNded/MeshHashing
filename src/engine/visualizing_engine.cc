@@ -27,7 +27,7 @@ void VisualizingEngine::Init(std::string window_name, int width, int height) {
   camera_.set_model(m);
 }
 
-void VisualizingEngine::Render() {
+int VisualizingEngine::Render() {
   glClearColor(1, 1, 1, 1);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -37,8 +37,9 @@ void VisualizingEngine::Render() {
 
   window_.swap_buffer();
   if (window_.get_key(GLFW_KEY_ESCAPE) == GLFW_PRESS ) {
-    exit(0);
+    return -1;
   }
+    return 0;
 }
 
 void VisualizingEngine::set_interaction_mode(
