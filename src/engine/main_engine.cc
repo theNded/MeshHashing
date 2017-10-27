@@ -91,7 +91,7 @@ void MainEngine::Recycle() {
 }
 
 // view: world -> camera
-void MainEngine::Visualize(float4x4 view) {
+int MainEngine::Visualize(float4x4 view) {
   if (vis_engine_.enable_interaction()) {
     vis_engine_.update_view_matrix();
   } else {
@@ -125,7 +125,7 @@ void MainEngine::Visualize(float4x4 view) {
     vis_engine_.trajectory().AddPose(view.getInverse());
   }
 
-  vis_engine_.Render();
+
 
   if (vis_engine_.enable_ray_casting()) {
     vis_engine_.RenderRayCaster(view,
@@ -133,6 +133,8 @@ void MainEngine::Visualize(float4x4 view) {
                                 hash_table_,
                                 geometry_helper_);
   }
+
+  return  vis_engine_.Render();
 }
 
 void MainEngine::Log() {

@@ -55,7 +55,7 @@ public:
   void Mapping(Sensor &sensor);
   void Meshing();
   void Recycle();
-  void Visualize(float4x4 view);
+  int Visualize(float4x4 view);
   void Log();
   void FinalLog();
 
