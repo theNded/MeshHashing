@@ -5,7 +5,7 @@ dataset_path:     "/home/wei/Work/data/SUN3D-Princeton/hotel_umd/maryland_hotel3
 # Hash params
 bucket_count:      400000
 bucket_size:       10
-entry_count:       4000000
+count:       4000000
 linked_list_size:  7
 value_capacity:    100000
 

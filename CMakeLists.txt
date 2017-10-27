@@ -1,6 +1,5 @@
 cmake_minimum_required(VERSION 3.5)
 PROJECT(mesh-hashing)
-cmake_policy(SET CMP0015 NEW)
 
 #----------
 # C++ version setting
@@ -76,13 +75,13 @@ endforeach()
 #---------
 
 #----------
-SET(VH ${PROJECT_SOURCE_DIR})
-MESSAGE(STATUS ${CUDA_TOOLKIT_INCLUDE})
+SET(VH ${PROJECT_SOURCE_DIR}/src)
+SET(GL_WRAPPER ${VH}/extern/opengl-wrapper)
 
 INCLUDE_DIRECTORIES(
-        ${VH}/include
-        ${VH}/include/opengl
-        ${VH}/include/cuda
+        ${VH}
+        ${VH}/extern/cuda
+        ${GL_WRAPPER}/include
         ${GLOG_INCLUDE_DIRS}
         ${CUDA_TOOLKIT_INCLUDE})
 
@@ -90,77 +89,83 @@ INCLUDE_DIRECTORIES(
 ## Building Libraries
 ### 1. OpenGL util
 ADD_LIBRARY(gl-util
-        ${VH}/include/opengl/args.cc
-        ${VH}/include/opengl/program.cc
-        ${VH}/include/opengl/window.cc
-        ${VH}/include/opengl/uniforms.cc
-        ${VH}/include/opengl/camera.cc)
+        ${GL_WRAPPER}/src/args.cc
+        ${GL_WRAPPER}/src/program.cc
+        ${GL_WRAPPER}/src/window.cc
+        ${GL_WRAPPER}/src//uniforms.cc
+        ${GL_WRAPPER}/src/camera.cc)
+SET_TARGET_PROPERTIES(gl-util PROPERTIES COMPILE_DEFINITIONS USE_CUDA)
 TARGET_LINK_LIBRARIES(gl-util
         ${OPENGL_DEPENDENCIES}
         ${GLOG_LIBRARIES})
 
 ### 2. CUDA
-SET(CUDA_SEPARABLE_COMPILATION ON)
-# sm MUST >= 50, otherwise separable compilation will be disabled...
-# compute_35, sm_50 is ok
-LIST(APPEND CUDA_NVCC_FLAGS -gencode=arch=compute_52,code=sm_61)
+# Don't know exactly how it should be configured
+LIST(APPEND CUDA_NVCC_FLAGS -gencode=arch=compute_50,code=sm_60)
 CUDA_ADD_LIBRARY(mesh-hashing-cuda
-        ${VH}/src/constant.cu
-        ${VH}/src/hash_table.cu
-        ${VH}/src/block.cu
-        ${VH}/src/mesh.cu
-        ${VH}/src/sensor.cu
-        ${VH}/src/map_core.cu
-        ${VH}/src/map_fusion.cu
-        ${VH}/src/map_mesh.cu
-        #${VH}/src/map_plane.cu
-        ${VH}/src/map_debug.cu
-        ${VH}/src/ray_caster.cu)
+        ${VH}/core/hash_table.cu
+        ${VH}/core/entry_array.cu
+        ${VH}/core/block_array.cu
+        ${VH}/core/mesh.cu
+        ${VH}/core/collect_block_array.cu
+
+        ${VH}/sensor/rgbd_sensor.cu
+        ${VH}/sensor/preprocess.cu
+
+        ${VH}/mapping/allocate.cu
+        ${VH}/mapping/update_simple.cu
+        ${VH}/mapping/update_probabilistic.cu
+        ${VH}/mapping/recycle.cu
+
+        ${VH}/optimize/linear_equations.cu
+        ${VH}/optimize/primal_dual.cu
+
+        ${VH}/meshing/marching_cubes.cu
+
+        ${VH}/visualization/colorize.cu
+        ${VH}/visualization/compact_mesh.cu
+        ${VH}/visualization/bounding_box.cu
+        ${VH}/visualization/trajectory.cu
+        ${VH}/visualization/compress_mesh.cu
+        ${VH}/visualization/extract_bounding_box.cu
+        ${VH}/visualization/ray_caster.cu)
 TARGET_LINK_LIBRARIES(mesh-hashing-cuda
         ${CUDA_DEPENDENCIES}
-        -lopencv_core -lopencv_highgui -lopencv_imgproc# cv::Mat in sensor
+        -lopencv_core -lopencv_highgui -lopencv_imgproc
         ${GLOG_LIBRARIES})
 
 ### 3. C++
 ADD_LIBRARY(mesh-hashing
-        ${VH}/include/dataset_manager.cc
-        ${VH}/tool/cpp/debugger.cc)
+        ${VH}/engine/main_engine.cc
+        ${VH}/engine/mapping_engine.cc
+        ${VH}/engine/logging_engine.cc
+        ${VH}/engine/visualizing_engine.cc
+
+        ${VH}/io/config_manager.cc
+        ${VH}/io/mesh_writer.cc
+
+        ${VH}/sensor/rgbd_data_provider.cc)
+        #${VH}/tool/cpp/debugger.cc)
+SET_TARGET_PROPERTIES(mesh-hashing PROPERTIES COMPILE_DEFINITIONS USE_CUDA)
 TARGET_LINK_LIBRARIES(mesh-hashing
         mesh-hashing-cuda
         gl-util)
 
 #----------
-## Unit tests
-### CUDA - OpenGL intergration
-ADD_EXECUTABLE(cuda_gl_interp src/unit_test/cuda_gl_interp.cc)
-TARGET_LINK_LIBRARIES(cuda_gl_interp
-        mesh-hashing
-        -lopencv_core -lopencv_highgui
-        ${GLOG_LIBRARIES})
-
-ADD_EXECUTABLE(block_visualizer src/unit_test/block_visualizer.cc include/timer.h src/unit_test/video_clip.cc)
-TARGET_LINK_LIBRARIES(block_visualizer
-        mesh-hashing
-        ${OpenCV_LIBRARIES}
-        ${GLOG_LIBRARIES})
-
-ADD_EXECUTABLE(video_clip src/unit_test/video_clip.cc)
-TARGET_LINK_LIBRARIES(video_clip
-        -lopencv_core -lopencv_highgui)
-
 ### Loop over
 MESSAGE(STATUS ${GLOG_LIBRARIES})
-ADD_EXECUTABLE(mesh_hashing
-        src/example/mesh_hashing.cc)
-TARGET_LINK_LIBRARIES(mesh_hashing
+ADD_EXECUTABLE(reconstruction
+        src/app/reconstruction.cc)
+SET_TARGET_PROPERTIES(reconstruction PROPERTIES COMPILE_DEFINITIONS USE_CUDA)
+TARGET_LINK_LIBRARIES(reconstruction
         mesh-hashing
         -lopencv_core -lopencv_highgui
         ${GLOG_LIBRARIES})
 
-### An ORB example
+### An ORB app
 OPTION(WITH_ORBSLAM2 "Build with orb slam" ON)
 if (WITH_ORBSLAM2)
-    SET(ORB_SLAM2_PATH ../../opensource/orb_slam2)
+    SET(ORB_SLAM2_PATH ${VH}/extern/orb_slam2)
     MESSAGE(STATUS "Build with ORB-SLAM2")
 
     FIND_PACKAGE(Pangolin REQUIRED)
@@ -170,11 +175,12 @@ if (WITH_ORBSLAM2)
             ${ORB_SLAM2_PATH}/include
             ${EIGEN3_INCLUDE_DIR})
     LINK_DIRECTORIES(${ORB_SLAM2_PATH}/lib)
-    ADD_EXECUTABLE(rgbd_orb src/example/rgbd_orb.cc)
-    TARGET_LINK_LIBRARIES(rgbd_orb
+    ADD_EXECUTABLE(orb_slam2 src/app/orb_slam.cc)
+    TARGET_LINK_LIBRARIES(orb_slam2
             mesh-hashing
             ORB_SLAM2
             ${Pangolin_LIBRARIES}
             -lopencv_core -lopencv_highgui
             ${GLOG_LIBRARIES})
+    SET_TARGET_PROPERTIES(orb_slam2 PROPERTIES COMPILE_DEFINITIONS USE_CUDA)
 endif(WITH_ORBSLAM2)
