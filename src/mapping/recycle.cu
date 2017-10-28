@@ -20,7 +20,7 @@ void StarveOccupiedBlocksKernel(
   const uint idx = blockIdx.x;
   const HashEntry& entry = candidate_entries[idx];
   float weight = blocks[entry.ptr].voxels[threadIdx.x].weight;
-  weight = fmaxf(0, weight - 0.1f);
+  weight = fmaxf(0, weight - 1.0f);
   blocks[entry.ptr].voxels[threadIdx.x].weight = weight;
 }
 

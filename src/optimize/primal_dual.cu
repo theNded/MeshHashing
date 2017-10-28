@@ -25,18 +25,10 @@ void PrimalDualIteratePass1Kernel(
 
   // Pass 1
   // p_{n+1} = \delta (p_n + \sigma \nabla \bar{x_n})
-  float3 primal_gradient;
-  float dual_divergence;
-  bool valid = GetPrimalGradientDualDivergence(
+  float3 primal_gradient = GetPrimalGradient(
       entry, voxel_pos,
-      blocks,
-      hash_table,
-      geometry_helper,
-      primal_gradient,
-      dual_divergence
-  );
-  if (! valid) return;
-
+      blocks, hash_table,
+      geometry_helper);
   voxel.p = voxel.p + sigma * primal_gradient;
   voxel.p = voxel.p / fmaxf(1, length(voxel.p));
 }
@@ -60,16 +52,12 @@ void PrimalDualIteratePass2Kernel(
 
   // Pass 2: should be separated in another function
   // x_{n+1} = prox (x_{n} - \tau (\nabla^T) p_{n+1})
-  float3 primal_gradient;
-  float dual_divergence;
-  bool valid = GetPrimalGradientDualDivergence(
+  float dual_divergence = GetDualDivergence(
       entry, voxel_pos,
-      blocks,
-      hash_table,
-      geometry_helper,
-      primal_gradient,
-      dual_divergence
+      blocks, hash_table,
+      geometry_helper
   );
+
   float voxel_prev_x = voxel.x;
   voxel.x = voxel.x - tau * dual_divergence;
   voxel.x = (voxel.x + lambda * sigma * voxel.sdf) / (1 + lambda);

@@ -50,7 +50,8 @@ void UpdateBlocksSimpleKernel(
       sensor_params.min_depth_range,
       sensor_params.max_depth_range
   );
-  float weight = (1.0f - normalized_depth);
+  float weight = fmaxf(10 * geometry_helper.weight_sample * (1.0f - normalized_depth),
+                       1.0f);
   float truncation = geometry_helper.truncate_distance(depth);
   if (sdf <= -truncation)
     return;

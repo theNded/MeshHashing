@@ -14,23 +14,23 @@ public:
   void Init(
       int sensor_width,
       int sensor_height,
-      bool enable_input_refine
+      bool enable_bayesian_update
   );
   MappingEngine(
       int sensor_width,
       int sensor_height,
-      bool enable_input_refine
+      bool enable_bayesian_update
   );
   ~MappingEngine();
 
-  bool enable_input_refine() {
-    return enable_input_refine_;
+  bool enable_bayesian_update() {
+    return enable_bayesian_update_;
   }
   SensorLinearEquations& linear_equations() {
     return linear_equations_;
   }
 private:
-  bool enable_input_refine_ = false;
+  bool enable_bayesian_update_ = false;
   SensorLinearEquations linear_equations_;
 };
 

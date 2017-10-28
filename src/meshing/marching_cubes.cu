@@ -167,17 +167,17 @@ void MarchingCubesPass1Kernel(
   this_voxel.curr_cube_idx = 0;
 
   /// Check 8 corners of a cube: are they valid?
+  Voxel voxel_query;
   for (int i = 0; i < kVertexCount; ++i) {
-    float weight;
-    GetVoxelValue(entry,
-                  voxel_pos + kVtxOffset[i],
-                  blocks,
-                  hash_table,
-                  geometry_helper,
-                  d[i], weight);
-    if (weight < 0.5f)
+    if (! GetVoxelValue(entry, voxel_pos + kVtxOffset[i],
+                        blocks, hash_table,
+                        geometry_helper, &voxel_query))
       return;
+//
+//    if (voxel_query.weight < 0.2f)
+//      return;
 
+    d[i] = voxel_query.sdf;
     if (fabs(d[i]) > kThreshold) return;
 
     if (d[i] < kIsoLevel) cube_index |= (1 << i);
@@ -204,8 +204,7 @@ void MarchingCubesPass1Kernel(
 
       Voxel &voxel = GetVoxelRef(entry,
                                  voxel_pos + make_int3(c_idx.x, c_idx.y, c_idx.z),
-                                 blocks,
-                                 hash_table,
+                                 blocks, hash_table,
                                  geometry_helper);
       AllocateVertexWithMutex(voxel, c_idx.w, vertex_pos, mesh,
                               blocks, hash_table, geometry_helper,

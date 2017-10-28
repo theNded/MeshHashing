@@ -23,7 +23,7 @@ public:
   // configure main data
   MainEngine(
       const HashParams& hash_params,
-      const VolumeParams& sdf_params,
+      const VolumeParams& volume_params,
       const MeshParams& mesh_params,
       const SensorParams& sensor_params,
       const RayCasterParams& ray_caster_params
@@ -33,7 +33,7 @@ public:
 
   // configure engines
   void ConfigMappingEngine(
-      bool enable_input_refine
+      bool enable_bayesian_update
   );
   void ConfigVisualizingEngine(
       Light& light,
@@ -82,13 +82,13 @@ private:
   Mesh             mesh_;
 
   // Geometry
-  GeometryHelper geometry_helper_;
+  GeometryHelper  geometry_helper_;
 
   int             integrated_frame_count_ = 0;
   bool            enable_sdf_gradient_;
 
   HashParams hash_params_;
-  VolumeParams  volume_params_;
+  VolumeParams volume_params_;
   MeshParams mesh_params_;
   SensorParams sensor_params_;
   RayCasterParams ray_caster_params_;

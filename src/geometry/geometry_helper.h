@@ -29,6 +29,18 @@ struct GeometryHelper {
   float sdf_upper_bound;
   float weight_sample;
 
+  GeometryHelper() = default;
+  void Init(const VolumeParams &params) {
+    voxel_size = params.voxel_size;
+    truncation_distance_scale = params.truncation_distance_scale;
+    truncation_distance = params.truncation_distance;
+    sdf_upper_bound = params.sdf_upper_bound;
+    weight_sample = params.weight_sample;
+  }
+  GeometryHelper(const VolumeParams &params) {
+    Init(params);
+  }
+
   __host__ __device__
   inline
   float3 WorldToVoxelf(const float3 world_pos) {

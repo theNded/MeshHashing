@@ -53,32 +53,34 @@ inline Voxel &GetVoxelRef(
 // get SDF in @param blocks
 // with the help of @param hash_table and geometry_helper
 __device__
-inline void GetVoxelValue(
+inline bool GetVoxelValue(
     const HashEntry &curr_entry,
     const int3 voxel_pos,
     const BlockArray &blocks,
     const HashTable &hash_table,
     GeometryHelper &geometry_helper,
-    float &sdf,
-    float &weight) {
-  sdf = 0.0;
-  weight = 0;
+    Voxel* voxel) {
   int3 block_pos = geometry_helper.VoxelToBlock(voxel_pos);
   uint3 offset = geometry_helper.VoxelToOffset(block_pos, voxel_pos);
 
   if (curr_entry.pos == block_pos) {
     uint i = geometry_helper.VectorizeOffset(offset);
     const Voxel &v = blocks[curr_entry.ptr].voxels[i];
-    sdf = v.sdf;
-    weight = v.weight;
+    voxel->sdf = v.sdf;
+    voxel->weight = v.weight;
+    voxel->p = v.p;
+    voxel->x = v.x;
   } else {
     HashEntry entry = hash_table.GetEntry(block_pos);
-    if (entry.ptr == FREE_ENTRY) return;
+    if (entry.ptr == FREE_ENTRY) return false;
     uint i = geometry_helper.VectorizeOffset(offset);
     const Voxel &v = blocks[entry.ptr].voxels[i];
-    sdf = v.sdf;
-    weight = v.weight;
+    voxel->sdf = v.sdf;
+    voxel->weight = v.weight;
+    voxel->p = v.p;
+    voxel->x = v.x;
   }
+  return true;
 }
 
 __device__

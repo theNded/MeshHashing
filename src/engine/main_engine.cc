@@ -29,7 +29,7 @@ void MainEngine::Mapping(Sensor &sensor) {
                                                candidate_entries_);
 
   double update_time;
-  if (!map_engine_.enable_input_refine()) {
+  if (!map_engine_.enable_bayesian_update()) {
     update_time = UpdateBlocksSimple(candidate_entries_,
                                             blocks_,
                                             sensor,
@@ -161,14 +161,14 @@ void MainEngine::FinalLog() {
 /// Life cycle
 MainEngine::MainEngine(
     const HashParams& hash_params,
-    const VolumeParams &sdf_params,
+    const VolumeParams &volume_params,
     const MeshParams &mesh_params,
     const SensorParams &sensor_params,
     const RayCasterParams &ray_caster_params
 ) {
 
   hash_params_ = hash_params;
-  volume_params_ = sdf_params;
+  volume_params_ = volume_params;
   mesh_params_ = mesh_params;
   sensor_params_ = sensor_params;
   ray_caster_params_ = ray_caster_params;
@@ -179,13 +179,7 @@ MainEngine::MainEngine(
 
   mesh_.Resize(mesh_params);
 
-  geometry_helper_.voxel_size = sdf_params.voxel_size;
-  geometry_helper_.truncation_distance_scale =
-      sdf_params.truncation_distance_scale;
-  geometry_helper_.truncation_distance =
-      sdf_params.truncation_distance;
-  geometry_helper_.sdf_upper_bound = sdf_params.sdf_upper_bound;
-  geometry_helper_.weight_sample = sdf_params.weight_sample;
+  geometry_helper_.Init(volume_params);
 }
 
 MainEngine::~MainEngine() {
@@ -208,11 +202,11 @@ void MainEngine::Reset() {
 }
 
 void MainEngine::ConfigMappingEngine(
-    bool enable_input_refine
+    bool enable_bayesian_update
 ) {
   map_engine_.Init(sensor_params_.width,
                    sensor_params_.height,
-                   enable_input_refine);
+                   enable_bayesian_update);
 }
 
 void MainEngine::ConfigVisualizingEngine(

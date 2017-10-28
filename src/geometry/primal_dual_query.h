@@ -9,9 +9,9 @@
 #include "core/block_array.h"
 #include "core/hash_table.h"
 #include "geometry/geometry_helper.h"
+#include "geometry/voxel_query.h"
 #include "helper_math.h"
 
-// TODO: fix these awful conversions and coordinates
 __device__
 inline bool GetPrimalDualValue(
     const HashEntry &curr_entry,
@@ -22,7 +22,7 @@ inline bool GetPrimalDualValue(
     Voxel* voxel
 ) {
   int3 block_pos = geometry_helper.VoxelToBlock(voxel_pos);
-  int3 offset = geometry_helper.VoxelToOffset(block_pos, voxel_pos);
+  uint3 offset = geometry_helper.VoxelToOffset(block_pos, voxel_pos);
 
   if (curr_entry.pos == block_pos) {
     uint i = geometry_helper.VectorizeOffset(offset);
@@ -41,95 +41,52 @@ inline bool GetPrimalDualValue(
 }
 
 __device__
-inline bool GetPrimalGradientDualDivergence(
+inline float GetDualDivergence(
     const HashEntry &curr_entry,
-    const int3 voxel_local_pos,
+    const int3 voxel_pos,
     const BlockArray &blocks,
     const HashTable &hash_table,
-    GeometryHelper &geometry_helper,
-    float3& primal_gradient,
-    float& dual_divergence
+    GeometryHelper &geometry_helper
 ) {
-  bool valid = false;
+  Voxel voxel_query;
+  bool valid = GetVoxelValue(curr_entry, voxel_pos,
+                             blocks, hash_table,
+                             geometry_helper, &voxel_query);
+  if (! valid) return 0;
+  return (voxel_query.p.x + voxel_query.p.y + voxel_query.p.z);
+}
 
-  float primal000;
-  float3 dual000;
-  valid = GetPrimalDualValue(curr_entry,
-                             voxel_local_pos + make_int3(0, 0, 0),
-                             blocks,
-                             hash_table,
-                             geometry_helper,
-                             primal000, dual000);
-  if (! valid) return false;
-  dual_divergence = dual000.x + dual000.y + dual000.z;
+__device__
+inline float3 GetPrimalGradient(
+    const HashEntry &curr_entry,
+    const int3 voxel_pos,
+    const BlockArray &blocks,
+    const HashTable &hash_table,
+    GeometryHelper &geometry_helper
+) {
+  const int3 grad_offsets[3] = {{1,0,0}, {0,1,0}, {0,0,1}};
 
-  /// negative
-  float primaln00;
-  float3 dualn00;
-  valid = GetPrimalDualValue(curr_entry,
-                                  voxel_local_pos + make_int3(-1, 0, 0),
-                                  blocks,
-                                  hash_table,
-                                  geometry_helper,
-                                  primaln00, dualn00);
-  if (! valid) return false;
+  bool valid = true;
+  Voxel voxel_query;
+  float primalp[3], primaln[3];
+#pragma unroll 1
+  for (int i = 0; i < 3; ++i) {
+    valid = valid && GetPrimalDualValue(curr_entry, voxel_pos + grad_offsets[i],
+                                        blocks, hash_table,
+                                        geometry_helper, &voxel_query);
+    primalp[i] = voxel_query.x;
+    valid = valid && GetPrimalDualValue(curr_entry, voxel_pos - grad_offsets[i],
+                                        blocks, hash_table,
+                                        geometry_helper, &voxel_query);
+    primaln[i] = voxel_query.x;
+    if (! valid) break;
+  }
 
-  float primal0n0;
-  float3 dual0n0;
-  valid = GetPrimalDualValue(curr_entry,
-                             voxel_local_pos + make_int3(0, -1, 0),
-                             blocks,
-                             hash_table,
-                             geometry_helper,
-                             primal0n0, dual0n0);
-  if (! valid) return false;
-
-  float primal00n;
-  float3 dual00n;
-  valid = GetPrimalDualValue(curr_entry,
-                                  voxel_local_pos + make_int3(0, 0, -1),
-                                  blocks,
-                                  hash_table,
-                                  geometry_helper,
-                                  primal00n, dual00n);
-  if (! valid) return false;
-
-  /// Positive
-  float primalp00;
-  float3 dualp00;
-  valid = GetPrimalDualValue(curr_entry,
-                             voxel_local_pos + make_int3(-1, 0, 0),
-                             blocks,
-                             hash_table,
-                             geometry_helper,
-                             primalp00, dualp00);
-  if (! valid) return false;
-
-  float primal0p0;
-  float3 dual0p0;
-  valid = GetPrimalDualValue(curr_entry,
-                             voxel_local_pos + make_int3(0, -1, 0),
-                             blocks,
-                             hash_table,
-                             geometry_helper,
-                             primal0p0, dual0p0);
-  if (! valid) return false;
-
-  float primal00p;
-  float3 dual00p;
-  valid = GetPrimalDualValue(curr_entry,
-                             voxel_local_pos + make_int3(0, 0, -1),
-                             blocks,
-                             hash_table,
-                             geometry_helper,
-                             primal00p, dual00p);
-  if (! valid) return false;
-
-  primal_gradient = make_float3(primalp00 - primaln00,
-                                primal0p0 - primal0n0,
-                                primal00p - primal00n);
-
-  return false;
+  float3 primal_gradient = make_float3(primalp[0] - primaln[0],
+                                       primalp[1] - primaln[1],
+                                       primalp[2] - primaln[2]);
+  if (! valid) return make_float3(0.0f);
+  return primal_gradient;
 }
 
 
