@@ -48,12 +48,6 @@ inline int AllocateVertexWithMutex(
   }
 
   if (ptr >= 0) {
-    voxel.vertex_ptrs[vertex_idx] = ptr;
-    mesh.vertex(ptr).pos = vertex_pos;
-    if (enable_sdf_gradient) {
-      mesh.vertex(ptr).normal = GetSpatialGradient(vertex_pos, blocks, hash_table, geometry_helper);
-    }
-
     float sdf;
 #ifdef STATS
     Stat  stats;
@@ -64,7 +58,12 @@ inline int AllocateVertexWithMutex(
         , stats,
 #endif
     );
-
+    voxel.vertex_ptrs[vertex_idx] = ptr;
+    mesh.vertex(ptr).pos = vertex_pos;
+    if (enable_sdf_gradient) {
+      mesh.vertex(ptr).normal = GetSpatialGradient(vertex_pos, blocks, hash_table, geometry_helper);
+    }
+    mesh.vertex(ptr).color = make_float3(color.x, color.y, color.z) / 255.0;
 #ifdef STATS
     float3 val = ValToRGB(stats.duration, 0, 100);
     mesh.vertex(ptr).color = make_float3(val.x, val.y, val.z);
@@ -269,6 +268,7 @@ void MarchingCubesPass2Kernel(
       uint3 voxel_p = voxel_local_pos + make_uint3(c_idx.x, c_idx.y, c_idx.z);
       Voxel &voxel  = GetVoxelRef(entry, voxel_p, blocks, hash_table, geometry_helper);
       vertex_ptr[i] = voxel.GetVertex(c_idx.w);
+      Vertex& v = mesh.vertex(vertex_ptr[i]);
       voxel.ResetMutexes();
     }
   }

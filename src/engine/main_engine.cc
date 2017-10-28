@@ -17,21 +17,24 @@
 /// Host code
 ////////////////////
 void MainEngine::Mapping(Sensor &sensor) {
-  AllocBlockArray(hash_table_,
-                  sensor,
-                  geometry_helper_);
 
-  CollectBlocksInFrustum(hash_table_,
-                         sensor,
-                         geometry_helper_,
-                         candidate_entries_);
+  double alloc_time = AllocBlockArray(hash_table_,
+                                      sensor,
+                                      geometry_helper_);
 
-  if (! map_engine_.enable_input_refine()) {
-    UpdateBlocksSimple(candidate_entries_,
-                       blocks_,
-                       sensor,
-                       hash_table_,
-                       geometry_helper_);
+
+  double collect_time = CollectBlocksInFrustum(hash_table_,
+                                               sensor,
+                                               geometry_helper_,
+                                               candidate_entries_);
+
+  double update_time;
+  if (!map_engine_.enable_input_refine()) {
+    update_time = UpdateBlocksSimple(candidate_entries_,
+                                            blocks_,
+                                            sensor,
+                                            hash_table_,
+                                            geometry_helper_);
   } else {
     map_engine_.linear_equations().Reset();
     BuildSensorDataEquation(
@@ -59,6 +62,7 @@ void MainEngine::Mapping(Sensor &sensor) {
         geometry_helper_
     );
   }
+  log_engine_.WriteMappingTimeStamp(alloc_time,collect_time,update_time,integrated_frame_count_);
   integrated_frame_count_ ++;
 }
 
@@ -214,7 +218,8 @@ void MainEngine::ConfigVisualizingEngine(
     bool enable_bounding_box,
     bool enable_trajectory,
     bool enable_polygon_mode,
-    bool enable_ray_caster
+    bool enable_ray_caster,
+    bool enable_color
 ) {
   vis_engine_.Init("VisEngine", 640, 480);
   vis_engine_.set_interaction_mode(enable_navigation);
@@ -222,7 +227,8 @@ void MainEngine::ConfigVisualizingEngine(
   vis_engine_.BindMainProgram(mesh_params_.max_vertex_count,
                               mesh_params_.max_triangle_count,
                               enable_global_mesh,
-                              enable_polygon_mode);
+                              enable_polygon_mode,
+                              enable_color);
   vis_engine_.compact_mesh().Resize(mesh_params_);
 
   if (enable_bounding_box || enable_trajectory) {

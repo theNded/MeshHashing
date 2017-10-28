@@ -11,6 +11,7 @@
 #include <list>
 #include <glog/logging.h>
 #include <device_launch_parameters.h>
+#include <util/timer.h>
 #include "meshing/mc_tables.h"
 
 
@@ -116,12 +117,15 @@ void CollectAllBlocks(
             << candidate_entries.count();
 }
 
-void CollectBlocksInFrustum(
+double CollectBlocksInFrustum(
     HashTable &hash_table,
     Sensor   &sensor,
     GeometryHelper &geometry_helper,
     EntryArray &candidate_entries
 ) {
+
+  Timer timer;
+  timer.Tick();
   const uint threads_per_block = 256;
 
   uint entry_count = hash_table.entry_count;
@@ -143,5 +147,6 @@ void CollectBlocksInFrustum(
 
   LOG(INFO) << "Block count in view frustum: "
             << candidate_entries.count();
+  return timer.Tock();
 }
 

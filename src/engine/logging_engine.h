@@ -20,6 +20,8 @@ public:
   void ConfigPlyWriter();
   void WriteVideo(cv::Mat& mat);
   void WritePly(CompactMesh& mesh);
+  void WriteMappingTimeStamp(double alloc_time, double collect_time, double update_time,
+                               int num);
 
   bool enable_video() {
     return enable_video_;
@@ -34,6 +36,7 @@ private:
   std::string base_path_;
   std::string prefix_;
   cv::VideoWriter video_writer_;
+  std::ofstream time_stamp_file_;
 };
 
 

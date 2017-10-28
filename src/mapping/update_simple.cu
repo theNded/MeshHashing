@@ -1,4 +1,5 @@
 #include <device_launch_parameters.h>
+#include <util/timer.h>
 
 #include "core/block_array.h"
 #include "mapping/update_simple.h"
@@ -73,16 +74,19 @@ void UpdateBlocksSimpleKernel(
   this_voxel.Update(delta);
 }
 
-void UpdateBlocksSimple(EntryArray &candidate_entries,
+double UpdateBlocksSimple(EntryArray &candidate_entries,
                       BlockArray &blocks,
                       Sensor &sensor,
                       HashTable &hash_table,
                       GeometryHelper &geometry_helper) {
+
+  Timer timer;
+  timer.Tick();
   const uint threads_per_block = BLOCK_SIZE;
 
   uint compacted_entry_count = candidate_entries.count();
   if (compacted_entry_count <= 0)
-    return;
+    return timer.Tock();
 
   const dim3 grid_size(compacted_entry_count, 1);
   const dim3 block_size(threads_per_block, 1);
@@ -96,4 +100,5 @@ void UpdateBlocksSimple(EntryArray &candidate_entries,
           geometry_helper);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
+  return timer.Tock();
 }
