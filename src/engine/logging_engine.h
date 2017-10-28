@@ -5,6 +5,7 @@
 #ifndef ENGINE_LOGGING_ENGINE_H
 #define ENGINE_LOGGING_ENGINE_H
 
+#include <fstream>
 #include <string>
 #include <opencv2/opencv.hpp>
 
@@ -21,7 +22,7 @@ public:
   void WriteVideo(cv::Mat& mat);
   void WritePly(CompactMesh& mesh);
   void WriteMappingTimeStamp(double alloc_time, double collect_time, double update_time,
-                               int num);
+                               int frame_idx);
 
   bool enable_video() {
     return enable_video_;

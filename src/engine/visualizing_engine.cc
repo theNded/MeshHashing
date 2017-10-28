@@ -89,8 +89,8 @@ void VisualizingEngine::BindMainProgram(
 
 
   } else {
-    main_program_.Load(kShaderPath + "/model_multi_color_vertex.glsl", gl::kVertexShader);
-    main_program_.Load(kShaderPath + "/model_multi_color_fragment.glsl", gl::kFragmentShader);
+    main_program_.Load(kShaderPath + "/model_color_vertex.glsl", gl::kVertexShader);
+    main_program_.Load(kShaderPath + "/model_color_fragment.glsl", gl::kFragmentShader);
     main_program_.Build();
 
     main_uniforms_.GetLocation(main_program_.id(), "mvp", gl::kMatrix4f);

@@ -84,7 +84,7 @@ private:
   // Geometry
   GeometryHelper geometry_helper_;
 
-  int             integrated_frame_count_;
+  int             integrated_frame_count_ = 0;
   bool            enable_sdf_gradient_;
 
   HashParams hash_params_;

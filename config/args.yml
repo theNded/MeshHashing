@@ -10,7 +10,7 @@ dataset_type:    4
 # RenderMain options
 # 0 - shaded map,
 # 1 - color map (entropy, laplacian, duration, whatever)
-render_type:     0
+enable_color:     1
 
 enable_sdf_gradient:    1
 enable_polygon_mode:    1

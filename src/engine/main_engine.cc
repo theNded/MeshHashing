@@ -62,7 +62,11 @@ void MainEngine::Mapping(Sensor &sensor) {
         geometry_helper_
     );
   }
-  log_engine_.WriteMappingTimeStamp(alloc_time,collect_time,update_time,integrated_frame_count_);
+  log_engine_.WriteMappingTimeStamp(
+      alloc_time,
+      collect_time,
+      update_time,
+      integrated_frame_count_);
   integrated_frame_count_ ++;
 }
 

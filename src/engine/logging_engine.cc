@@ -2,6 +2,7 @@
 // Created by wei on 17-10-24.
 //
 
+#include <iomanip>
 #include <io/mesh_writer.h>
 #include <glog/logging.h>
 #include "logging_engine.h"
@@ -48,9 +49,10 @@ void LoggingEngine::WritePly(CompactMesh &mesh) {
 void LoggingEngine::WriteMappingTimeStamp(double alloc_time,
                                           double collect_time,
                                           double update_time,
-                                          int num) {
+                                          int frame_idx) {
 
-  time_stamp_file_ << "For " << num << "-th frame, alloc time : " << alloc_time * 1000 << "ms "
+  time_stamp_file_ << "For " << frame_idx << "-th frame, "
+                   << "alloc time : " << alloc_time * 1000 << "ms "
                    << "collect time : " << collect_time * 1000 << "ms "
                    << "update time : " << update_time * 1000 << "ms\n";
 }

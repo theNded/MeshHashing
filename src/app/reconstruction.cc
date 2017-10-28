@@ -73,7 +73,7 @@ int main(int argc, char **argv) {
       args.enable_trajectory,
       args.enable_polygon_mode,
       args.enable_ray_casting,
-      true
+      args.enable_color
   );
   main_engine.ConfigLoggingEngine(
       ".",
