@@ -38,6 +38,8 @@ struct __ALIGN__(8) Voxel {
   float  weight;
   uchar3 color;  // color
 
+  // TODO: split them into mesh_unit, stats, additional variables, etc
+  // mesh
   int vertex_ptrs   [N_VERTEX];  // 3
   int vertex_mutexes[N_VERTEX];  // 3
   int triangle_ptrs [N_TRIANGLE];// 5

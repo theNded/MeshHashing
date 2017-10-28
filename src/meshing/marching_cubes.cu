@@ -48,28 +48,22 @@ inline int AllocateVertexWithMutex(
   }
 
   if (ptr >= 0) {
-    float sdf;
-#ifdef STATS
-    Stat  stats;
-#endif
-    uchar3 color;
-    GetSpatialValue(vertex_pos, blocks, hash_table, geometry_helper, sdf, color
-#ifdef STATS
-        , stats,
-#endif
-    );
+    Voxel voxel_query;
+    GetSpatialValue(vertex_pos, blocks, hash_table,
+                    geometry_helper, &voxel_query);
     voxel.vertex_ptrs[vertex_idx] = ptr;
     mesh.vertex(ptr).pos = vertex_pos;
+    mesh.vertex(ptr).color = make_float3(voxel_query.color) / 255.0;
     if (enable_sdf_gradient) {
-      mesh.vertex(ptr).normal = GetSpatialGradient(vertex_pos, blocks, hash_table, geometry_helper);
+      mesh.vertex(ptr).normal = GetSpatialSDFGradient(vertex_pos,
+                                                      blocks, hash_table,
+                                                      geometry_helper);
     }
-    mesh.vertex(ptr).color = make_float3(color.x, color.y, color.z) / 255.0;
 #ifdef STATS
     float3 val = ValToRGB(stats.duration, 0, 100);
     mesh.vertex(ptr).color = make_float3(val.x, val.y, val.z);
 #endif
   }
-
   return ptr;
 }
 

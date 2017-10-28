@@ -15,39 +15,27 @@
 __device__
 inline bool GetPrimalDualValue(
     const HashEntry &curr_entry,
-    int3 voxel_local_pos,
+    const int3 voxel_pos,
     const BlockArray &blocks,
     const HashTable &hash_table,
     GeometryHelper &geometry_helper,
-    float &primal,
-    float3 &dual) {
-  int3 block_offset = voxel_local_pos / BLOCK_SIDE_LENGTH;
-  if (voxel_local_pos.x < 0) {
-    block_offset.x = -1;
-    voxel_local_pos.x += BLOCK_SIDE_LENGTH;
-  }
-  if (voxel_local_pos.y < 0) {
-    block_offset.y = -1;
-    voxel_local_pos.y += BLOCK_SIDE_LENGTH;
-  }
-  if (voxel_local_pos.z < 0) {
-    block_offset.z = -1;
-    voxel_local_pos.z += BLOCK_SIDE_LENGTH;
-  }
+    Voxel* voxel
+) {
+  int3 block_pos = geometry_helper.VoxelToBlock(voxel_pos);
+  int3 offset = geometry_helper.VoxelToOffset(block_pos, voxel_pos);
 
-  if (block_offset == make_int3(0)) {
-    uint i = geometry_helper.VectorizeOffset(make_uint3(voxel_local_pos));
+  if (curr_entry.pos == block_pos) {
+    uint i = geometry_helper.VectorizeOffset(offset);
     const Voxel &v = blocks[curr_entry.ptr].voxels[i];
-    primal = v.x;
-    dual = v.p;
+    voxel->x = v.x;
+    voxel->p = v.p;
   } else {
-    HashEntry entry = hash_table.GetEntry(curr_entry.pos + block_offset);
+    HashEntry entry = hash_table.GetEntry(block_pos);
     if (entry.ptr == FREE_ENTRY) return false;
-    uint i = geometry_helper.VectorizeOffset(make_uint3(voxel_local_pos % BLOCK_SIDE_LENGTH));
-
+    uint i = geometry_helper.VectorizeOffset(offset);
     const Voxel &v = blocks[entry.ptr].voxels[i];
-    primal = v.x;
-    dual = v.p;
+    voxel->x = v.x;
+    voxel->p = v.p;
   }
   return true;
 }
