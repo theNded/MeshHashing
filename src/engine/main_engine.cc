@@ -17,21 +17,24 @@
 /// Host code
 ////////////////////
 void MainEngine::Mapping(Sensor &sensor) {
-  AllocBlockArray(hash_table_,
-                  sensor,
-                  geometry_helper_);
 
-  CollectBlocksInFrustum(hash_table_,
-                         sensor,
-                         geometry_helper_,
-                         candidate_entries_);
+  double alloc_time = AllocBlockArray(hash_table_,
+                                      sensor,
+                                      geometry_helper_);
 
-  if (! map_engine_.enable_input_refine()) {
-    UpdateBlocksSimple(candidate_entries_,
-                       blocks_,
-                       sensor,
-                       hash_table_,
-                       geometry_helper_);
+
+  double collect_time = CollectBlocksInFrustum(hash_table_,
+                                               sensor,
+                                               geometry_helper_,
+                                               candidate_entries_);
+
+  double update_time;
+  if (!map_engine_.enable_input_refine()) {
+    update_time = UpdateBlocksSimple(candidate_entries_,
+                                            blocks_,
+                                            sensor,
+                                            hash_table_,
+                                            geometry_helper_);
   } else {
     map_engine_.linear_equations().Reset();
     BuildSensorDataEquation(
@@ -59,6 +62,7 @@ void MainEngine::Mapping(Sensor &sensor) {
         geometry_helper_
     );
   }
+  log_engine_.WriteMappingTimeStamp(alloc_time,collect_time,update_time,integrated_frame_count_);
   integrated_frame_count_ ++;
 }
 

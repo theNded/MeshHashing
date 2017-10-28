@@ -63,7 +63,7 @@ int main(int argc, char **argv) {
   );
 
   main_engine.ConfigMappingEngine(
-      true
+      false
   );
   main_engine.ConfigVisualizingEngine(
       light,

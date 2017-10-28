@@ -18,7 +18,7 @@
 // according to the existing @param mesh
 //                 and input @param sensor data
 // with the help of hash_table and geometry_helper
-void UpdateBlocksSimple(
+double UpdateBlocksSimple(
     EntryArray& candidate_entries,
     BlockArray& blocks,
     Sensor& sensor,

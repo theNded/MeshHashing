@@ -2,6 +2,7 @@
 // Created by wei on 17-10-22.
 //
 
+#include <util/timer.h>
 #include "mapping/allocate.h"
 
 __global__
@@ -97,11 +98,13 @@ void AllocBlockArrayKernel(HashTable   hash_table,
   }
 }
 
-void AllocBlockArray(
+double AllocBlockArray(
     HashTable& hash_table,
     Sensor& sensor,
     GeometryHelper& geometry_helper
 ) {
+  Timer timer;
+  timer.Tick();
   hash_table.ResetMutexes();
 
   const uint threads_per_block = 8;
@@ -118,4 +121,5 @@ void AllocBlockArray(
       geometry_helper);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
+  return timer.Tock();
 }

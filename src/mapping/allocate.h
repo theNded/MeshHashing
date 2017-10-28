@@ -13,7 +13,7 @@
 // See what entries of @param hash_table
 // was affected by @param sensor
 // with the help of @param geometry_helper
-void AllocBlockArray(
+double AllocBlockArray(
     HashTable& hash_table,
     Sensor& sensor,
     GeometryHelper& geometry_helper

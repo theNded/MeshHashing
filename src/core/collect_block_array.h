@@ -23,7 +23,7 @@ void CollectAllBlocks(
 // Filter the positions with @param sensor info (pose and params),
 //                       and @param geometry helper
 // Write to the @param candidate_entries (for parallel computation)
-void CollectBlocksInFrustum(
+double CollectBlocksInFrustum(
     HashTable &hash_table,
     Sensor &sensor,
     GeometryHelper &geometry_helper,
