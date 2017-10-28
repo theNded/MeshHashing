@@ -36,14 +36,14 @@ inline bool GetPrimalDualValue(
   }
 
   if (block_offset == make_int3(0)) {
-    uint i = geometry_helper.VoxelLocalPosToIdx(make_uint3(voxel_local_pos));
+    uint i = geometry_helper.VectorizeOffset(make_uint3(voxel_local_pos));
     const Voxel &v = blocks[curr_entry.ptr].voxels[i];
     primal = v.x;
     dual = v.p;
   } else {
     HashEntry entry = hash_table.GetEntry(curr_entry.pos + block_offset);
     if (entry.ptr == FREE_ENTRY) return false;
-    uint i = geometry_helper.VoxelLocalPosToIdx(make_uint3(voxel_local_pos % BLOCK_SIDE_LENGTH));
+    uint i = geometry_helper.VectorizeOffset(make_uint3(voxel_local_pos % BLOCK_SIDE_LENGTH));
 
     const Voxel &v = blocks[entry.ptr].voxels[i];
     primal = v.x;

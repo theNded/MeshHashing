@@ -24,14 +24,17 @@ inline Voxel GetVoxel(
     const HashTable &hash_table,
     GeometryHelper &geometry_helper
 ) {
-  HashEntry hash_entry = hash_table.GetEntry(geometry_helper.WorldToBlock(world_pos));
+  int3 voxel_pos = geometry_helper.WorldToVoxeli(world_pos);
+  int3 block_pos = geometry_helper.VoxelToBlock(voxel_pos);
+  uint3 offset = geometry_helper.VoxelToOffset(block_pos, voxel_pos);
+  HashEntry entry = hash_table.GetEntry(block_pos);
+
   Voxel v;
-  if (hash_entry.ptr == FREE_ENTRY) {
+  if (entry.ptr == FREE_ENTRY) {
     v.ClearSDF();
   } else {
-    int3 voxel_pos = geometry_helper.WorldToVoxeli(world_pos);
-    int i = geometry_helper.VoxelPosToIdx(voxel_pos);
-    v = blocks[hash_entry.ptr].voxels[i];
+    uint i = geometry_helper.VectorizeOffset(offset);
+    v = blocks[entry.ptr].voxels[i];
   }
   return v;
 }
@@ -43,23 +46,23 @@ inline Voxel GetVoxel(
 __device__
 inline Voxel &GetVoxelRef(
     const HashEntry &curr_entry,
-    const uint3 voxel_local_pos,
+    const int3 voxel_pos,
     BlockArray &blocks,
     const HashTable &hash_table,
     GeometryHelper &geometry_helper
 ) {
+  int3 block_pos = geometry_helper.VoxelToBlock(voxel_pos);
+  uint3 offset = geometry_helper.VoxelToOffset(block_pos, voxel_pos);
 
-  int3 block_offset = make_int3(voxel_local_pos) / BLOCK_SIDE_LENGTH;
-
-  if (block_offset == make_int3(0)) {
-    uint i = geometry_helper.VoxelLocalPosToIdx(voxel_local_pos);
+  if (curr_entry.pos == block_pos) {
+    uint i = geometry_helper.VectorizeOffset(offset);
     return blocks[curr_entry.ptr].voxels[i];
   } else {
-    HashEntry entry = hash_table.GetEntry(curr_entry.pos + block_offset);
+    HashEntry entry = hash_table.GetEntry(block_pos);
     if (entry.ptr == FREE_ENTRY) {
       printf("GetVoxelRef: should never reach here!\n");
     }
-    uint i = geometry_helper.VoxelLocalPosToIdx(voxel_local_pos % BLOCK_SIDE_LENGTH);
+    uint i = geometry_helper.VectorizeOffset(offset);
     return blocks[entry.ptr].voxels[i];
   }
 }
@@ -72,7 +75,7 @@ inline Voxel &GetVoxelRef(
 __device__
 inline void GetVoxelValue(
     const HashEntry &curr_entry,
-    const uint3 voxel_local_pos,
+    const int3 voxel_pos,
     const BlockArray &blocks,
     const HashTable &hash_table,
     GeometryHelper &geometry_helper,
@@ -80,18 +83,18 @@ inline void GetVoxelValue(
     float &weight) {
   sdf = 0.0;
   weight = 0;
-  int3 block_offset = make_int3(voxel_local_pos) / BLOCK_SIDE_LENGTH;
+  int3 block_pos = geometry_helper.VoxelToBlock(voxel_pos);
+  uint3 offset = geometry_helper.VoxelToOffset(block_pos, voxel_pos);
 
-  if (block_offset == make_int3(0)) {
-    uint i = geometry_helper.VoxelLocalPosToIdx(voxel_local_pos);
+  if (curr_entry.pos == block_pos) {
+    uint i = geometry_helper.VectorizeOffset(offset);
     const Voxel &v = blocks[curr_entry.ptr].voxels[i];
     sdf = v.sdf;
     weight = v.weight;
   } else {
-    HashEntry entry = hash_table.GetEntry(curr_entry.pos + block_offset);
+    HashEntry entry = hash_table.GetEntry(block_pos);
     if (entry.ptr == FREE_ENTRY) return;
-    uint i = geometry_helper.VoxelLocalPosToIdx(voxel_local_pos % BLOCK_SIDE_LENGTH);
-
+    uint i = geometry_helper.VectorizeOffset(offset);
     const Voxel &v = blocks[entry.ptr].voxels[i];
     sdf = v.sdf;
     weight = v.weight;

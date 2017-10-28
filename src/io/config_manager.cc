@@ -16,7 +16,7 @@ void LoadRuntimeParams(std::string path, RuntimeParams& params) {
   params.dataset_type  = (int)fs["dataset_type"];
 
   params.enable_navigation   = (int)fs["enable_navigation"];
-  params.enable_polygon_mode = (int)fs["enable_ploygon_mode"];
+  params.enable_polygon_mode = (int)fs["enable_polygon_mode"];
   params.enable_global_mesh = (int)fs["enable_global_mesh"];
   params.enable_sdf_gradient = (int)fs["enable_sdf_gradient"];
   params.enable_color   = (int)fs["enable_color"];

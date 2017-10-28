@@ -37,8 +37,8 @@ void ConvertColorFormatKernel(float4 *dst, uchar4 *src,
 
   uchar4 c = src[idx];
   bool is_valid = (c.x != 0 && c.y != 0 && c.z != 0);
-  dst[idx] = is_valid ? make_float4(c.x / 255.0f, c.y / 255.0f,
-                                    c.z / 255.0f, c.w / 255.0f)
+  dst[idx] = is_valid ? make_float4(c.z / 255.0f, c.y / 255.0f,
+                                    c.x / 255.0f, c.w / 255.0f)
                       : make_float4(MINF, MINF, MINF, MINF);
 }
 

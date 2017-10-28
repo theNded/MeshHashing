@@ -25,7 +25,7 @@ void UpdateBlocksSimpleKernel(
   const HashEntry &entry = candidate_entries[blockIdx.x];
   int3 voxel_base_pos = geometry_helper.BlockToVoxel(entry.pos);
   uint local_idx = threadIdx.x;  //inside of an SDF block
-  int3 voxel_pos = voxel_base_pos + make_int3(geometry_helper.IdxToVoxelLocalPos(local_idx));
+  int3 voxel_pos = voxel_base_pos + make_int3(geometry_helper.DevectorizeIndex(local_idx));
 
   Voxel &this_voxel = blocks[entry.ptr].voxels[local_idx];
   /// 2. Project to camera

@@ -31,52 +31,58 @@ struct GeometryHelper {
 
   __host__ __device__
   inline
-  float3 WorldToVoxelf(const float3 &world_pos) {
+  float3 WorldToVoxelf(const float3 world_pos) {
     return world_pos / voxel_size;
   }
 
   __host__ __device__
   inline
-  int3 WorldToVoxeli(const float3 &world_pos) {
+  int3 WorldToVoxeli(const float3 world_pos) {
     const float3 p = world_pos / voxel_size;
     return make_int3(p + make_float3(sign(p)) * 0.5f);
   }
 
   __host__ __device__
-  inline
-  float3 VoxelToWorld(const int3 &voxel_pos) {
+  inline // no offset here: value is stored 90on the corner of a voxel
+  float3 VoxelToWorld(const int3 voxel_pos) {
     return make_float3(voxel_pos) * voxel_size;
   }
 
 /// Voxel <-> Block
-  __host__ __device__
-  inline
-  int3 VoxelToBlock(int3 voxel_pos) {
-    if (voxel_pos.x < 0) voxel_pos.x -= BLOCK_SIDE_LENGTH - 1;
-    if (voxel_pos.y < 0) voxel_pos.y -= BLOCK_SIDE_LENGTH - 1;
-    if (voxel_pos.z < 0) voxel_pos.z -= BLOCK_SIDE_LENGTH - 1;
-
-    return make_int3(voxel_pos.x / BLOCK_SIDE_LENGTH,
-                     voxel_pos.y / BLOCK_SIDE_LENGTH,
-                     voxel_pos.z / BLOCK_SIDE_LENGTH);
-  }
 // Corner voxel with smallest xyz
   __host__ __device__
   inline
-  int3 BlockToVoxel(const int3 &block_pos) {
+  int3 BlockToVoxel(const int3 block_pos) {
     return block_pos * BLOCK_SIDE_LENGTH;
   }
 
-/// Block <-> World
   __host__ __device__
   inline
-  float3 BlockToWorld(const int3 &block_pos) {
+  int3 VoxelToBlock(const int3 voxel_pos) {
+    int3 pos = voxel_pos;
+    pos.x -= (voxel_pos.x < 0) * (BLOCK_SIDE_LENGTH - 1);
+    pos.y -= (voxel_pos.y < 0) * (BLOCK_SIDE_LENGTH - 1);
+    pos.z -= (voxel_pos.z < 0) * (BLOCK_SIDE_LENGTH - 1);
+    return pos / BLOCK_SIDE_LENGTH;
+  }
+
+  __host__ __device__
+  inline
+  uint3 VoxelToOffset(const int3 block_pos, const int3 voxel_pos) {
+    int3 offset = voxel_pos - BlockToVoxel(block_pos);
+    return make_uint3(offset);
+  }
+
+  /// Block <-> World
+  __host__ __device__
+  inline
+  float3 BlockToWorld(const int3 block_pos) {
     return VoxelToWorld(BlockToVoxel(block_pos));
   }
 
   __host__ __device__
   inline
-  int3 WorldToBlock(const float3 &world_pos) {
+  int3 WorldToBlock(const float3 world_pos) {
     return VoxelToBlock(WorldToVoxeli(world_pos));
   }
 
@@ -85,7 +91,7 @@ struct GeometryHelper {
 /// Idx means local idx inside a block \in [0, 512)
   __host__ __device__
   inline
-  uint3 IdxToVoxelLocalPos(uint idx) {
+  uint3 DevectorizeIndex(const uint idx) {
     uint x = idx % BLOCK_SIDE_LENGTH;
     uint y = (idx % (BLOCK_SIDE_LENGTH * BLOCK_SIDE_LENGTH)) / BLOCK_SIDE_LENGTH;
     uint z = idx / (BLOCK_SIDE_LENGTH * BLOCK_SIDE_LENGTH);
@@ -95,39 +101,17 @@ struct GeometryHelper {
 /// Computes the linearized index of a local virtual voxel pos; pos \in [0, 8)^3
   __host__ __device__
   inline
-  uint VoxelLocalPosToIdx(const uint3 &voxel_local_pos) {
+  uint VectorizeOffset(const uint3 voxel_local_pos) {
     return voxel_local_pos.z * BLOCK_SIDE_LENGTH * BLOCK_SIDE_LENGTH +
            voxel_local_pos.y * BLOCK_SIDE_LENGTH +
            voxel_local_pos.x;
-  }
-
-  __host__ __device__
-  inline
-  int VoxelPosToIdx(const int3 &voxel_pos) {
-    int3 voxel_local_pos = make_int3(
-        voxel_pos.x % BLOCK_SIDE_LENGTH,
-        voxel_pos.y % BLOCK_SIDE_LENGTH,
-        voxel_pos.z % BLOCK_SIDE_LENGTH);
-
-    if (voxel_local_pos.x < 0) voxel_local_pos.x += BLOCK_SIDE_LENGTH;
-    if (voxel_local_pos.y < 0) voxel_local_pos.y += BLOCK_SIDE_LENGTH;
-    if (voxel_local_pos.z < 0) voxel_local_pos.z += BLOCK_SIDE_LENGTH;
-
-    return VoxelLocalPosToIdx(make_uint3(voxel_local_pos));
-  }
-
-  __host__ __device__
-  inline
-  int WorldPosToIdx(const float3 &world_pos) {
-    int3 voxel_pos = WorldToVoxeli(world_pos);
-    return VoxelPosToIdx(voxel_pos);
   }
 
 //////////
 /// Truncating distance
   __host__ __device__
   inline
-  float truncate_distance(float z) {
+  float truncate_distance(const float z) {
     return truncation_distance +truncation_distance_scale * z;
   }
 
@@ -137,7 +121,7 @@ struct GeometryHelper {
 /// Projection
   __host__ __device__
   inline
-  float2 CameraProjectToImagef(const float3 &camera_pos,
+  float2 CameraProjectToImagef(const float3 camera_pos,
                                float fx, float fy, float cx, float cy) {
     return make_float2(camera_pos.x * fx / camera_pos.z + cx,
                        camera_pos.y * fy / camera_pos.z + cy);
@@ -146,7 +130,7 @@ struct GeometryHelper {
   __host__ __device__
   inline
   int2 CameraProjectToImagei(
-      const float3 &camera_pos,
+      const float3 camera_pos,
       float fx, float fy, float cx, float cy) {
     float2 uv = CameraProjectToImagef(camera_pos, fx, fy, cx, cy);
     return make_int2(uv + make_float2(0.5f, 0.5f));
@@ -179,7 +163,7 @@ struct GeometryHelper {
   __host__ __device__
   inline
   bool IsPointInCameraFrustum(const float4x4 &c_T_w,
-                              const float3 &world_pos,
+                              const float3 world_pos,
                               const SensorParams &sensor_params) {
     float3 camera_pos = c_T_w * world_pos;
     float2 uv = CameraProjectToImagef(camera_pos,
@@ -201,7 +185,7 @@ struct GeometryHelper {
   __host__ __device__
   inline
   bool IsBlockInCameraFrustum(float4x4 c_T_w,
-                              const int3 &block_pos,
+                              const int3 block_pos,
                               const SensorParams &sensor_params) {
     float3 world_pos = VoxelToWorld(BlockToVoxel(block_pos))
                        + voxel_size * 0.5f * (BLOCK_SIDE_LENGTH - 1.0f);

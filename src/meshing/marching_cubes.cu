@@ -152,7 +152,7 @@ void MarchingCubesPass1Kernel(
   const uint local_idx = threadIdx.x;
 
   int3 voxel_base_pos = geometry_helper.BlockToVoxel(entry.pos);
-  uint3 voxel_local_pos = geometry_helper.IdxToVoxelLocalPos(local_idx);
+  uint3 voxel_local_pos = geometry_helper.DevectorizeIndex(local_idx);
   int3 voxel_pos = voxel_base_pos + make_int3(voxel_local_pos);
   float3 world_pos = geometry_helper.VoxelToWorld(voxel_pos);
 
@@ -174,11 +174,9 @@ void MarchingCubesPass1Kernel(
 
   /// Check 8 corners of a cube: are they valid?
   for (int i = 0; i < kVertexCount; ++i) {
-    uint3 offset = make_uint3(kVtxOffset[i]);
     float weight;
-
     GetVoxelValue(entry,
-                  voxel_local_pos + offset,
+                  voxel_pos + kVtxOffset[i],
                   blocks,
                   hash_table,
                   geometry_helper,
@@ -189,7 +187,7 @@ void MarchingCubesPass1Kernel(
     if (fabs(d[i]) > kThreshold) return;
 
     if (d[i] < kIsoLevel) cube_index |= (1 << i);
-    p[i] = world_pos + kVoxelSize * make_float3(offset);
+    p[i] = world_pos + kVoxelSize * make_float3(kVtxOffset[i]);
   }
   this_voxel.curr_cube_idx = cube_index;
   if (cube_index == 0 || cube_index == 255) return;
@@ -211,7 +209,7 @@ void MarchingCubesPass1Kernel(
                                       d[v_idx.x], d[v_idx.y], kIsoLevel);
 
       Voxel &voxel = GetVoxelRef(entry,
-                                 voxel_local_pos + make_uint3(c_idx.x, c_idx.y, c_idx.z),
+                                 voxel_pos + make_int3(c_idx.x, c_idx.y, c_idx.z),
                                  blocks,
                                  hash_table,
                                  geometry_helper);
@@ -236,7 +234,7 @@ void MarchingCubesPass2Kernel(
   const uint local_idx = threadIdx.x;
 
   int3 voxel_base_pos = geometry_helper.BlockToVoxel(entry.pos);
-  uint3 voxel_local_pos = geometry_helper.IdxToVoxelLocalPos(local_idx);
+  uint3 voxel_local_pos = geometry_helper.DevectorizeIndex(local_idx);
   int3 voxel_pos = voxel_base_pos + make_int3(voxel_local_pos);
   float3 world_pos = geometry_helper.VoxelToWorld(voxel_pos);
 
@@ -265,7 +263,7 @@ void MarchingCubesPass2Kernel(
   for (int i = 0; i < kEdgeCount; ++i) {
     if (kEdgeTable[this_voxel.curr_cube_idx] & (1 << i)) {
       uint4 c_idx = kEdgeCubeTable[i];
-      uint3 voxel_p = voxel_local_pos + make_uint3(c_idx.x, c_idx.y, c_idx.z);
+      int3 voxel_p = voxel_pos + make_int3(c_idx.x, c_idx.y, c_idx.z);
       Voxel &voxel  = GetVoxelRef(entry, voxel_p, blocks, hash_table, geometry_helper);
       vertex_ptr[i] = voxel.GetVertex(c_idx.w);
       Vertex& v = mesh.vertex(vertex_ptr[i]);
@@ -355,7 +353,7 @@ void UpdateStatisticsKernel(HashTable        hash_table,
   const uint local_idx   = threadIdx.x;
 
   int3  voxel_base_pos  = BlockToVoxel(entry.pos);
-  uint3 voxel_local_pos = IdxToVoxelLocalPos(local_idx);
+  uint3 voxel_local_pos = DevectorizeIndex(local_idx);
   int3 voxel_pos        = voxel_base_pos + make_int3(voxel_local_pos);
 
   const int3 offset[] = {

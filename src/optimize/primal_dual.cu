@@ -21,7 +21,7 @@ void PrimalDualIteratePass1Kernel(
 
   int3 voxel_base_pos = geometry_helper.BlockToVoxel(entry.pos);
   uint local_idx = threadIdx.x;  //inside of an SDF block
-  int3 voxel_pos = voxel_base_pos + make_int3(geometry_helper.IdxToVoxelLocalPos(local_idx));
+  int3 voxel_pos = voxel_base_pos + make_int3(geometry_helper.DevectorizeIndex(local_idx));
 
   // Pass 1
   // p_{n+1} = \delta (p_n + \sigma \nabla \bar{x_n})
@@ -56,7 +56,7 @@ void PrimalDualIteratePass2Kernel(
 
   int3 voxel_base_pos = geometry_helper.BlockToVoxel(entry.pos);
   uint local_idx = threadIdx.x;  //inside of an SDF block
-  int3 voxel_pos = voxel_base_pos + make_int3(geometry_helper.IdxToVoxelLocalPos(local_idx));
+  int3 voxel_pos = voxel_base_pos + make_int3(geometry_helper.DevectorizeIndex(local_idx));
 
   // Pass 2: should be separated in another function
   // x_{n+1} = prox (x_{n} - \tau (\nabla^T) p_{n+1})

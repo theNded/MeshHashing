@@ -86,8 +86,6 @@ void VisualizingEngine::BindMainProgram(
     main_uniforms_.GetLocation(main_program_.id(), "light", gl::kVector3f);
     main_uniforms_.GetLocation(main_program_.id(), "light_power", gl::kFloat);
     main_uniforms_.GetLocation(main_program_.id(), "light_color", gl::kVector3f);
-
-
   } else {
     main_program_.Load(kShaderPath + "/model_color_vertex.glsl", gl::kVertexShader);
     main_program_.Load(kShaderPath + "/model_color_fragment.glsl", gl::kFragmentShader);
