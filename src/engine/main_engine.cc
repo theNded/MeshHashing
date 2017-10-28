@@ -214,7 +214,8 @@ void MainEngine::ConfigVisualizingEngine(
     bool enable_bounding_box,
     bool enable_trajectory,
     bool enable_polygon_mode,
-    bool enable_ray_caster
+    bool enable_ray_caster,
+    bool enable_color
 ) {
   vis_engine_.Init("VisEngine", 640, 480);
   vis_engine_.set_interaction_mode(enable_navigation);
@@ -222,7 +223,8 @@ void MainEngine::ConfigVisualizingEngine(
   vis_engine_.BindMainProgram(mesh_params_.max_vertex_count,
                               mesh_params_.max_triangle_count,
                               enable_global_mesh,
-                              enable_polygon_mode);
+                              enable_polygon_mode,
+                              enable_color);
   vis_engine_.compact_mesh().Resize(mesh_params_);
 
   if (enable_bounding_box || enable_trajectory) {

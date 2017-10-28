@@ -30,7 +30,7 @@ public:
   void update_view_matrix();
   void set_view_matrix(glm::mat4 view);
 
-    int Render();
+  int Render();
   cv::Mat Capture() {
     return window_.CaptureRGB();
   }
@@ -40,7 +40,8 @@ public:
       uint max_vertices,
       uint max_triangles,
       bool enable_global_mesh,
-      bool enable_polygon_mode
+      bool enable_polygon_mode,
+      bool enable_color
   );
   void BindMainUniforms();
   void BindMainData();
@@ -104,6 +105,7 @@ private:
   bool enable_bounding_box_ = false;
   bool enable_trajectory_   = false;
   bool enable_polygon_mode_ = false;
+  bool enable_color_ = false;
 
   // Lighting conditions
   Light light_;

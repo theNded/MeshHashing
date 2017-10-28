@@ -42,7 +42,8 @@ public:
       bool enable_bounding_box,
       bool enable_trajectory,
       bool enable_polygon_mode,
-      bool enable_ray_caster
+      bool enable_ray_caster,
+      bool enable_color
   );
 
   void ConfigLoggingEngine(
