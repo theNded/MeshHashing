@@ -63,7 +63,7 @@ int main(int argc, char **argv) {
   );
 
   main_engine.ConfigMappingEngine(
-      false
+      args.enable_bayesian_update
   );
   main_engine.ConfigVisualizingEngine(
       light,

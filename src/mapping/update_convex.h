@@ -6,11 +6,4 @@
 #define MESH_HASHING_UPDATE_CONVEX_H
 
 
-
-class update_convex {
-
-};
-
-
-
 #endif //MESH_HASHING_UPDATE_CONVEX_H

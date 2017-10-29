@@ -2,7 +2,8 @@
 // Created by wei on 17-10-22.
 //
 
-#include <mapping/update_probabilistic.h>
+#include <mapping/update_bayesian.h>
+#include <optimize/primal_dual.h>
 #include "engine/main_engine.h"
 
 #include "core/collect_block_array.h"
@@ -30,37 +31,57 @@ void MainEngine::Mapping(Sensor &sensor) {
 
   double update_time;
   if (!map_engine_.enable_bayesian_update()) {
+    LOG(INFO) << "Simple update";
     update_time = UpdateBlocksSimple(candidate_entries_,
                                             blocks_,
                                             sensor,
                                             hash_table_,
                                             geometry_helper_);
   } else {
-    map_engine_.linear_equations().Reset();
-    BuildSensorDataEquation(
-        candidate_entries_,
-        blocks_,
-        mesh_,
-        sensor,
-        hash_table_,
-        geometry_helper_,
-        map_engine_.linear_equations()
-    );
+    LOG(INFO) << "Bayesian update";
+    update_time = UpdateBlocksSimple(candidate_entries_,
+                                     blocks_,
+                                     sensor,
+                                     hash_table_,
+                                     geometry_helper_);
+    if (integrated_frame_count_ % 16 == 15) {
+      LOG(INFO) << "Primal dual init";
+      PrimalDualInit(candidate_entries_, blocks_);
+      for (int i = 0; i < 260; ++i) {
+        std::cout << "Primal dual iteration: " << i << std::endl;
+        PrimalDualIterate(candidate_entries_, blocks_,
+                          hash_table_, geometry_helper_, 10, 1, 1);
+        Meshing();
+        Visualize(sensor.cTw());
+        Log();
+      }
+    }
 
-    SolveSensorDataEquation(
-        map_engine_.linear_equations(),
-        sensor,
-        geometry_helper_
-    );
-
-    UpdateBlocksBayesian(
-        candidate_entries_,
-        blocks_,
-        sensor,
-        map_engine_.linear_equations(),
-        hash_table_,
-        geometry_helper_
-    );
+//    map_engine_.linear_equations().Reset();
+//    BuildSensorDataEquation(
+//        candidate_entries_,
+//        blocks_,
+//        mesh_,
+//        sensor,
+//        hash_table_,
+//        geometry_helper_,
+//        map_engine_.linear_equations()
+//    );
+//
+//    SolveSensorDataEquation(
+//        map_engine_.linear_equations(),
+//        sensor,
+//        geometry_helper_
+//    );
+//
+//    UpdateBlocksBayesian(
+//        candidate_entries_,
+//        blocks_,
+//        sensor,
+//        map_engine_.linear_equations(),
+//        hash_table_,
+//        geometry_helper_
+//    );
   }
   log_engine_.WriteMappingTimeStamp(
       alloc_time,

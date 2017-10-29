@@ -80,6 +80,7 @@ inline bool GetVoxelValue(
     voxel->p = v.p;
     voxel->x = v.x;
   }
+  if (voxel->weight < EPSILON) return false;
   return true;
 }
 

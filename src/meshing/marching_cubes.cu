@@ -174,8 +174,8 @@ void MarchingCubesPass1Kernel(
                         geometry_helper, &voxel_query))
       return;
 //
-//    if (voxel_query.weight < 0.2f)
-//      return;
+    if (voxel_query.weight < 3.0f)
+      return;
 
     d[i] = voxel_query.sdf;
     if (fabs(d[i]) > kThreshold) return;

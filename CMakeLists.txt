@@ -116,7 +116,7 @@ CUDA_ADD_LIBRARY(mesh-hashing-cuda
 
         ${VH}/mapping/allocate.cu
         ${VH}/mapping/update_simple.cu
-        ${VH}/mapping/update_probabilistic.cu
+        ${VH}/mapping/update_bayesian.cu
         ${VH}/mapping/recycle.cu
 
         ${VH}/optimize/linear_equations.cu

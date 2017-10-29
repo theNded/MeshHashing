@@ -18,7 +18,8 @@ void UpdateBlocksSimpleKernel(
     SensorParams sensor_params,
     float4x4 cTw,
     HashTable hash_table,
-    GeometryHelper geometry_helper) {
+    GeometryHelper geometry_helper
+) {
 
   //TODO check if we should load this in shared memory (entries)
   /// 1. Select voxel
@@ -75,21 +76,23 @@ void UpdateBlocksSimpleKernel(
   this_voxel.Update(delta);
 }
 
-double UpdateBlocksSimple(EntryArray &candidate_entries,
-                      BlockArray &blocks,
-                      Sensor &sensor,
-                      HashTable &hash_table,
-                      GeometryHelper &geometry_helper) {
+double UpdateBlocksSimple(
+    EntryArray &candidate_entries,
+    BlockArray &blocks,
+    Sensor &sensor,
+    HashTable &hash_table,
+    GeometryHelper &geometry_helper
+) {
 
   Timer timer;
   timer.Tick();
   const uint threads_per_block = BLOCK_SIZE;
 
-  uint compacted_entry_count = candidate_entries.count();
-  if (compacted_entry_count <= 0)
+  uint candidate_entry_count = candidate_entries.count();
+  if (candidate_entry_count <= 0)
     return timer.Tock();
 
-  const dim3 grid_size(compacted_entry_count, 1);
+  const dim3 grid_size(candidate_entry_count, 1);
   const dim3 block_size(threads_per_block, 1);
   UpdateBlocksSimpleKernel << < grid_size, block_size >> > (
       candidate_entries,

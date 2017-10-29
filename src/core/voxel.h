@@ -52,7 +52,7 @@ struct __ALIGN__(8) Voxel {
   short curr_cube_idx, prev_cube_idx;
 
 //#ifdef PRIMAL_DUAL
-  float  x, x_bar;
+  float  x0, x, x_bar;
   float3 p;
 //#endif
 

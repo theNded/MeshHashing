@@ -3,7 +3,7 @@
 //
 
 #include <device_launch_parameters.h>
-#include "update_probabilistic.h"
+#include "update_bayesian.h"
 
 #include "core/block_array.h"
 #include "mapping/update_simple.h"
@@ -132,7 +132,10 @@ void UpdateBlocksBayesianKernel(
       sensor_params.min_depth_range,
       sensor_params.max_depth_range
   );
-  float weight = (1.0f - normalized_depth);
+  float sigma = (depth - 0.4f) * 0.0019f + 0.0012f;
+  float dist = length(sample_pos_cam - camera_pos) / sigma;
+  float weight = fmaxf(geometry_helper.weight_sample * 10 * expf(-(dist*dist)),
+                       1.0f);
   float truncation = geometry_helper.truncate_distance(depth);
   if (sdf <= -truncation)
     return;
@@ -167,11 +170,11 @@ void BuildSensorDataEquation(
 ) {
   const uint threads_per_block = BLOCK_SIZE;
 
-  uint compacted_entry_count = candidate_entries.count();
-  if (compacted_entry_count <= 0)
+  uint candidate_entry_count = candidate_entries.count();
+  if (candidate_entry_count <= 0)
     return;
 
-  const dim3 grid_size(compacted_entry_count, 1);
+  const dim3 grid_size(candidate_entry_count, 1);
   const dim3 block_size(threads_per_block, 1);
   BuildSensorDataEquationKernel << < grid_size, block_size >> > (
       candidate_entries,
@@ -197,11 +200,11 @@ void UpdateBlocksBayesian(
 ) {
   const uint threads_per_block = BLOCK_SIZE;
 
-  uint compacted_entry_count = candidate_entries.count();
-  if (compacted_entry_count <= 0)
+  uint candidate_entry_count = candidate_entries.count();
+  if (candidate_entry_count <= 0)
     return;
 
-  const dim3 grid_size(compacted_entry_count, 1);
+  const dim3 grid_size(candidate_entry_count, 1);
   const dim3 block_size(threads_per_block, 1);
   UpdateBlocksBayesianKernel << < grid_size, block_size >> > (
       candidate_entries,

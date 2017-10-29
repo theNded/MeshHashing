@@ -7,15 +7,13 @@
 dataset_type:    4
 
 # -----------
-# RenderMain options
-# 0 - shaded map,
-# 1 - color map (entropy, laplacian, duration, whatever)
-enable_color:     0
+enable_bayesian_update: 0
 
 enable_sdf_gradient:    1
 enable_polygon_mode:    0
 
-enable_navigation:      1
+enable_color:           1
+enable_navigation:      0
 enable_global_mesh:     1
 enable_bounding_box:    0
 enable_trajectory:      0

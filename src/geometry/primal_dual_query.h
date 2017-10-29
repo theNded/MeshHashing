@@ -27,16 +27,24 @@ inline bool GetPrimalDualValue(
   if (curr_entry.pos == block_pos) {
     uint i = geometry_helper.VectorizeOffset(offset);
     const Voxel &v = blocks[curr_entry.ptr].voxels[i];
+    voxel->sdf = v.sdf;
     voxel->x = v.x;
     voxel->p = v.p;
+    voxel->x_bar = v.x_bar;
+    voxel->weight = v.weight;
   } else {
     HashEntry entry = hash_table.GetEntry(block_pos);
     if (entry.ptr == FREE_ENTRY) return false;
     uint i = geometry_helper.VectorizeOffset(offset);
     const Voxel &v = blocks[entry.ptr].voxels[i];
+    voxel->sdf = v.sdf;
     voxel->x = v.x;
     voxel->p = v.p;
+    voxel->x_bar = v.x_bar;
+    voxel->weight = v.weight;
   }
+
+  if (voxel->weight < EPSILON) return false;
   return true;
 }
 
@@ -57,12 +65,13 @@ inline float GetDualDivergence(
 }
 
 __device__
-inline float3 GetPrimalGradient(
+inline bool GetPrimalGradient(
     const HashEntry &curr_entry,
     const int3 voxel_pos,
     const BlockArray &blocks,
     const HashTable &hash_table,
-    GeometryHelper &geometry_helper
+    GeometryHelper &geometry_helper,
+    float3* primal_gradient
 ) {
   const int3 grad_offsets[3] = {{1,0,0}, {0,1,0}, {0,0,1}};
 
@@ -74,19 +83,18 @@ inline float3 GetPrimalGradient(
     valid = valid && GetPrimalDualValue(curr_entry, voxel_pos + grad_offsets[i],
                                         blocks, hash_table,
                                         geometry_helper, &voxel_query);
-    primalp[i] = voxel_query.x;
+    primalp[i] = voxel_query.sdf;
     valid = valid && GetPrimalDualValue(curr_entry, voxel_pos - grad_offsets[i],
                                         blocks, hash_table,
                                         geometry_helper, &voxel_query);
-    primaln[i] = voxel_query.x;
-    if (! valid) break;
+    primaln[i] = voxel_query.sdf;
+    if (! valid) return false;
   }
 
-  float3 primal_gradient = make_float3(primalp[0] - primaln[0],
-                                       primalp[1] - primaln[1],
-                                       primalp[2] - primaln[2]);
-  if (! valid) return make_float3(0.0f);
-  return primal_gradient;
+  *primal_gradient = make_float3(primalp[0] - primaln[0],
+                                 primalp[1] - primaln[1],
+                                 primalp[2] - primaln[2]);
+  return true;
 }
 
 

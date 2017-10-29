@@ -15,6 +15,7 @@ void LoadRuntimeParams(std::string path, RuntimeParams& params) {
   cv::FileStorage fs(path, cv::FileStorage::READ);
   params.dataset_type  = (int)fs["dataset_type"];
 
+  params.enable_bayesian_update = (int)fs["enable_bayesian_update"];
   params.enable_navigation   = (int)fs["enable_navigation"];
   params.enable_polygon_mode = (int)fs["enable_polygon_mode"];
   params.enable_global_mesh = (int)fs["enable_global_mesh"];
