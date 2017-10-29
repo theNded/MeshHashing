@@ -58,6 +58,7 @@ public:
   void Recycle();
   int Visualize(float4x4 view);
   void Log();
+  void RecordBlocks();
   void FinalLog();
 
   const int& frame_count() {

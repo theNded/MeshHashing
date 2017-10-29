@@ -3,6 +3,7 @@
 //
 
 #include <mapping/update_probabilistic.h>
+#include <extern/cuda/helper_cuda.h>
 #include "engine/main_engine.h"
 
 #include "core/collect_block_array.h"
@@ -263,4 +264,32 @@ void MainEngine::ConfigLoggingEngine(
   if (enable_ply) {
     log_engine_.ConfigPlyWriter();
   }
+}
+
+void MainEngine::RecordBlocks() {
+
+  std::map<int3, Block, Int3Sort> blockmap;
+  CollectAllBlocks(hash_table_, candidate_entries_);
+  Block *cpublock = new Block[hash_params_.value_capacity];
+  uint N = candidate_entries_.count();
+  HashEntry *cpuhashentry = new HashEntry[N];
+  cudaMemcpy(cpublock, blocks_.GetGPUPtr(),
+             sizeof(Block) * hash_params_.value_capacity,
+             cudaMemcpyDeviceToHost);
+  cudaMemcpy(cpuhashentry, candidate_entries_.GetGPUPtr(),
+             sizeof(HashEntry) * N,
+             cudaMemcpyDeviceToHost);
+
+  for (uint i = 0; i < N; ++i) {
+    int3 &pos = cpuhashentry[i].pos;
+    CHECK_LT(cpuhashentry[i].ptr, hash_params_.value_capacity);
+    Block &block = cpublock[cpuhashentry[i].ptr];
+    blockmap.emplace(pos, block);
+  }
+  log_engine_.WriteBlock(integrated_frame_count_ - 1, blockmap);
+  std::map<int3, Block, Int3Sort> &&readblock = log_engine_.ReadBlock(integrated_frame_count_ - 1);
+//  log_engine_.WriteBlockWithFormat(integrated_frame_count_-1,blockmap);
+//  readblock=log_engine_.ReadBlockWithFormat(integrated_frame_count_-1);
+  delete[] cpublock;
+  delete[] cpuhashentry;
 }
