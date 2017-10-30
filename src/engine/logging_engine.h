@@ -33,6 +33,9 @@ public:
   void WriteMappingTimeStamp(double alloc_time, double collect_time, double update_time,
                                int frame_idx);
 
+  void BlockRecordProcedure(const Block *block_gpu, uint block_num,
+                            const HashEntry *candidate_entry_gpu, uint entry_num,
+                            int frame_idx);
   void WriteBlockWithFormat(int frame_idx,const std::map<int3,Block,Int3Sort>& blocks);
   std::map<int3,Block,Int3Sort> ReadBlockWithFormat(int frame_idx);
   void WriteBlock(int frame_idx,const std::map<int3,Block,Int3Sort>& blocks);

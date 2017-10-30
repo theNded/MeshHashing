@@ -6,6 +6,7 @@
 #include <io/mesh_writer.h>
 #include <glog/logging.h>
 #include <core/block.h>
+#include <core/hash_entry.h>
 #include "logging_engine.h"
 
 void LoggingEngine::Init(std::string path) {
@@ -77,7 +78,6 @@ void LoggingEngine::WriteBlock(int frame_idx, const std::map<int3, Block, Int3So
 
 std::map<int3, Block, Int3Sort> LoggingEngine::ReadBlock(int frame_idx) {
   std::ifstream file(base_path_ + "/Blocks/" + std::to_string(frame_idx) + ".block");
-  auto func = [](const int3 a, const int3 b) -> bool { if (a.x != b.x) return a.x < b.x; };
   std::map<int3, Block, Int3Sort> blocks;
   if (!file.is_open()) {
     LOG(WARNING) << " can't open block file.";
@@ -164,4 +164,32 @@ std::map<int3, Block, Int3Sort> LoggingEngine::ReadBlockWithFormat(int frame_idx
   }
   file.close();
   return blocks;
+}
+
+void LoggingEngine::BlockRecordProcedure(const Block *block_gpu, uint block_num,
+                                         const HashEntry *candidate_entry_gpu, uint entry_num,
+                                         int frame_idx) {
+
+  std::map<int3, Block, Int3Sort> block_map;
+  Block *block_cpu = new Block[block_num];
+  HashEntry *candidate_entry_cpu = new HashEntry[entry_num];
+  cudaMemcpy(block_cpu, block_gpu,
+             sizeof(Block) * block_num,
+             cudaMemcpyDeviceToHost);
+  cudaMemcpy(candidate_entry_cpu, candidate_entry_gpu,
+             sizeof(HashEntry) * entry_num,
+             cudaMemcpyDeviceToHost);
+
+  for (uint i = 0; i < entry_num; ++i) {
+    int3 &pos = candidate_entry_cpu[i].pos;
+    CHECK_LT(candidate_entry_cpu[i].ptr, entry_num);
+    Block &block = block_cpu[candidate_entry_cpu[i].ptr];
+    block_map.emplace(pos, block);
+  }
+  WriteBlock(frame_idx - 1, block_map);
+  std::map<int3, Block, Int3Sort> &&readblock = ReadBlock(frame_idx - 1);
+//  log_engine_.WriteBlockWithFormat(integrated_frame_count_-1,block_map);
+//  readblock=log_engine_.ReadBlockWithFormat(integrated_frame_count_-1);
+  delete[] block_cpu;
+  delete[] candidate_entry_cpu;
 }
