@@ -33,6 +33,9 @@ public:
     return counter_[0];
   }
 
+  __host__ HashEntry* GetGPUPtr() const{
+    return entries_;
+  }
 private:
   bool      is_allocated_on_gpu_ = false;
   // @param const element

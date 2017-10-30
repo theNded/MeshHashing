@@ -34,6 +34,9 @@ public:
     return blocks_[i];
   }
 
+  __host__ Block* GetGPUPtr() const{
+    return blocks_;
+  }
 private:
   bool is_allocated_on_gpu_ = false;
   // @param array
