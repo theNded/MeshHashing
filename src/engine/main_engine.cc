@@ -44,13 +44,16 @@ void MainEngine::Mapping(Sensor &sensor) {
                                      sensor,
                                      hash_table_,
                                      geometry_helper_);
-    if (integrated_frame_count_ % 16 == 15) {
+
+    if (integrated_frame_count_ % 100 == 99) {
       LOG(INFO) << "Primal dual init";
-      PrimalDualInit(candidate_entries_, blocks_);
-      for (int i = 0; i < 260; ++i) {
-        std::cout << "Primal dual iteration: " << i << std::endl;
+      //CollectAllBlocks(hash_table_, candidate_entries_);
+      PrimalDualInit(candidate_entries_, blocks_, hash_table_, geometry_helper_);
+      for (int i = 0; i < 10; ++i) {
+        //std::cout << "Primal dual iteration: " << i << std::endl;
         PrimalDualIterate(candidate_entries_, blocks_,
-                          hash_table_, geometry_helper_, 10, 1, 1);
+                          hash_table_, geometry_helper_,
+                          1, 0.1, 0.1);
         Meshing();
         Visualize(sensor.cTw());
         Log();
@@ -153,7 +156,6 @@ int MainEngine::Visualize(float4x4 view) {
   if (vis_engine_.enable_trajectory()) {
     vis_engine_.trajectory().AddPose(view.getInverse());
   }
-
 
 
   if (vis_engine_.enable_ray_casting()) {

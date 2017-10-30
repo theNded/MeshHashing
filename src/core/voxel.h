@@ -52,7 +52,8 @@ struct __ALIGN__(8) Voxel {
   short curr_cube_idx, prev_cube_idx;
 
 //#ifdef PRIMAL_DUAL
-  float  x0, x, x_bar;
+  bool   mask;
+  float  sdf0, sdf_bar;
   float3 p;
 //#endif
 
@@ -81,6 +82,10 @@ struct __ALIGN__(8) Voxel {
   void ClearSDF() {
     sdf = weight = 0.0f;
     color = make_uchar3(0, 0, 0);
+    sdf0 = 0;
+    sdf_bar = 0;
+    p = make_float3(0);
+    mask = false;
   }
 
   __host__ __device__

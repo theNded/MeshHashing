@@ -135,7 +135,7 @@ CUDA_ADD_LIBRARY(mesh-hashing-cuda
 TARGET_LINK_LIBRARIES(mesh-hashing-cuda
         ${CUDA_DEPENDENCIES}
         ${GLOG_LIBRARIES}
-        -lopencv_core -lopencv_highgui -lopencv_imgproc)
+        ${OpenCV_LIBS})
 
 ### 3. C++
 ADD_LIBRARY(mesh-hashing
@@ -168,6 +168,14 @@ TARGET_LINK_LIBRARIES(reconstruction
         -lopencv_core -lopencv_highgui
         ${GLOG_LIBRARIES})
 
+ADD_EXECUTABLE(BlockAnalysis src/app/Block_Analysis.cc)
+SET_TARGET_PROPERTIES(BlockAnalysis
+        PROPERTIES
+        COMPILE_DEFINITIONS USE_CUDA_GL)
+TARGET_LINK_LIBRARIES(BlockAnalysis
+        mesh-hashing
+        ${OpenCV_LIBS}
+        ${GLOG_LIBRARIES})
 ### An ORB app
 OPTION(WITH_ORBSLAM2 "Build with orb slam" ON)
 if (WITH_ORBSLAM2)
@@ -186,7 +194,7 @@ if (WITH_ORBSLAM2)
     TARGET_LINK_LIBRARIES(orb_slam2
             mesh-hashing
             ORB_SLAM2
-            -lopencv_core -lopencv_highgui
+            ${OpenCV_LIBS}
             ${Pangolin_LIBRARIES}
             ${GLOG_LIBRARIES})
 
