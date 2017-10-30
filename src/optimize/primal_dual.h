@@ -13,7 +13,9 @@
 
 void PrimalDualInit(
     EntryArray& candidate_entries,
-    BlockArray& blocks
+    BlockArray& blocks,
+    HashTable& hash_table,
+    GeometryHelper& geometry_helper
 );
 
 void PrimalDualIterate(

@@ -101,7 +101,7 @@ int main(int argc, char **argv) {
       break;
 
     main_engine.Log();
-    main_engine.Recycle();
+    //main_engine.Recycle();
   }
 
   main_engine.FinalLog();

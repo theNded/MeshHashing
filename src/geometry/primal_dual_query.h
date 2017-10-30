@@ -28,40 +28,105 @@ inline bool GetPrimalDualValue(
     uint i = geometry_helper.VectorizeOffset(offset);
     const Voxel &v = blocks[curr_entry.ptr].voxels[i];
     voxel->sdf = v.sdf;
-    voxel->x = v.x;
+    voxel->sdf0 = v.sdf0;
+    voxel->sdf_bar = v.sdf_bar;
     voxel->p = v.p;
-    voxel->x_bar = v.x_bar;
+    voxel->mask = v.mask;
     voxel->weight = v.weight;
   } else {
     HashEntry entry = hash_table.GetEntry(block_pos);
-    if (entry.ptr == FREE_ENTRY) return false;
+    if (entry.ptr == FREE_ENTRY)
+      return false;
+
     uint i = geometry_helper.VectorizeOffset(offset);
     const Voxel &v = blocks[entry.ptr].voxels[i];
     voxel->sdf = v.sdf;
-    voxel->x = v.x;
     voxel->p = v.p;
-    voxel->x_bar = v.x_bar;
+    voxel->sdf0 = v.sdf0;
+    voxel->sdf_bar = v.sdf_bar;
+    voxel->mask = v.mask;
     voxel->weight = v.weight;
   }
-
-  if (voxel->weight < EPSILON) return false;
   return true;
 }
 
 __device__
-inline float GetDualDivergence(
+inline bool GetSDFGradient(
     const HashEntry &curr_entry,
     const int3 voxel_pos,
     const BlockArray &blocks,
     const HashTable &hash_table,
-    GeometryHelper &geometry_helper
+    GeometryHelper &geometry_helper,
+    float3* primal_gradient
 ) {
+  const int3 grad_offsets[3] = {{1,0,0}, {0,1,0}, {0,0,1}};
+
   Voxel voxel_query;
-  bool valid = GetVoxelValue(curr_entry, voxel_pos,
-                             blocks, hash_table,
-                             geometry_helper, &voxel_query);
-  if (! valid) return 0;
-  return (voxel_query.p.x + voxel_query.p.y + voxel_query.p.z);
+  bool valid = GetPrimalDualValue(curr_entry, voxel_pos,
+                                  blocks, hash_table,
+                                  geometry_helper, &voxel_query);
+  if (! valid || voxel_query.weight < EPSILON || !voxel_query.mask) {
+    printf("GetSDFGradinet: Invalid Center\n");
+  }
+
+  float primal = voxel_query.sdf;
+  float primalp[3];
+#pragma unroll 1
+  for (int i = 0; i < 3; ++i) {
+    valid = GetPrimalDualValue(curr_entry, voxel_pos + grad_offsets[i],
+                               blocks, hash_table,
+                               geometry_helper, &voxel_query);
+    if (! valid || voxel_query.weight < EPSILON || !voxel_query.mask) {
+      *primal_gradient = make_float3(0);
+      return false;
+    }
+    primalp[i] = voxel_query.sdf;
+  }
+
+  *primal_gradient = make_float3(primalp[0] - primal,
+                                 primalp[1] - primal,
+                                 primalp[2] - primal);
+  return true;
+}
+
+__device__
+inline bool GetDualDivergence(
+    const HashEntry &curr_entry,
+    const int3 voxel_pos,
+    const BlockArray &blocks,
+    const HashTable &hash_table,
+    GeometryHelper &geometry_helper,
+    float *dual_divergence
+) {
+  const int3 grad_offsets[3] = {{1,0,0}, {0,1,0}, {0,0,1}};
+
+  Voxel voxel_query;
+  bool valid = GetPrimalDualValue(curr_entry, voxel_pos,
+                                  blocks, hash_table,
+                                  geometry_helper, &voxel_query);
+  if (! valid || voxel_query.weight < EPSILON || !voxel_query.mask) {
+    printf("GetDualDivergence: Invalid Center\n");
+    return false;
+  }
+  float3 dual = voxel_query.p;
+  float3 dualn[3];
+
+#pragma unroll 1
+  for (int i = 0; i < 3; ++i) {
+    valid = valid && GetPrimalDualValue(curr_entry, voxel_pos - grad_offsets[i],
+                                        blocks, hash_table,
+                                        geometry_helper, &voxel_query);
+    dualn[i] = voxel_query.p;
+    if (! valid || voxel_query.weight < EPSILON || !voxel_query.mask) {
+      *dual_divergence = 0;
+      return false;
+    }
+  }
+
+  *dual_divergence = (dualn[0] - dual).x
+                     + (dualn[1] - dual).y
+                     + (dualn[2] - dual).z;
+  return true;
 }
 
 __device__
@@ -75,25 +140,32 @@ inline bool GetPrimalGradient(
 ) {
   const int3 grad_offsets[3] = {{1,0,0}, {0,1,0}, {0,0,1}};
 
-  bool valid = true;
   Voxel voxel_query;
-  float primalp[3], primaln[3];
+  float primalp[3], primal;
+  bool valid = GetPrimalDualValue(curr_entry, voxel_pos,
+                                  blocks, hash_table,
+                                  geometry_helper, &voxel_query);
+  if (! valid || voxel_query.weight < EPSILON || !voxel_query.mask) {
+    printf("GetPrimalGradient: Invalid Center\n");
+    return false;
+  }
+  primal = voxel_query.sdf_bar;
+
 #pragma unroll 1
   for (int i = 0; i < 3; ++i) {
     valid = valid && GetPrimalDualValue(curr_entry, voxel_pos + grad_offsets[i],
                                         blocks, hash_table,
                                         geometry_helper, &voxel_query);
-    primalp[i] = voxel_query.sdf;
-    valid = valid && GetPrimalDualValue(curr_entry, voxel_pos - grad_offsets[i],
-                                        blocks, hash_table,
-                                        geometry_helper, &voxel_query);
-    primaln[i] = voxel_query.sdf;
-    if (! valid) return false;
+    primalp[i] = voxel_query.sdf_bar;
+    if (! valid || voxel_query.weight < EPSILON || !voxel_query.mask) {
+      *primal_gradient = make_float3(0);
+      return false;
+    }
   }
 
-  *primal_gradient = make_float3(primalp[0] - primaln[0],
-                                 primalp[1] - primaln[1],
-                                 primalp[2] - primaln[2]);
+  *primal_gradient = make_float3(primalp[0] - primal,
+                                 primalp[1] - primal,
+                                 primalp[2] - primal);
   return true;
 }
 

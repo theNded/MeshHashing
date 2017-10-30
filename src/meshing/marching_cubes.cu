@@ -156,7 +156,7 @@ void MarchingCubesPass1Kernel(
   /// 1. Read the scalar values, see mc_tables.h
   const int kVertexCount = 8;
   const float kVoxelSize = geometry_helper.voxel_size;
-  const float kThreshold = 0.2f;
+  const float kThreshold = 0.20f;
   const float kIsoLevel = 0;
 
   float d[kVertexCount];
