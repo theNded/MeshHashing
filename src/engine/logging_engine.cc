@@ -5,6 +5,8 @@
 #include <iomanip>
 #include <io/mesh_writer.h>
 #include <glog/logging.h>
+#include <core/block.h>
+#include <core/hash_entry.h>
 #include "logging_engine.h"
 
 void LoggingEngine::Init(std::string path) {
@@ -12,7 +14,7 @@ void LoggingEngine::Init(std::string path) {
 
   time_stamp_file_.open(base_path_ + "/mappingstamp.txt");
   if (!time_stamp_file_.is_open()) {
-    LOG(ERROR) << "Can't open mappoint stamp file";
+    LOG(ERROR) << "Can't open mappoing stamp file";
     return;
   }
 
@@ -55,4 +57,139 @@ void LoggingEngine::WriteMappingTimeStamp(double alloc_time,
                    << "alloc time : " << alloc_time * 1000 << "ms "
                    << "collect time : " << collect_time * 1000 << "ms "
                    << "update time : " << update_time * 1000 << "ms\n";
+}
+
+void LoggingEngine::WriteBlock(int frame_idx, const std::map<int3, Block, Int3Sort> &blocks) {
+  std::ofstream file(base_path_ + "/Blocks/" + std::to_string(frame_idx) + ".block",
+                     std::ios::binary);
+  if (!file.is_open()) {
+    LOG(WARNING) << "can't open block file.";
+    return;
+  }
+
+  int N = sizeof(std::pair<int3, Block>);
+  int num = blocks.size();
+  file.write((char *) &num, sizeof(int));
+  for (auto &&block:blocks) {
+    file.write((char *) &block, N);
+  }
+  file.close();
+}
+
+std::map<int3, Block, Int3Sort> LoggingEngine::ReadBlock(int frame_idx) {
+  std::ifstream file(base_path_ + "/Blocks/" + std::to_string(frame_idx) + ".block");
+  std::map<int3, Block, Int3Sort> blocks;
+  if (!file.is_open()) {
+    LOG(WARNING) << " can't open block file.";
+    return blocks;
+  }
+
+  int num;
+  file.read((char *) &num, sizeof(int));
+  if (file.bad()) {
+    LOG(WARNING) << " can't open block file.";
+    return blocks;
+  }
+
+  std::pair<int3, Block> block;
+  int N = sizeof(block);
+  for (int i = 0; i < num; ++i) {
+    file.read((char *) &block, N);
+    if (file.bad()) {
+      LOG(WARNING) << " did not read the whole block file.";
+      return std::move(blocks);
+    }
+    blocks.insert(block);
+  }
+  file.close();
+  return std::move(blocks);
+}
+
+void
+LoggingEngine::WriteBlockWithFormat(int frame_idx, const std::map<int3, Block, Int3Sort> &blocks) {
+  std::ofstream file(base_path_ + "/FormatBlocks/" + std::to_string(frame_idx) + ".formatblock");
+  if (!file.is_open()) {
+    LOG(ERROR) << " can't open format block file.";
+    return;
+  }
+
+  file << std::left << std::setprecision(3);
+  int num = blocks.size();
+  file << num << std::endl;
+  for (auto &&block:blocks) {
+    file << block.first.x << ' ' << block.first.y << ' ' << block.first.z << std::endl;
+    int cols = BLOCK_SIDE_LENGTH * BLOCK_SIDE_LENGTH;
+    for (int i = 0; i < BLOCK_SIDE_LENGTH; ++i)
+      for (int j = 0; j < cols; ++j) {
+        file << std::setw(6) << block.second.voxels[i * cols + j].sdf;
+        file << (j != cols - 1 ? ' ' : '\n');
+      }
+    file << std::endl;
+    for (int i = 0; i < BLOCK_SIDE_LENGTH; ++i)
+      for (int j = 0; j < cols; ++j) {
+        file << std::setw(6) << block.second.voxels[i * cols + j].weight;
+        file << (j != cols - 1 ? ' ' : '\n');
+      }
+    file << std::endl;
+    file << std::endl;
+  }
+  file.close();
+}
+
+std::map<int3, Block, Int3Sort> LoggingEngine::ReadBlockWithFormat(int frame_idx) {
+  std::ifstream file(base_path_ + "/FormatBlocks/" + std::to_string(frame_idx) + ".formatblock");
+  std::map<int3, Block, Int3Sort> blocks;
+  if (!file.is_open()) {
+    LOG(ERROR) << " can't open format block file.";
+    return blocks;
+  }
+
+  int num;
+  Block block;
+  file >> num;
+  for (int i = 0; i < num; ++i) {
+    int3 pos;
+    file >> pos.x >> pos.y >> pos.z;
+    int size = BLOCK_SIDE_LENGTH * BLOCK_SIDE_LENGTH * BLOCK_SIDE_LENGTH;
+    block.Clear();
+    for (int i = 0; i < size; ++i)
+      file >> block.voxels[i].sdf;
+    for (int i = 0; i < size; ++i)
+      file >> block.voxels[i].weight;
+    if (file.bad()) {
+      LOG(ERROR) << " can't read the whole format block file.";
+      return blocks;
+    }
+    blocks.emplace(pos, block);
+  }
+  file.close();
+  return blocks;
+}
+
+void LoggingEngine::BlockRecordProcedure(const Block *block_gpu, uint block_num,
+                                         const HashEntry *candidate_entry_gpu, uint entry_num,
+                                         int frame_idx) {
+
+  std::map<int3, Block, Int3Sort> block_map;
+  Block *block_cpu = new Block[block_num];
+  HashEntry *candidate_entry_cpu = new HashEntry[entry_num];
+  cudaMemcpy(block_cpu, block_gpu,
+             sizeof(Block) * block_num,
+             cudaMemcpyDeviceToHost);
+  cudaMemcpy(candidate_entry_cpu, candidate_entry_gpu,
+             sizeof(HashEntry) * entry_num,
+             cudaMemcpyDeviceToHost);
+
+  for (uint i = 0; i < entry_num; ++i) {
+    int3 &pos = candidate_entry_cpu[i].pos;
+    CHECK_LT(candidate_entry_cpu[i].ptr, entry_num);
+    Block &block = block_cpu[candidate_entry_cpu[i].ptr];
+    block_map.emplace(pos, block);
+  }
+  WriteBlock(frame_idx - 1, block_map);
+  std::map<int3, Block, Int3Sort> &&readblock = ReadBlock(frame_idx - 1);
+//  log_engine_.WriteBlockWithFormat(integrated_frame_count_-1,block_map);
+//  readblock=log_engine_.ReadBlockWithFormat(integrated_frame_count_-1);
+  delete[] block_cpu;
+  delete[] candidate_entry_cpu;
 }

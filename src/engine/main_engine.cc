@@ -33,10 +33,10 @@ void MainEngine::Mapping(Sensor &sensor) {
   if (!map_engine_.enable_bayesian_update()) {
     LOG(INFO) << "Simple update";
     update_time = UpdateBlocksSimple(candidate_entries_,
-                                            blocks_,
-                                            sensor,
-                                            hash_table_,
-                                            geometry_helper_);
+                                     blocks_,
+                                     sensor,
+                                     hash_table_,
+                                     geometry_helper_);
   } else {
     LOG(INFO) << "Bayesian update";
     update_time = UpdateBlocksSimple(candidate_entries_,
@@ -280,4 +280,12 @@ void MainEngine::ConfigLoggingEngine(
   if (enable_ply) {
     log_engine_.ConfigPlyWriter();
   }
+}
+
+void MainEngine::RecordBlocks() {
+
+  CollectAllBlocks(hash_table_, candidate_entries_);
+  log_engine_.BlockRecordProcedure(blocks_.GetGPUPtr(), hash_params_.value_capacity,
+                                   candidate_entries_.GetGPUPtr(), candidate_entries_.count(),
+                                   integrated_frame_count_);
 }
