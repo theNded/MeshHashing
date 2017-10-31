@@ -17,6 +17,7 @@ public:
     return a.z < b.z;
   }
 };
+typedef std::map<int3, Block, Int3Sort> BlockMap;
 
 class LoggingEngine {
 public:
@@ -33,13 +34,14 @@ public:
   void WriteMappingTimeStamp(double alloc_time, double collect_time, double update_time,
                                int frame_idx);
 
-  void BlockRecordProcedure(const Block *block_gpu, uint block_num,
-                            const HashEntry *candidate_entry_gpu, uint entry_num,
-                            int frame_idx);
-  void WriteBlockWithFormat(int frame_idx,const std::map<int3,Block,Int3Sort>& blocks);
-  std::map<int3,Block,Int3Sort> ReadBlockWithFormat(int frame_idx);
-  void WriteBlock(int frame_idx,const std::map<int3,Block,Int3Sort>& blocks);
-  std::map<int3,Block,Int3Sort> ReadBlock(int frame_idx);
+  BlockMap RecordBlockToMemory(
+      const Block *block_gpu, uint block_num,
+      const HashEntry *candidate_entry_gpu, uint entry_num
+  );
+  void WriteFormattedBlocks(const BlockMap &blocks, std::string filename);
+  BlockMap ReadFormattedBlocks(std::string filename);
+  void WriteRawBlocks(const BlockMap &blocks, std::string filename);
+  BlockMap ReadRawBlocks(std::string filename);
 
   bool enable_video() {
     return enable_video_;

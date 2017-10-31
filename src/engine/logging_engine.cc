@@ -59,8 +59,8 @@ void LoggingEngine::WriteMappingTimeStamp(double alloc_time,
                    << "update time : " << update_time * 1000 << "ms\n";
 }
 
-void LoggingEngine::WriteBlock(int frame_idx, const std::map<int3, Block, Int3Sort> &blocks) {
-  std::ofstream file(base_path_ + "/Blocks/" + std::to_string(frame_idx) + ".block",
+void LoggingEngine::WriteRawBlocks(const BlockMap &blocks, std::string filename) {
+  std::ofstream file(base_path_ + "/Blocks/" + filename + ".block",
                      std::ios::binary);
   if (!file.is_open()) {
     LOG(WARNING) << "can't open block file.";
@@ -76,9 +76,9 @@ void LoggingEngine::WriteBlock(int frame_idx, const std::map<int3, Block, Int3So
   file.close();
 }
 
-std::map<int3, Block, Int3Sort> LoggingEngine::ReadBlock(int frame_idx) {
-  std::ifstream file(base_path_ + "/Blocks/" + std::to_string(frame_idx) + ".block");
-  std::map<int3, Block, Int3Sort> blocks;
+BlockMap LoggingEngine::ReadRawBlocks(std::string filename) {
+  std::ifstream file(base_path_ + "/Blocks/" + filename + ".block");
+  BlockMap blocks;
   if (!file.is_open()) {
     LOG(WARNING) << " can't open block file.";
     return blocks;
@@ -106,8 +106,8 @@ std::map<int3, Block, Int3Sort> LoggingEngine::ReadBlock(int frame_idx) {
 }
 
 void
-LoggingEngine::WriteBlockWithFormat(int frame_idx, const std::map<int3, Block, Int3Sort> &blocks) {
-  std::ofstream file(base_path_ + "/FormatBlocks/" + std::to_string(frame_idx) + ".formatblock");
+LoggingEngine::WriteFormattedBlocks(const BlockMap &blocks, std::string filename) {
+  std::ofstream file(base_path_ + "/FormatBlocks/" + filename + ".formatblock");
   if (!file.is_open()) {
     LOG(ERROR) << " can't open format block file.";
     return;
@@ -136,9 +136,9 @@ LoggingEngine::WriteBlockWithFormat(int frame_idx, const std::map<int3, Block, I
   file.close();
 }
 
-std::map<int3, Block, Int3Sort> LoggingEngine::ReadBlockWithFormat(int frame_idx) {
-  std::ifstream file(base_path_ + "/FormatBlocks/" + std::to_string(frame_idx) + ".formatblock");
-  std::map<int3, Block, Int3Sort> blocks;
+BlockMap LoggingEngine::ReadFormattedBlocks(std::string filename) {
+  std::ifstream file(base_path_ + "/FormatBlocks/" + filename + ".formatblock");
+  BlockMap blocks;
   if (!file.is_open()) {
     LOG(ERROR) << " can't open format block file.";
     return blocks;
@@ -166,11 +166,12 @@ std::map<int3, Block, Int3Sort> LoggingEngine::ReadBlockWithFormat(int frame_idx
   return blocks;
 }
 
-void LoggingEngine::BlockRecordProcedure(const Block *block_gpu, uint block_num,
-                                         const HashEntry *candidate_entry_gpu, uint entry_num,
-                                         int frame_idx) {
+BlockMap LoggingEngine::RecordBlockToMemory(
+    const Block *block_gpu, uint block_num,
+    const HashEntry *candidate_entry_gpu, uint entry_num
+) {
 
-  std::map<int3, Block, Int3Sort> block_map;
+  BlockMap block_map;
   Block *block_cpu = new Block[block_num];
   HashEntry *candidate_entry_cpu = new HashEntry[entry_num];
   cudaMemcpy(block_cpu, block_gpu,
@@ -186,10 +187,8 @@ void LoggingEngine::BlockRecordProcedure(const Block *block_gpu, uint block_num,
     Block &block = block_cpu[candidate_entry_cpu[i].ptr];
     block_map.emplace(pos, block);
   }
-  WriteBlock(frame_idx - 1, block_map);
-  std::map<int3, Block, Int3Sort> &&readblock = ReadBlock(frame_idx - 1);
-//  log_engine_.WriteBlockWithFormat(integrated_frame_count_-1,block_map);
-//  readblock=log_engine_.ReadBlockWithFormat(integrated_frame_count_-1);
+
   delete[] block_cpu;
   delete[] candidate_entry_cpu;
+  return block_map;
 }

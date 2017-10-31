@@ -168,14 +168,16 @@ TARGET_LINK_LIBRARIES(reconstruction
         -lopencv_core -lopencv_highgui
         ${GLOG_LIBRARIES})
 
-ADD_EXECUTABLE(BlockAnalysis src/app/Block_Analysis.cc)
-SET_TARGET_PROPERTIES(BlockAnalysis
+ADD_EXECUTABLE(block_analysis src/app/block_analysis.cc)
+SET_TARGET_PROPERTIES(block_analysis
         PROPERTIES
         COMPILE_DEFINITIONS USE_CUDA_GL)
-TARGET_LINK_LIBRARIES(BlockAnalysis
+TARGET_LINK_LIBRARIES(block_analysis
+        gl-util
         mesh-hashing
-        ${OpenCV_LIBS}
+        -lopencv_core -lopencv_highgui
         ${GLOG_LIBRARIES})
+
 ### An ORB app
 OPTION(WITH_ORBSLAM2 "Build with orb slam" ON)
 if (WITH_ORBSLAM2)

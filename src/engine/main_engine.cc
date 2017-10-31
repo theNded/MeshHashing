@@ -283,9 +283,12 @@ void MainEngine::ConfigLoggingEngine(
 }
 
 void MainEngine::RecordBlocks() {
-
   CollectAllBlocks(hash_table_, candidate_entries_);
-  log_engine_.BlockRecordProcedure(blocks_.GetGPUPtr(), hash_params_.value_capacity,
-                                   candidate_entries_.GetGPUPtr(), candidate_entries_.count(),
-                                   integrated_frame_count_);
+  BlockMap block_map = log_engine_.RecordBlockToMemory(
+      blocks_.GetGPUPtr(), hash_params_.value_capacity,
+      candidate_entries_.GetGPUPtr(), candidate_entries_.count());
+
+  std::stringstream ss("");
+  ss << integrated_frame_count_ - 1;
+  log_engine_.WriteRawBlocks(block_map, ss.str());
 }
