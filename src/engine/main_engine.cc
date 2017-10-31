@@ -49,7 +49,10 @@ void MainEngine::Mapping(Sensor &sensor) {
       LOG(INFO) << "Primal dual init";
       //CollectAllBlocks(hash_table_, candidate_entries_);
       PrimalDualInit(candidate_entries_, blocks_, hash_table_, geometry_helper_);
-      for (int i = 0; i < 10; ++i) {
+      for (int i = 0; i < 101; ++i) {
+        std::stringstream ss("");
+        ss << "primal_dual_" << i << "_";
+
         //std::cout << "Primal dual iteration: " << i << std::endl;
         PrimalDualIterate(candidate_entries_, blocks_,
                           hash_table_, geometry_helper_,
@@ -57,6 +60,9 @@ void MainEngine::Mapping(Sensor &sensor) {
         Meshing();
         Visualize(sensor.cTw());
         Log();
+        if (i % 10 == 0) {
+          RecordBlocks(ss.str());
+        }
       }
     }
 
@@ -176,6 +182,13 @@ void MainEngine::Log() {
 }
 
 void MainEngine::FinalLog() {
+  CollectAllBlocks(hash_table_, candidate_entries_);
+  Meshing();
+  int3 timing;
+  CompressMesh(candidate_entries_,
+               blocks_,
+               mesh_,
+               vis_engine_.compact_mesh(), timing);
   if (log_engine_.enable_ply()) {
     log_engine_.WritePly(vis_engine_.compact_mesh());
   }
@@ -282,13 +295,13 @@ void MainEngine::ConfigLoggingEngine(
   }
 }
 
-void MainEngine::RecordBlocks() {
-  CollectAllBlocks(hash_table_, candidate_entries_);
+void MainEngine::RecordBlocks(std::string prefix) {
+  //CollectAllBlocks(hash_table_, candidate_entries_);
   BlockMap block_map = log_engine_.RecordBlockToMemory(
       blocks_.GetGPUPtr(), hash_params_.value_capacity,
       candidate_entries_.GetGPUPtr(), candidate_entries_.count());
 
   std::stringstream ss("");
   ss << integrated_frame_count_ - 1;
-  log_engine_.WriteRawBlocks(block_map, ss.str());
+  log_engine_.WriteRawBlocks(block_map, prefix + ss.str());
 }

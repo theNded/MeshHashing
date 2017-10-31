@@ -20,11 +20,12 @@ int main(int argc, char **argv) {
   LoggingEngine log_engine_;
   log_engine_.Init(".");
 
-  int selected_frame_idx = 4;
+  int selected_frame_idx = 98;
+  int iter = 0;
   float truncation = 0.01f;
   BlockMap blocks;
   std::stringstream ss("");
-  ss << selected_frame_idx;
+  ss << "primal_dual_" << iter << "_" << selected_frame_idx;
   LOG(INFO) << "Reading block from disk";
   blocks = log_engine_.ReadRawBlocks(ss.str());
 
@@ -33,7 +34,7 @@ int main(int argc, char **argv) {
   pos.reserve(blocks.size() * BLOCK_SIZE);
   sdf.reserve(blocks.size() * BLOCK_SIZE);
   for (auto &&block:blocks) {
-    float delta = 1.0f / 2.0f;
+    float delta = 1.0f;
     for (int i = 0; i < BLOCK_SIDE_LENGTH; ++i) {
       for (int j = 0; j < BLOCK_SIDE_LENGTH; ++j) {
         for (int k = 0; k < BLOCK_SIDE_LENGTH; ++k) {
@@ -41,10 +42,12 @@ int main(int argc, char **argv) {
           float3 voxel_pos = {block.first.x + delta * i,
                               block.first.y + delta * j,
                               block.first.z + delta * k};
-          pos.emplace_back(voxel_pos);
-          sdf.emplace_back(ValToRGB(block.second.voxels[index].sdf,
-                                    -truncation,
-                                    truncation));
+          if (block.second.voxels[index].weight > 0) {
+            pos.emplace_back(voxel_pos);
+            sdf.emplace_back(ValToRGB(block.second.voxels[index].sdf,
+                                      -truncation,
+                                      truncation));
+          }
         }
       }
     }
@@ -77,6 +80,10 @@ int main(int argc, char **argv) {
   glClearColor(1.0f, 1.0f, 1.0f, 0.0f);
   glEnable(GL_DEPTH_TEST);
   glDepthFunc(GL_LESS);
+
+  std::string base = ss.str();
+  ss.str("");
+  int idx = 0;
   do {
     // Clear the screen
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -92,6 +99,10 @@ int main(int argc, char **argv) {
     glBindVertexArray(0);
 
     window.swap_buffer();
+    if (window.get_key(GLFW_KEY_ENTER) == GLFW_PRESS) {
+      ss << idx++;
+      cv::imwrite(base + ss.str() + ".png" , window.CaptureRGB());
+    }
   } while (window.get_key(GLFW_KEY_ESCAPE) != GLFW_PRESS &&
            window.should_close() == 0);
 

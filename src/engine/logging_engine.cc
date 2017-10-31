@@ -183,7 +183,7 @@ BlockMap LoggingEngine::RecordBlockToMemory(
 
   for (uint i = 0; i < entry_num; ++i) {
     int3 &pos = candidate_entry_cpu[i].pos;
-    CHECK_LT(candidate_entry_cpu[i].ptr, entry_num);
+    //CHECK_LT(candidate_entry_cpu[i].ptr, entry_num);
     Block &block = block_cpu[candidate_entry_cpu[i].ptr];
     block_map.emplace(pos, block);
   }

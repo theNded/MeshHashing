@@ -4,7 +4,7 @@
 # 4   - SUN3D
 # 5   - SUN3D_ORIGINAL
 # 6   - PKU
-dataset_type:    0
+dataset_type:    4
 
 # -----------
 enable_bayesian_update: 1
@@ -27,4 +27,4 @@ time_profile:    "tum3-nhm"
 memo_profile:    "tum3-nhm"
 
 # Others
-run_frames:     5
+run_frames:     100
