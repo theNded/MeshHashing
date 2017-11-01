@@ -58,7 +58,7 @@ void MainEngine::Mapping(Sensor &sensor) {
         //std::cout << "Primal dual iteration: " << i << std::endl;
         PrimalDualIterate(candidate_entries_, blocks_,
                           hash_table_, geometry_helper_,
-                          10, 0.1, 0.1);
+                          20, 0.1, 0.1);
         Meshing();
         Visualize(sensor.cTw());
         Log();

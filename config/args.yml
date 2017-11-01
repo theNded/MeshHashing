@@ -27,4 +27,4 @@ time_profile:    "tum3-nhm"
 memo_profile:    "tum3-nhm"
 
 # Others
-run_frames:     -1
+run_frames:     100

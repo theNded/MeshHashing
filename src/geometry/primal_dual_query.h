@@ -35,7 +35,7 @@ inline bool GetPrimalDualValue(
     if (entry.ptr == FREE_ENTRY)
       return false;
     uint i = geometry_helper.VectorizeOffset(offset);
-    const Block& block = blocks[curr_entry.ptr];
+    const Block& block = blocks[entry.ptr];
     *voxel = block.voxels[i];
     *primal_dual_variables = block.primal_dual_variables[i];
   }

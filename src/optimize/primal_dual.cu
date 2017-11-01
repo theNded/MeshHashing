@@ -85,13 +85,14 @@ void PrimalDualIteratePass1Kernel(
   float3 primal_gradient;
   GetPrimalGradient(entry, voxel_pos,
                     blocks, hash_table,
-                    geometry_helper, &primal_gradient);
+                    geometry_helper,
+                    &primal_gradient);
 
   //float tv_diff =
   primal_dual_variable.p = primal_dual_variable.p + sigma * primal_gradient;
   // huber
   primal_dual_variable.p /= (1 + sigma * alpha);
-  primal_dual_variable.p = primal_dual_variable.p / fmaxf(1, length(primal_dual_variable.p));
+  primal_dual_variable.p /= fmaxf(1, length(primal_dual_variable.p));
 }
 
 __global__
