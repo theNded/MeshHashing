@@ -24,14 +24,7 @@ struct __ALIGN__(4) Stat {
   }
 };
 
-//  + --------> //
-//  | \         //
-//  |  \        //
-//  |   \       //
-//  v　　 v      //
-// A voxel holds:
-// float: *sdf* and *weight* on its corner
-struct __ALIGN__(8) MeshUnit {
+struct __ALIGN__(4) MeshUnit {
   // mesh
   int vertex_ptrs   [N_VERTEX];  // 3
   int vertex_mutexes[N_VERTEX];  // 3
@@ -50,7 +43,6 @@ struct __ALIGN__(8) MeshUnit {
     return vertex_ptrs[idx];
   }
 
-
   __host__ __device__
   void Clear() {
     vertex_ptrs[0] = vertex_mutexes[0] = FREE_PTR;
@@ -67,30 +59,44 @@ struct __ALIGN__(8) MeshUnit {
   }
 };
 
-struct __ALIGN__(8) Voxel {
+struct __ALIGN__(4) PrimalDualVariables {
+  bool   mask;
+  float  sdf0, sdf_bar;
+  float3 p;
+
+  __host__ __device__
+  void operator = (const PrimalDualVariables& pdv) {
+    mask = pdv.mask;
+    sdf0 = pdv.sdf0;
+    sdf_bar = pdv.sdf_bar;
+    p = pdv.p;
+  }
+
+  __host__ __device__
+  void Clear() {
+    mask = false;
+    sdf0 = 0;
+    sdf_bar = 0;
+    p = make_float3(0);
+  }
+};
+
+struct __ALIGN__(4) Voxel {
   float  sdf;    // signed distance function
   float  weight;
   uchar3 color;  // color
 
-//#ifdef PRIMAL_DUAL
-  bool   mask;
-  float  sdf0, sdf_bar;
-  float3 p;
-//#endif
-
   __host__ __device__
-  void Clear() {
-    ClearSDF();
+  void operator = (const Voxel& v) {
+    sdf = v.sdf;
+    weight = v.weight;
+    color = v.color;
   }
 
   __host__ __device__
-  void ClearSDF() {
+  void Clear() {
     sdf = weight = 0.0f;
     color = make_uchar3(0, 0, 0);
-    sdf0 = 0;
-    sdf_bar = 0;
-    p = make_float3(0);
-    mask = false;
   }
 
   __host__ __device__

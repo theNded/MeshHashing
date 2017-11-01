@@ -30,7 +30,7 @@ public:
   __host__ __device__ Block& operator[] (uint i) {
     return blocks_[i];
   }
-  __host__ __device__ const Block&operator[] (uint i) const {
+  __host__ __device__ const Block& operator[] (uint i) const {
     return blocks_[i];
   }
 

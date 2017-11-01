@@ -88,20 +88,12 @@ inline bool GetVoxelValue(
 
   if (curr_entry.pos == block_pos) {
     uint i = geometry_helper.VectorizeOffset(offset);
-    const Voxel &v = blocks[curr_entry.ptr].voxels[i];
-
-    // TODO: change it accordingly
-    voxel->sdf = v.sdf;
-    voxel->weight = v.weight;
-    voxel->color = v.color;
+    *voxel = blocks[curr_entry.ptr].voxels[i];
   } else {
     HashEntry entry = hash_table.GetEntry(block_pos);
     if (entry.ptr == FREE_ENTRY) return false;
     uint i = geometry_helper.VectorizeOffset(offset);
-    const Voxel &v = blocks[entry.ptr].voxels[i];
-    voxel->sdf = v.sdf;
-    voxel->weight = v.weight;
-    voxel->color = v.color;
+    *voxel = blocks[entry.ptr].voxels[i];
   }
   return true;
 }

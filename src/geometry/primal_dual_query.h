@@ -19,33 +19,25 @@ inline bool GetPrimalDualValue(
     const BlockArray &blocks,
     const HashTable &hash_table,
     GeometryHelper &geometry_helper,
-    Voxel* voxel
+    Voxel* voxel, // primal
+    PrimalDualVariables* primal_dual_variables // dual
 ) {
   int3 block_pos = geometry_helper.VoxelToBlock(voxel_pos);
   uint3 offset = geometry_helper.VoxelToOffset(block_pos, voxel_pos);
 
   if (curr_entry.pos == block_pos) {
     uint i = geometry_helper.VectorizeOffset(offset);
-    const Voxel &v = blocks[curr_entry.ptr].voxels[i];
-    voxel->sdf = v.sdf;
-    voxel->sdf0 = v.sdf0;
-    voxel->sdf_bar = v.sdf_bar;
-    voxel->p = v.p;
-    voxel->mask = v.mask;
-    voxel->weight = v.weight;
+    const Block& block = blocks[curr_entry.ptr];
+    *voxel = block.voxels[i];
+    *primal_dual_variables = block.primal_dual_variables[i];
   } else {
     HashEntry entry = hash_table.GetEntry(block_pos);
     if (entry.ptr == FREE_ENTRY)
       return false;
-
     uint i = geometry_helper.VectorizeOffset(offset);
-    const Voxel &v = blocks[entry.ptr].voxels[i];
-    voxel->sdf = v.sdf;
-    voxel->p = v.p;
-    voxel->sdf0 = v.sdf0;
-    voxel->sdf_bar = v.sdf_bar;
-    voxel->mask = v.mask;
-    voxel->weight = v.weight;
+    const Block& block = blocks[curr_entry.ptr];
+    *voxel = block.voxels[i];
+    *primal_dual_variables = block.primal_dual_variables[i];
   }
   return true;
 }
@@ -62,10 +54,15 @@ inline bool GetSDFGradient(
   const int3 grad_offsets[3] = {{1,0,0}, {0,1,0}, {0,0,1}};
 
   Voxel voxel_query;
+  PrimalDualVariables primal_dual_variable_query;
   bool valid = GetPrimalDualValue(curr_entry, voxel_pos,
                                   blocks, hash_table,
-                                  geometry_helper, &voxel_query);
-  if (! valid || voxel_query.weight < EPSILON || !voxel_query.mask) {
+                                  geometry_helper,
+                                  &voxel_query,
+                                  &primal_dual_variable_query);
+  if (! valid
+      || voxel_query.weight < EPSILON
+      || !primal_dual_variable_query.mask) {
     printf("GetSDFGradinet: Invalid Center\n");
   }
 
@@ -75,8 +72,12 @@ inline bool GetSDFGradient(
   for (int i = 0; i < 3; ++i) {
     valid = GetPrimalDualValue(curr_entry, voxel_pos + grad_offsets[i],
                                blocks, hash_table,
-                               geometry_helper, &voxel_query);
-    if (! valid || voxel_query.weight < EPSILON || !voxel_query.mask) {
+                               geometry_helper,
+                               &voxel_query,
+                               &primal_dual_variable_query);
+    if (! valid
+        || voxel_query.weight < EPSILON
+        || !primal_dual_variable_query.mask) {
       *primal_gradient = make_float3(0);
       return false;
     }
@@ -101,23 +102,32 @@ inline bool GetDualDivergence(
   const int3 grad_offsets[3] = {{1,0,0}, {0,1,0}, {0,0,1}};
 
   Voxel voxel_query;
+  PrimalDualVariables primal_dual_variable_query;
   bool valid = GetPrimalDualValue(curr_entry, voxel_pos,
                                   blocks, hash_table,
-                                  geometry_helper, &voxel_query);
-  if (! valid || voxel_query.weight < EPSILON || !voxel_query.mask) {
+                                  geometry_helper,
+                                  &voxel_query,
+                                  &primal_dual_variable_query);
+  if (! valid
+      || voxel_query.weight < EPSILON
+      || !primal_dual_variable_query.mask) {
     printf("GetDualDivergence: Invalid Center\n");
     return false;
   }
-  float3 dual = voxel_query.p;
-  float3 dualn[3];
 
+  float3 dual = primal_dual_variable_query.p;
+  float3 dualn[3];
 #pragma unroll 1
   for (int i = 0; i < 3; ++i) {
     valid = valid && GetPrimalDualValue(curr_entry, voxel_pos - grad_offsets[i],
                                         blocks, hash_table,
-                                        geometry_helper, &voxel_query);
-    dualn[i] = voxel_query.p;
-    if (! valid || voxel_query.weight < EPSILON || !voxel_query.mask) {
+                                        geometry_helper,
+                                        &voxel_query,
+                                        &primal_dual_variable_query);
+    dualn[i] = primal_dual_variable_query.p;
+    if (! valid
+        || voxel_query.weight < EPSILON
+        || !primal_dual_variable_query.mask) {
       *dual_divergence = 0;
       return false;
     }
@@ -141,23 +151,32 @@ inline bool GetPrimalGradient(
   const int3 grad_offsets[3] = {{1,0,0}, {0,1,0}, {0,0,1}};
 
   Voxel voxel_query;
+  PrimalDualVariables primal_dual_variable_query;
   float primalp[3], primal;
   bool valid = GetPrimalDualValue(curr_entry, voxel_pos,
                                   blocks, hash_table,
-                                  geometry_helper, &voxel_query);
-  if (! valid || voxel_query.weight < EPSILON || !voxel_query.mask) {
+                                  geometry_helper,
+                                  &voxel_query,
+                                  &primal_dual_variable_query);
+  if (! valid
+      || voxel_query.weight < EPSILON
+      || !primal_dual_variable_query.mask) {
     printf("GetPrimalGradient: Invalid Center\n");
     return false;
   }
-  primal = voxel_query.sdf_bar;
+  primal = primal_dual_variable_query.sdf_bar;
 
 #pragma unroll 1
   for (int i = 0; i < 3; ++i) {
     valid = valid && GetPrimalDualValue(curr_entry, voxel_pos + grad_offsets[i],
                                         blocks, hash_table,
-                                        geometry_helper, &voxel_query);
-    primalp[i] = voxel_query.sdf_bar;
-    if (! valid || voxel_query.weight < EPSILON || !voxel_query.mask) {
+                                        geometry_helper,
+                                        &voxel_query,
+                                        &primal_dual_variable_query);
+    primalp[i] = primal_dual_variable_query.sdf_bar;
+    if (! valid
+        || voxel_query.weight < EPSILON
+        || !primal_dual_variable_query.mask) {
       *primal_gradient = make_float3(0);
       return false;
     }

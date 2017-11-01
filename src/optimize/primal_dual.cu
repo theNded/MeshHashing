@@ -20,16 +20,15 @@ void PrimalDualInitKernel(
     GeometryHelper geometry_helper
 ) {
   const HashEntry& entry = candidate_entries[blockIdx.x];
-  Voxel& voxel = blocks[entry.ptr].voxels[threadIdx.x];
-  int3 voxel_base_pos = geometry_helper.BlockToVoxel(entry.pos);
-  uint local_idx = threadIdx.x;  //inside of an SDF block
-  int3 voxel_pos = voxel_base_pos + make_int3(geometry_helper.DevectorizeIndex(local_idx));
+  Block& block = blocks[entry.ptr];
+  PrimalDualVariables& primal_dual_variables
+      = block.primal_dual_variables[threadIdx.x];
+  Voxel& voxel = block.voxels[threadIdx.x];
 
   // primal
-  voxel.sdf0 = voxel.sdf;
-  voxel.sdf_bar = 0;
-  voxel.p = make_float3(0);
-  voxel.mask = true;
+  primal_dual_variables.Clear();
+  primal_dual_variables.sdf0 = voxel.sdf;
+  primal_dual_variables.mask = true;
 }
 
 __global__
@@ -57,16 +56,18 @@ void PrimalDualIteratePass1Kernel(
   const float alpha = 0.02;
 
   const HashEntry &entry = candidate_entries[blockIdx.x];
-  Voxel &voxel = blocks[entry.ptr].voxels[threadIdx.x];
-  /// mask
+  Block& block = blocks[entry.ptr];
+
+  Voxel &voxel = block.voxels[threadIdx.x];
+  PrimalDualVariables &primal_dual_variable = block.primal_dual_variables[threadIdx.x];
   if (voxel.weight < EPSILON) return;
 
   int3 voxel_base_pos = geometry_helper.BlockToVoxel(entry.pos);
-  uint local_idx = threadIdx.x;  //inside of an SDF block
-  int3 voxel_pos = voxel_base_pos + make_int3(geometry_helper.DevectorizeIndex(local_idx));
+  uint3 offset = geometry_helper.DevectorizeIndex(threadIdx.x);
+  int3 voxel_pos = voxel_base_pos + make_int3(offset);
 
   // Compute error
-  float data_diff = fabsf(voxel.sdf - voxel.sdf0);
+  float data_diff = fabsf(voxel.sdf - primal_dual_variable.sdf0);
   data_diff *= data_diff;
   if (voxel.weight > EPSILON) {
     atomicAdd(err_data, data_diff);
@@ -87,10 +88,10 @@ void PrimalDualIteratePass1Kernel(
                     geometry_helper, &primal_gradient);
 
   //float tv_diff =
-  voxel.p = voxel.p + sigma * primal_gradient;
+  primal_dual_variable.p = primal_dual_variable.p + sigma * primal_gradient;
   // huber
-  voxel.p /= (1 + sigma * alpha);
-  voxel.p = voxel.p / fmaxf(1, length(voxel.p));
+  primal_dual_variable.p /= (1 + sigma * alpha);
+  primal_dual_variable.p = primal_dual_variable.p / fmaxf(1, length(primal_dual_variable.p));
 }
 
 __global__
@@ -104,17 +105,17 @@ void PrimalDualIteratePass2Kernel(
     float tau
 ) {
   const HashEntry &entry = candidate_entries[blockIdx.x];
-  Voxel &voxel = blocks[entry.ptr].voxels[threadIdx.x];
+  Block& block = blocks[entry.ptr];
+  Voxel &voxel = block.voxels[threadIdx.x];
+  PrimalDualVariables& primal_dual_variables = block.primal_dual_variables[threadIdx.x];
   if (voxel.weight < EPSILON)
     return;
 
   int3 voxel_base_pos = geometry_helper.BlockToVoxel(entry.pos);
-  uint local_idx = threadIdx.x;  //inside of an SDF block
-  int3 voxel_pos = voxel_base_pos + make_int3(geometry_helper.DevectorizeIndex(local_idx));
-  uint3 offset = geometry_helper.DevectorizeIndex(local_idx);
+  uint3 offset = geometry_helper.DevectorizeIndex(threadIdx.x);
+  int3 voxel_pos = voxel_base_pos + make_int3(offset);
 
   float voxel_sdf_prev = voxel.sdf;
-
   // Primal step
   // x_{n+1} = prox_G  (x_{n} - \tau -Div p_{n+1})
   // prox_G = (1 + \lambda y) / (1 + \lambda)
@@ -123,18 +124,10 @@ void PrimalDualIteratePass2Kernel(
                     blocks, hash_table,
                     geometry_helper, &dual_divergence);
   voxel.sdf = voxel.sdf - tau * dual_divergence;
-  voxel.sdf = (voxel.sdf + lambda * tau * voxel.sdf0) / (1 + lambda * tau);
-//  float diff = voxel.sdf - voxel.sdf0;
-//  if (fabs(diff) <= tau*lambda) {
-//    voxel.sdf = voxel.sdf0;
-//  } else if (diff > tau * lambda) {
-//    voxel.sdf -= tau*lambda;
-//  } else {
-//    voxel.sdf += tau*lambda;
-//  }
-
+  voxel.sdf = (voxel.sdf + lambda * tau * primal_dual_variables.sdf0)
+              / (1 + lambda * tau);
   // Extrapolation
-  voxel.sdf_bar = 2 * voxel.sdf - voxel_sdf_prev;
+  primal_dual_variables.sdf_bar = 2 * voxel.sdf - voxel_sdf_prev;
 }
 
 void PrimalDualInit(

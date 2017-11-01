@@ -23,6 +23,7 @@ public:
   );
   ~MappingEngine();
 
+
   bool enable_bayesian_update() {
     return enable_bayesian_update_;
   }

@@ -14,6 +14,7 @@
 struct __ALIGN__(8) Block {
   Voxel voxels[BLOCK_SIZE];
   MeshUnit mesh_units[BLOCK_SIZE];
+  PrimalDualVariables primal_dual_variables[BLOCK_SIZE];
 
   __host__ __device__
   void Clear() {
@@ -23,6 +24,7 @@ struct __ALIGN__(8) Block {
     for (int i = 0; i < BLOCK_SIZE; ++i) {
       voxels[i].Clear();
       mesh_units[i].Clear();
+      primal_dual_variables[i].Clear();
     }
   }
 };
