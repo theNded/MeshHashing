@@ -1,6 +1,6 @@
 %YAML:1.0
 
-dataset_path:      "/home/wei/Work/data/SUN3D/copyroom/"
+dataset_path:      "/home/wei/Work/data/SUN3D/burghers/"
 
 # Hash params
 bucket_count:      200000
@@ -13,7 +13,7 @@ value_capacity:    50000
 voxel_size:                0.008
 sdf_upper_bound:           14.0
 truncation_distance_scale: 0.008
-truncation_distance:       0.016
+truncation_distance:       0.024
 weight_sample:             10
 weight_upper_bound:        255
 

@@ -1,17 +1,17 @@
 %YAML:1.0
-dataset_path:      "/home/wei/Work/data/ICL/lv2/"
+dataset_path:      "/home/wei/Work/data/ICL/office2/"
 
 bucket_count:      40000
 bucket_size:       10
-count:       400000
+count:             400000
 linked_list_size:  7
-value_capacity:    50000
+value_capacity:    100000
 
 # SDF params
 voxel_size:                0.008
 sdf_upper_bound:           4.0
-truncation_distance_scale: 0.004
-truncation_distance:       0.008
+truncation_distance_scale: 0.008
+truncation_distance:       0.012
 weight_sample:             10
 weight_upper_bound:        255
 
@@ -34,5 +34,5 @@ sample_sdf_threshold: 0.808
 sdf_threshold:        0.800
 enable_gradient:      1
 
-max_vertex_count:     1800000
-max_triangle_count:   3400000
+max_vertex_count:     3400000
+max_triangle_count:   5000000

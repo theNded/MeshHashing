@@ -10,10 +10,10 @@ linked_list_size:  7
 value_capacity:    50000
 
 # SDF params
-voxel_size:                0.03
+voxel_size:                0.008
 sdf_upper_bound:           4.0
-truncation_distance_scale: 0.01
-truncation_distance:       0.03
+truncation_distance_scale: 0.008
+truncation_distance:       0.016
 weight_sample:             10
 weight_upper_bound:        255
 
