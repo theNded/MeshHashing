@@ -88,16 +88,17 @@ void RecycleGarbageTrianglesKernel(
   const HashEntry& entry = candidate_entries[idx];
   const uint local_idx = threadIdx.x;  //inside an SDF block
   Voxel &voxel = blocks[entry.ptr].voxels[local_idx];
+  MeshUnit &mesh_unit = blocks[entry.ptr].mesh_units[local_idx];
 
   for (int i = 0; i < N_TRIANGLE; ++i) {
-    int triangle_ptr = voxel.triangle_ptrs[i];
+    int triangle_ptr = mesh_unit.triangle_ptrs[i];
     if (triangle_ptr == FREE_PTR) continue;
 
     // Clear ref_count of its pointed vertices
     mesh.ReleaseTriangle(mesh.triangle(triangle_ptr));
     mesh.triangle(triangle_ptr).Clear();
     mesh.FreeTriangle(triangle_ptr);
-    voxel.triangle_ptrs[i] = FREE_PTR;
+    mesh_unit.triangle_ptrs[i] = FREE_PTR;
   }
 }
 
@@ -112,7 +113,7 @@ void RecycleGarbageVerticesKernel(
   const HashEntry &entry = candidate_entries[blockIdx.x];
   const uint local_idx = threadIdx.x;
 
-  Voxel &cube = blocks[entry.ptr].voxels[local_idx];
+  MeshUnit &cube = blocks[entry.ptr].mesh_units[local_idx];
 
   __shared__ int valid_vertex_count;
   if (threadIdx.x == 0) valid_vertex_count = 0;

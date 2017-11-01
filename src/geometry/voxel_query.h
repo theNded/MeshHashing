@@ -47,6 +47,30 @@ inline Voxel &GetVoxelRef(
   }
 }
 
+__device__
+inline MeshUnit &GetMeshUnitRef(
+    const HashEntry &curr_entry,
+    const int3 voxel_pos,
+    BlockArray &blocks,
+    const HashTable &hash_table,
+    GeometryHelper &geometry_helper
+) {
+  int3 block_pos = geometry_helper.VoxelToBlock(voxel_pos);
+  uint3 offset = geometry_helper.VoxelToOffset(block_pos, voxel_pos);
+
+  if (curr_entry.pos == block_pos) {
+    uint i = geometry_helper.VectorizeOffset(offset);
+    return blocks[curr_entry.ptr].mesh_units[i];
+  } else {
+    HashEntry entry = hash_table.GetEntry(block_pos);
+    if (entry.ptr == FREE_ENTRY) {
+      printf("GetVoxelRef: should never reach here!\n");
+    }
+    uint i = geometry_helper.VectorizeOffset(offset);
+    return blocks[entry.ptr].mesh_units[i];
+  }
+}
+
 // function:
 // block-pos @param curr_entry -> voxel-pos @param voxel_local_pos
 // get SDF in @param blocks

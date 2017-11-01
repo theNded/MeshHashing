@@ -13,6 +13,7 @@
 // Typically Block is a 8x8x8 voxel array
 struct __ALIGN__(8) Block {
   Voxel voxels[BLOCK_SIZE];
+  MeshUnit mesh_units[BLOCK_SIZE];
 
   __host__ __device__
   void Clear() {
@@ -21,6 +22,7 @@ struct __ALIGN__(8) Block {
 #endif
     for (int i = 0; i < BLOCK_SIZE; ++i) {
       voxels[i].Clear();
+      mesh_units[i].Clear();
     }
   }
 };

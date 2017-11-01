@@ -35,6 +35,8 @@ void BuildSensorDataEquationKernel(
   int3 voxel_pos = voxel_base_pos + make_int3(geometry_helper.DevectorizeIndex(local_idx));
 
   Voxel &this_voxel = blocks[entry.ptr].voxels[local_idx];
+  MeshUnit &mesh_unit = blocks[entry.ptr].mesh_units[local_idx];
+
   /// 2. Project to camera
   float3 world_pos = geometry_helper.VoxelToWorld(voxel_pos);
   float3 camera_pos = cTw * world_pos;
@@ -71,8 +73,8 @@ void BuildSensorDataEquationKernel(
   float3 b = make_float3(0);
 
   for (int i = 0; i < N_VERTEX; ++i) {
-    if (this_voxel.vertex_ptrs[i] > 0) {
-      Vertex vtx = mesh.vertex(this_voxel.vertex_ptrs[i]);
+    if (mesh_unit.vertex_ptrs[i] > 0) {
+      Vertex vtx = mesh.vertex(mesh_unit.vertex_ptrs[i]);
       float3 v = vtx.pos;
       float3 n = vtx.normal;
       float3x3 nnT = float3x3(n.x * n.x, n.x * n.y, n.x * n.z,

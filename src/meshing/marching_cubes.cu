@@ -1,3 +1,4 @@
+#include <device_launch_parameters.h>
 #include "meshing/marching_cubes.h"
 #include "geometry/spatial_query.h"
 #include "visualization/color_util.h"
@@ -28,20 +29,18 @@ float3 VertexIntersection(const float3 &p1, const float3 p2,
 
 __device__
 inline int AllocateVertexWithMutex(
-    Voxel &voxel,
+    MeshUnit &mesh_unit,
     uint  &vertex_idx,
     const float3 &vertex_pos,
     Mesh &mesh,
-
     BlockArray &blocks,
-
     const HashTable &hash_table,
     GeometryHelper &geometry_helper,
     bool enable_sdf_gradient
 ) {
-  int ptr = voxel.vertex_ptrs[vertex_idx];
+  int ptr = mesh_unit.vertex_ptrs[vertex_idx];
   if (ptr == FREE_PTR) {
-    int lock = atomicExch(&voxel.vertex_mutexes[vertex_idx], LOCK_ENTRY);
+    int lock = atomicExch(&mesh_unit.vertex_mutexes[vertex_idx], LOCK_ENTRY);
     if (lock != LOCK_ENTRY) {
       ptr = mesh.AllocVertex();
     } /// Ensure that it is only allocated once
@@ -51,7 +50,7 @@ inline int AllocateVertexWithMutex(
     Voxel voxel_query;
     GetSpatialValue(vertex_pos, blocks, hash_table,
                     geometry_helper, &voxel_query);
-    voxel.vertex_ptrs[vertex_idx] = ptr;
+    mesh_unit.vertex_ptrs[vertex_idx] = ptr;
     mesh.vertex(ptr).pos = vertex_pos;
     mesh.vertex(ptr).color = make_float3(voxel_query.color) / 255.0;
     if (enable_sdf_gradient) {
@@ -141,17 +140,15 @@ void MarchingCubesPass1Kernel(
     GeometryHelper geometry_helper,
     bool enable_sdf_gradient
 ) {
-
   const HashEntry &entry = candidate_entries[blockIdx.x];
-  const uint local_idx = threadIdx.x;
+  Block& block = blocks[entry.ptr];
 
-  int3 voxel_base_pos = geometry_helper.BlockToVoxel(entry.pos);
-  uint3 voxel_local_pos = geometry_helper.DevectorizeIndex(local_idx);
-  int3 voxel_pos = voxel_base_pos + make_int3(voxel_local_pos);
+  int3   voxel_base_pos = geometry_helper.BlockToVoxel(entry.pos);
+  uint3  offset = geometry_helper.DevectorizeIndex(threadIdx.x);
+  int3   voxel_pos = voxel_base_pos + make_int3(offset);
   float3 world_pos = geometry_helper.VoxelToWorld(voxel_pos);
 
-  Voxel &this_voxel = blocks[entry.ptr].voxels[local_idx];
-
+  MeshUnit &this_mesh_unit = block.mesh_units[threadIdx.x];
   //////////
   /// 1. Read the scalar values, see mc_tables.h
   const int kVertexCount = 8;
@@ -159,21 +156,22 @@ void MarchingCubesPass1Kernel(
   const float kThreshold = 0.20f;
   const float kIsoLevel = 0;
 
-  float d[kVertexCount];
+  float  d[kVertexCount];
   float3 p[kVertexCount];
 
   short cube_index = 0;
-  this_voxel.prev_cube_idx = this_voxel.curr_cube_idx;
-  this_voxel.curr_cube_idx = 0;
+  this_mesh_unit.prev_cube_idx = this_mesh_unit.curr_cube_idx;
+  this_mesh_unit.curr_cube_idx = 0;
 
   /// Check 8 corners of a cube: are they valid?
   Voxel voxel_query;
   for (int i = 0; i < kVertexCount; ++i) {
     if (! GetVoxelValue(entry, voxel_pos + kVtxOffset[i],
                         blocks, hash_table,
-                        geometry_helper, &voxel_query))
+                        geometry_helper, &voxel_query)) {
       return;
-//
+    }
+
     if (voxel_query.weight < 3.0f)
       return;
 
@@ -183,32 +181,41 @@ void MarchingCubesPass1Kernel(
     if (d[i] < kIsoLevel) cube_index |= (1 << i);
     p[i] = world_pos + kVoxelSize * make_float3(kVtxOffset[i]);
   }
-  this_voxel.curr_cube_idx = cube_index;
-  if (cube_index == 0 || cube_index == 255) return;
 
-  //int is_noise_bit[8];
-  //RefineMesh(this_voxel.prev_cube_idx, this_voxel.curr_cube_idx, d, is_noise_bit);
-  //cube_index = this_voxel.curr_cube_idx;
+  this_mesh_unit.curr_cube_idx = cube_index;
+  if (cube_index == 0 || cube_index == 255) return;
 
   const int kEdgeCount = 12;
 #pragma unroll 1
   for (int i = 0; i < kEdgeCount; ++i) {
-    if (kEdgeTable[cube_index] & (1 << i)) {
-      int2 v_idx = kEdgeVertexTable[i];
-      uint4 c_idx = kEdgeCubeTable[i];
+    if (kCubeEdges[cube_index] & (1 << i)) {
+      int2 edge_endpoint_vertices = kEdgeEndpointVertices[i];
+      uint4 edge_cube_owner_offset = kEdgeOwnerCubeOffset[i];
 
       // Special noise-bit interpolation here: extrapolation
-      float3 vertex_pos;
-      vertex_pos = VertexIntersection(p[v_idx.x], p[v_idx.y],
-                                      d[v_idx.x], d[v_idx.y], kIsoLevel);
+      float3 vertex_pos = VertexIntersection(
+          p[edge_endpoint_vertices.x],
+          p[edge_endpoint_vertices.y],
+          d[edge_endpoint_vertices.x],
+          d[edge_endpoint_vertices.y],
+          kIsoLevel);
 
-      Voxel &voxel = GetVoxelRef(entry,
-                                 voxel_pos + make_int3(c_idx.x, c_idx.y, c_idx.z),
-                                 blocks, hash_table,
-                                 geometry_helper);
-      AllocateVertexWithMutex(voxel, c_idx.w, vertex_pos, mesh,
-                              blocks, hash_table, geometry_helper,
-                              enable_sdf_gradient);
+      MeshUnit &mesh_unit = GetMeshUnitRef(
+          entry,
+          voxel_pos + make_int3(edge_cube_owner_offset.x,
+                                edge_cube_owner_offset.y,
+                                edge_cube_owner_offset.z),
+          blocks, hash_table,
+          geometry_helper);
+
+      AllocateVertexWithMutex(
+          mesh_unit,
+          edge_cube_owner_offset.w,
+          vertex_pos,
+          mesh,
+          blocks,
+          hash_table, geometry_helper,
+          enable_sdf_gradient);
     }
   }
 }
@@ -222,16 +229,15 @@ void MarchingCubesPass2Kernel(
     GeometryHelper geometry_helper,
     bool enable_sdf_gradient
 ) {
-
   const HashEntry &entry = candidate_entries[blockIdx.x];
-  const uint local_idx = threadIdx.x;
+  Block& block = blocks[entry.ptr];
 
-  int3 voxel_base_pos = geometry_helper.BlockToVoxel(entry.pos);
-  uint3 voxel_local_pos = geometry_helper.DevectorizeIndex(local_idx);
-  int3 voxel_pos = voxel_base_pos + make_int3(voxel_local_pos);
+  int3   voxel_base_pos = geometry_helper.BlockToVoxel(entry.pos);
+  uint3  offset = geometry_helper.DevectorizeIndex(threadIdx.x);
+  int3   voxel_pos = voxel_base_pos + make_int3(offset);
   float3 world_pos = geometry_helper.VoxelToWorld(voxel_pos);
 
-  Voxel &this_voxel = blocks[entry.ptr].voxels[local_idx];
+  MeshUnit &this_mesh_unit = block.mesh_units[threadIdx.x];
 
   /// Cube type unchanged: NO need to update triangles
 //  if (this_cube.curr_cube_idx == this_cube.prev_cube_idx) {
@@ -240,7 +246,8 @@ void MarchingCubesPass2Kernel(
 //  }
 //  blocks[entry.ptr].voxels[local_idx].stats.duration = 0;
 
-  if (this_voxel.curr_cube_idx == 0 || this_voxel.curr_cube_idx == 255) {
+  if (this_mesh_unit.curr_cube_idx == 0
+      || this_mesh_unit.curr_cube_idx == 255) {
     return;
   }
 
@@ -250,17 +257,23 @@ void MarchingCubesPass2Kernel(
   /// This operation is in 2-pass
   /// pass2: Assign
   const int kEdgeCount = 12;
-  int vertex_ptr[kEdgeCount];
+  int vertex_ptrs[kEdgeCount];
 
 #pragma unroll 1
   for (int i = 0; i < kEdgeCount; ++i) {
-    if (kEdgeTable[this_voxel.curr_cube_idx] & (1 << i)) {
-      uint4 c_idx = kEdgeCubeTable[i];
-      int3 voxel_p = voxel_pos + make_int3(c_idx.x, c_idx.y, c_idx.z);
-      Voxel &voxel  = GetVoxelRef(entry, voxel_p, blocks, hash_table, geometry_helper);
-      vertex_ptr[i] = voxel.GetVertex(c_idx.w);
-      Vertex& v = mesh.vertex(vertex_ptr[i]);
-      voxel.ResetMutexes();
+    if (kCubeEdges[this_mesh_unit.curr_cube_idx] & (1 << i)) {
+      uint4 edge_owner_cube_offset = kEdgeOwnerCubeOffset[i];
+
+      MeshUnit &mesh_unit  = GetMeshUnitRef(
+          entry,
+          voxel_pos + make_int3(edge_owner_cube_offset.x,
+                                edge_owner_cube_offset.y,
+                                edge_owner_cube_offset.z),
+          blocks,
+          hash_table, geometry_helper);
+
+      vertex_ptrs[i] = mesh_unit.GetVertex(edge_owner_cube_offset.w);
+      mesh_unit.ResetMutexes();
     }
   }
 
@@ -268,20 +281,21 @@ void MarchingCubesPass2Kernel(
   /// 3. Assign triangles
   int i = 0;
   for (int t = 0;
-       kTriangleTable[this_voxel.curr_cube_idx][t] != -1;
+       kTriangleVertexEdge[this_mesh_unit.curr_cube_idx][t] != -1;
        t += 3, ++i) {
-    int triangle_ptr = this_voxel.triangle_ptrs[i];
+    int triangle_ptr = this_mesh_unit.triangle_ptrs[i];
     if (triangle_ptr == FREE_PTR) {
       triangle_ptr = mesh.AllocTriangle();
     } else {
       mesh.ReleaseTriangle(mesh.triangle(triangle_ptr));
     }
-    this_voxel.triangle_ptrs[i] = triangle_ptr;
+    this_mesh_unit.triangle_ptrs[i] = triangle_ptr;
 
-    mesh.AssignTriangle(mesh.triangle(triangle_ptr),
-                        make_int3(vertex_ptr[kTriangleTable[this_voxel.curr_cube_idx][t + 0]],
-                                  vertex_ptr[kTriangleTable[this_voxel.curr_cube_idx][t + 1]],
-                                  vertex_ptr[kTriangleTable[this_voxel.curr_cube_idx][t + 2]]));
+    mesh.AssignTriangle(
+        mesh.triangle(triangle_ptr),
+        make_int3(vertex_ptrs[kTriangleVertexEdge[this_mesh_unit.curr_cube_idx][t + 0]],
+                  vertex_ptrs[kTriangleVertexEdge[this_mesh_unit.curr_cube_idx][t + 1]],
+                  vertex_ptrs[kTriangleVertexEdge[this_mesh_unit.curr_cube_idx][t + 2]]));
     if (!enable_sdf_gradient) {
       mesh.ComputeTriangleNormal(mesh.triangle(triangle_ptr));
     }
@@ -295,22 +309,22 @@ void RecycleTrianglesKernel(
     BlockArray blocks,
     Mesh mesh) {
   const HashEntry &entry = candidate_entries[blockIdx.x];
-
-  const uint local_idx = threadIdx.x;  //inside an SDF block
-  Voxel &voxel = blocks[entry.ptr].voxels[local_idx];
+  MeshUnit &mesh_unit = blocks[entry.ptr].mesh_units[threadIdx.x];
 
   int i = 0;
-  for (int t = 0; kTriangleTable[voxel.curr_cube_idx][t] != -1; t += 3, ++i);
+  for (int t = 0;
+       kTriangleVertexEdge[mesh_unit.curr_cube_idx][t] != -1;
+       t += 3, ++i);
 
   for (; i < N_TRIANGLE; ++i) {
-    int triangle_ptr = voxel.triangle_ptrs[i];
+    int triangle_ptr = mesh_unit.triangle_ptrs[i];
     if (triangle_ptr == FREE_PTR) continue;
 
     // Clear ref_count of its pointed vertices
     mesh.ReleaseTriangle(mesh.triangle(triangle_ptr));
     mesh.triangle(triangle_ptr).Clear();
     mesh.FreeTriangle(triangle_ptr);
-    voxel.triangle_ptrs[i] = FREE_PTR;
+    mesh_unit.triangle_ptrs[i] = FREE_PTR;
   }
 }
 
@@ -321,17 +335,15 @@ void RecycleVerticesKernel(
     Mesh mesh
 ) {
   const HashEntry &entry = candidate_entries[blockIdx.x];
-  const uint local_idx = threadIdx.x;
-
-  Voxel &voxel = blocks[entry.ptr].voxels[local_idx];
+  MeshUnit &mesh_unit = blocks[entry.ptr].mesh_units[threadIdx.x];
 
 #pragma unroll 1
   for (int i = 0; i < 3; ++i) {
-    if (voxel.vertex_ptrs[i] != FREE_PTR &&
-        mesh.vertex(voxel.vertex_ptrs[i]).ref_count == 0) {
-      mesh.vertex(voxel.vertex_ptrs[i]).Clear();
-      mesh.FreeVertex(voxel.vertex_ptrs[i]);
-      voxel.vertex_ptrs[i] = FREE_PTR;
+    if (mesh_unit.vertex_ptrs[i] != FREE_PTR &&
+        mesh.vertex(mesh_unit.vertex_ptrs[i]).ref_count == 0) {
+      mesh.vertex(mesh_unit.vertex_ptrs[i]).Clear();
+      mesh.FreeVertex(mesh_unit.vertex_ptrs[i]);
+      mesh_unit.vertex_ptrs[i] = FREE_PTR;
     }
   }
 }
