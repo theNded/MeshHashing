@@ -61,7 +61,7 @@ struct __ALIGN__(4) MeshUnit {
 
 struct __ALIGN__(4) PrimalDualVariables {
   bool   mask;
-  float  sdf0, sdf_bar;
+  float  sdf0, sdf_bar, weight;
   float3 p;
 
   __host__ __device__
@@ -75,8 +75,8 @@ struct __ALIGN__(4) PrimalDualVariables {
   __host__ __device__
   void Clear() {
     mask = false;
-    sdf0 = 0;
-    sdf_bar = 0;
+    sdf0 = sdf_bar = 0;
+    weight = 0;
     p = make_float3(0);
   }
 };

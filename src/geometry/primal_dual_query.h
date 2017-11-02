@@ -43,6 +43,51 @@ inline bool GetPrimalDualValue(
 }
 
 __device__
+inline bool GetInitSDFGradient(
+    const HashEntry &curr_entry,
+    const int3 voxel_pos,
+    const BlockArray &blocks,
+    const HashTable &hash_table,
+    GeometryHelper &geometry_helper,
+    float3* primal_gradient
+) {
+  const int3 grad_offsets[3] = {{1,0,0}, {0,1,0}, {0,0,1}};
+
+  Voxel voxel_query;
+  PrimalDualVariables primal_dual_variable_query;
+  bool valid = GetPrimalDualValue(curr_entry, voxel_pos,
+                                  blocks, hash_table,
+                                  geometry_helper,
+                                  &voxel_query,
+                                  &primal_dual_variable_query);
+  if (! valid || voxel_query.weight < EPSILON) {
+    printf("GetInitSDFGradinet: Invalid Center\n");
+  }
+
+  float primal = voxel_query.sdf;
+  float primalp[3];
+#pragma unroll 1
+  for (int i = 0; i < 3; ++i) {
+    valid = GetPrimalDualValue(curr_entry, voxel_pos + grad_offsets[i],
+                               blocks, hash_table,
+                               geometry_helper,
+                               &voxel_query,
+                               &primal_dual_variable_query);
+    if (! valid
+        || voxel_query.weight < EPSILON) {
+      *primal_gradient = make_float3(0);
+      return false;
+    }
+    primalp[i] = voxel_query.sdf;
+  }
+
+  *primal_gradient = make_float3(primalp[0] - primal,
+                                 primalp[1] - primal,
+                                 primalp[2] - primal);
+  return true;
+}
+
+__device__
 inline bool GetSDFGradient(
     const HashEntry &curr_entry,
     const int3 voxel_pos,

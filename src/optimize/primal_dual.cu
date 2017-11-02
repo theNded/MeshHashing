@@ -25,8 +25,19 @@ void PrimalDualInitKernel(
       = block.primal_dual_variables[threadIdx.x];
   Voxel& voxel = block.voxels[threadIdx.x];
 
+  if (voxel.weight < EPSILON)
+    return;
+
+  int3 voxel_base_pos = geometry_helper.BlockToVoxel(entry.pos);
+  uint3 offset = geometry_helper.DevectorizeIndex(threadIdx.x);
+  int3 voxel_pos = voxel_base_pos + make_int3(offset);
+  float3 gradient;
+  GetInitSDFGradient(entry, voxel_pos,
+                 blocks, hash_table,
+                 geometry_helper, &gradient);
   // primal
   primal_dual_variables.Clear();
+  primal_dual_variables.weight = expf(length(gradient) / geometry_helper.voxel_size);
   primal_dual_variables.sdf0 = voxel.sdf;
   primal_dual_variables.mask = true;
 }
@@ -83,10 +94,12 @@ void PrimalDualIteratePass1Kernel(
   // p_{n+1} = prox_F* (p_{n} + \sigma \nabla x_bar{n})
   // prox_F* (y) = \delta (y) (projection function)
   float3 primal_gradient;
-  GetPrimalGradient(entry, voxel_pos,
-                    blocks, hash_table,
-                    geometry_helper,
-                    &primal_gradient);
+  GetPrimalGradient(
+      entry, voxel_pos,
+      blocks, hash_table,
+      geometry_helper,
+      &primal_gradient
+  );
 
   //float tv_diff =
   primal_dual_variable.p = primal_dual_variable.p + sigma * primal_gradient;
@@ -121,13 +134,19 @@ void PrimalDualIteratePass2Kernel(
   // x_{n+1} = prox_G  (x_{n} - \tau -Div p_{n+1})
   // prox_G = (1 + \lambda y) / (1 + \lambda)
   float dual_divergence = 0;
-  GetDualDivergence(entry, voxel_pos,
-                    blocks, hash_table,
-                    geometry_helper, &dual_divergence);
+  GetDualDivergence(
+      entry, voxel_pos,
+      blocks, hash_table,
+      geometry_helper, &dual_divergence
+  );
+
+  lambda *= primal_dual_variables.weight;
   voxel.sdf = voxel.sdf - tau * dual_divergence;
   voxel.sdf = (voxel.sdf + lambda * tau * primal_dual_variables.sdf0)
               / (1 + lambda * tau);
-  // Extrapolation
+  if (primal_dual_variables.weight > 2.0f)
+    voxel.sdf = primal_dual_variables.sdf0;
+    // Extrapolation
   primal_dual_variables.sdf_bar = 2 * voxel.sdf - voxel_sdf_prev;
 }
 

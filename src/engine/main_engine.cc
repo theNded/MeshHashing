@@ -51,14 +51,14 @@ void MainEngine::Mapping(Sensor &sensor) {
       LOG(INFO) << "Primal dual init";
       //CollectAllBlocks(hash_table_, candidate_entries_);
       PrimalDualInit(candidate_entries_, blocks_, hash_table_, geometry_helper_);
-      for (int i = 0; i < 100; ++i) {
+      for (int i = 0; i < 10; ++i) {
         std::stringstream ss("");
         ss << "primal_dual_" << i << "_";
 
         //std::cout << "Primal dual iteration: " << i << std::endl;
         PrimalDualIterate(candidate_entries_, blocks_,
                           hash_table_, geometry_helper_,
-                          20, 0.1, 0.1);
+                          2.0f, 0.1, 0.1);
         Meshing();
         Visualize(sensor.cTw());
         Log();
