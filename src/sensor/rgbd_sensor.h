@@ -18,16 +18,22 @@ struct SensorData {
 
   /// Reformatted data
   float*		depth_data;
+  float*    filtered_depth_data;
   float4*		color_data;
+  float3*   normal_data;
 
   /// Texture-binded data
   cudaArray*	depth_array;
   cudaArray*	color_array;
+  cudaArray*  normal_array;
 
   cudaTextureObject_t depth_texture;
   cudaTextureObject_t color_texture;
+  cudaTextureObject_t normal_texture;
+
   cudaChannelFormatDesc depth_channel_desc;
   cudaChannelFormatDesc color_channel_desc;
+  cudaChannelFormatDesc normal_channel_desc;
 };
 
 class Sensor {
