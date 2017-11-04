@@ -22,6 +22,17 @@
 
 /// World <-> Voxel
 
+__device__ __host__
+__inline__ float squaref(float a) {
+  return a*a;
+}
+
+__device__ __host__
+__inline__ float gaussian(float x, float u, float squared_sigma) {
+  return 1 / (sqrt(2*M_PI)*sqrt(squared_sigma))
+         * exp(- squaref(x - u) / squared_sigma);
+}
+
 struct GeometryHelper {
   float voxel_size;
   float truncation_distance;

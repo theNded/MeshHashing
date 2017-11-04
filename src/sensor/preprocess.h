@@ -10,6 +10,12 @@
 #include "core/params.h"
 
 __host__
+void ResetInlierRatio(
+    float* inlier_ratio,
+    SensorParams& params
+);
+
+__host__
 void ConvertDepthFormat(
     cv::Mat& depth_img,
     short* depth_buffer,

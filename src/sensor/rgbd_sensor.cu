@@ -20,9 +20,10 @@ Sensor::Sensor(SensorParams &sensor_params) {
   checkCudaErrors(cudaMalloc(&data_.color_buffer, sizeof(uchar4) * image_size));
 
   checkCudaErrors(cudaMalloc(&data_.depth_data, sizeof(float) * image_size));
+  checkCudaErrors(cudaMalloc(&data_.inlier_ratio, sizeof(float) * image_size));
   checkCudaErrors(cudaMalloc(&data_.filtered_depth_data, sizeof(float) * image_size));
   checkCudaErrors(cudaMalloc(&data_.color_data, sizeof(float4) * image_size));
-  checkCudaErrors(cudaMalloc(&data_.normal_data, sizeof(float3) * image_size));
+  checkCudaErrors(cudaMalloc(&data_.normal_data, sizeof(float4) * image_size));
 
   data_.depth_channel_desc = cudaCreateChannelDesc<float>();
   checkCudaErrors(cudaMallocArray(&data_.depth_array,
@@ -34,7 +35,7 @@ Sensor::Sensor(SensorParams &sensor_params) {
                                   &data_.color_channel_desc,
                                   params_.width, params_.height));
 
-  data_.depth_channel_desc = cudaCreateChannelDesc<float3>();
+  data_.normal_channel_desc = cudaCreateChannelDesc<float4>();
   checkCudaErrors(cudaMallocArray(&data_.normal_array,
                                   &data_.normal_channel_desc,
                                   params_.width, params_.height));
@@ -53,6 +54,7 @@ Sensor::~Sensor() {
     checkCudaErrors(cudaFree(data_.color_buffer));
 
     checkCudaErrors(cudaFree(data_.depth_data));
+    checkCudaErrors(cudaFree(data_.inlier_ratio));
     checkCudaErrors(cudaFree(data_.filtered_depth_data));
     checkCudaErrors(cudaFree(data_.color_data));
     checkCudaErrors(cudaFree(data_.normal_data));
@@ -116,9 +118,10 @@ void Sensor::BindCUDATexture() {
 int Sensor::Process(cv::Mat &depth, cv::Mat &color) {
   // TODO(wei): deal with distortion
   /// Disable all filters at current
-
   ConvertDepthFormat(depth, data_.depth_buffer, data_.depth_data, params_);
   ConvertColorFormat(color, data_.color_buffer, data_.color_data, params_);
+
+  ResetInlierRatio(data_.inlier_ratio, params_);
 
   /// Array used as texture in mapper
   checkCudaErrors(cudaMemcpyToArray(data_.depth_array, 0, 0,

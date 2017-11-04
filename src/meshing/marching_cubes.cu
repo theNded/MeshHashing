@@ -48,20 +48,21 @@ inline int AllocateVertexWithMutex(
 
   if (ptr >= 0) {
     Voxel voxel_query;
-    GetSpatialValue(vertex_pos, blocks, hash_table,
-                    geometry_helper, &voxel_query);
+    bool valid = GetSpatialValue(vertex_pos, blocks, hash_table,
+                                 geometry_helper, &voxel_query);
     mesh_unit.vertex_ptrs[vertex_idx] = ptr;
     mesh.vertex(ptr).pos = vertex_pos;
+
+    if (! valid) return ptr;
+
+    mesh.vertex(ptr).radius = sqrtf(1.0f / voxel_query.weight);
     mesh.vertex(ptr).color = make_float3(voxel_query.color) / 255.0;
     if (enable_sdf_gradient) {
       mesh.vertex(ptr).normal = GetSpatialSDFGradient(vertex_pos,
                                                       blocks, hash_table,
                                                       geometry_helper);
     }
-#ifdef STATS
-    float3 val = ValToRGB(stats.duration, 0, 100);
-    mesh.vertex(ptr).color = make_float3(val.x, val.y, val.z);
-#endif
+    mesh.vertex(ptr).color = ValToRGB(voxel_query.a/(voxel_query.a + voxel_query.b), 0, 1.0f);
   }
   return ptr;
 }
@@ -172,7 +173,8 @@ void MarchingCubesPass1Kernel(
       return;
     }
 
-    if (voxel_query.weight < 3.0f)
+    // inlier ratio
+    if (voxel_query.a / (voxel_query.a + voxel_query.b) < 0.1f)
       return;
 
     d[i] = voxel_query.sdf;

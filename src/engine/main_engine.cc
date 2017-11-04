@@ -31,7 +31,7 @@ void MainEngine::Mapping(Sensor &sensor) {
       candidate_entries_
   );
 
-  double update_time;
+  double update_time = 0;
   if (!map_engine_.enable_bayesian_update()) {
     LOG(INFO) << "Simple update";
     update_time = UpdateBlocksSimple(candidate_entries_,
@@ -40,34 +40,34 @@ void MainEngine::Mapping(Sensor &sensor) {
                                      hash_table_,
                                      geometry_helper_);
   } else {
-    LOG(INFO) << "Bayesian update";
-    update_time = UpdateBlocksSimple(candidate_entries_,
-                                     blocks_,
-                                     sensor,
-                                     hash_table_,
-                                     geometry_helper_);
-
-    if (integrated_frame_count_ % 100 == 99) {
-      LOG(INFO) << "Primal dual init";
-      //CollectAllBlocks(hash_table_, candidate_entries_);
-      PrimalDualInit(candidate_entries_, blocks_, hash_table_, geometry_helper_);
-      for (int i = 0; i < 10; ++i) {
-        std::stringstream ss("");
-        ss << "primal_dual_" << i << "_";
-
-        //std::cout << "Primal dual iteration: " << i << std::endl;
-        PrimalDualIterate(candidate_entries_, blocks_,
-                          hash_table_, geometry_helper_,
-                          2.0f, 0.1, 0.1);
-        Meshing();
-        Visualize(sensor.cTw());
-        Log();
+//    LOG(INFO) << "Bayesian update";
+//    update_time = UpdateBlocksSimple(candidate_entries_,
+//                                     blocks_,
+//                                     sensor,
+//                                     hash_table_,
+//                                     geometry_helper_);
+//
+//    if (integrated_frame_count_ % 100 == 99) {
+//      LOG(INFO) << "Primal dual init";
+//      //CollectAllBlocks(hash_table_, candidate_entries_);
+//      PrimalDualInit(candidate_entries_, blocks_, hash_table_, geometry_helper_);
+//      for (int i = 0; i < 10; ++i) {
+//        std::stringstream ss("");
+//        ss << "primal_dual_" << i << "_";
+//
+//        //std::cout << "Primal dual iteration: " << i << std::endl;
+//        PrimalDualIterate(candidate_entries_, blocks_,
+//                          hash_table_, geometry_helper_,
+//                          2.0f, 0.1, 0.1);
+//        Meshing();
+//        Visualize(sensor.cTw());
+//        Log();
 
 //        if (i % 10 == 0) {
 //          RecordBlocks(ss.str());
 //        }
-      }
-    }
+//      }
+//    }
 
 //    map_engine_.linear_equations().Reset();
 //    BuildSensorDataEquation(
@@ -86,14 +86,21 @@ void MainEngine::Mapping(Sensor &sensor) {
 //        geometry_helper_
 //    );
 //
-//    UpdateBlocksBayesian(
-//        candidate_entries_,
-//        blocks_,
-//        sensor,
-//        map_engine_.linear_equations(),
-//        hash_table_,
-//        geometry_helper_
-//    );
+    PredictOutlierRatio(
+        candidate_entries_,
+        blocks_,
+        mesh_,
+        sensor,
+        hash_table_,
+        geometry_helper_
+    );
+    UpdateBlocksBayesian(
+        candidate_entries_,
+        blocks_,
+        sensor,
+        hash_table_,
+        geometry_helper_
+    );
   }
   log_engine_.WriteMappingTimeStamp(
       alloc_time,

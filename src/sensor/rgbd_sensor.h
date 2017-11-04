@@ -19,6 +19,7 @@ struct SensorData {
   /// Reformatted data
   float*		depth_data;
   float*    filtered_depth_data;
+  float*    inlier_ratio;
   float4*		color_data;
   float3*   normal_data;
 

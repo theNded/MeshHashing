@@ -82,8 +82,9 @@ struct __ALIGN__(4) PrimalDualVariables {
 };
 
 struct __ALIGN__(4) Voxel {
-  float  sdf;    // signed distance function
-  float  weight;
+  float  sdf;    // signed distance function, mu
+  float  weight; // sigma
+  float  a, b;
   uchar3 color;  // color
 
   __host__ __device__
@@ -91,12 +92,15 @@ struct __ALIGN__(4) Voxel {
     sdf = v.sdf;
     weight = v.weight;
     color = v.color;
+    a = v.a;
+    b = v.b;
   }
 
   __host__ __device__
   void Clear() {
     sdf = weight = 0.0f;
     color = make_uchar3(0, 0, 0);
+    a = b = 0;
   }
 
   __host__ __device__

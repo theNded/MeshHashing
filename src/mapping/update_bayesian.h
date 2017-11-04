@@ -34,8 +34,16 @@ void UpdateBlocksBayesian(
     EntryArray &candidate_entries,
     BlockArray &blocks,
     Sensor &sensor,
-    SensorLinearEquations &linear_equations,
     HashTable &hash_table,
     GeometryHelper &geometry_helper
 );
+
+void PredictOutlierRatio(
+    EntryArray& candidate_entries,
+    BlockArray& blocks,
+    Mesh& mesh,
+    Sensor& sensor,
+    HashTable& hash_table,
+    GeometryHelper& geometry_helper);
+
 #endif //MESH_HASHING_UPDATE_PROBABILISTIC_H
