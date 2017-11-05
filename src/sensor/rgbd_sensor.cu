@@ -22,7 +22,7 @@ Sensor::Sensor(SensorParams &sensor_params) {
   checkCudaErrors(cudaMalloc(&data_.depth_data, sizeof(float) * image_size));
   checkCudaErrors(cudaMalloc(&data_.filtered_depth_data, sizeof(float) * image_size));
   checkCudaErrors(cudaMalloc(&data_.color_data, sizeof(float4) * image_size));
-  checkCudaErrors(cudaMalloc(&data_.normal_data, sizeof(float3) * image_size));
+  checkCudaErrors(cudaMalloc(&data_.normal_data, sizeof(float4) * image_size));
 
   data_.depth_channel_desc = cudaCreateChannelDesc<float>();
   checkCudaErrors(cudaMallocArray(&data_.depth_array,
@@ -34,7 +34,7 @@ Sensor::Sensor(SensorParams &sensor_params) {
                                   &data_.color_channel_desc,
                                   params_.width, params_.height));
 
-  data_.depth_channel_desc = cudaCreateChannelDesc<float3>();
+  data_.normal_channel_desc = cudaCreateChannelDesc<float4>();
   checkCudaErrors(cudaMallocArray(&data_.normal_array,
                                   &data_.normal_channel_desc,
                                   params_.width, params_.height));
