@@ -45,6 +45,7 @@ void MainEngine::Mapping(Sensor &sensor) {
         update_time,
         integrated_frame_count_);
   } else {
+    LOG(INFO) << "Bayesian update";
     float predict_seconds = PredictOutlierRatio(
         candidate_entries_,
         blocks_,

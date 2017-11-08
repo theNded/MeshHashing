@@ -25,7 +25,7 @@ void PrimalDualInitKernel(
       = block.primal_dual_variables[threadIdx.x];
   Voxel& voxel = block.voxels[threadIdx.x];
 
-  if (voxel.weight < EPSILON)
+  if (voxel.inv_sigma2 < EPSILON)
     return;
 
   int3 voxel_base_pos = geometry_helper.BlockToVoxel(entry.pos);
@@ -37,7 +37,7 @@ void PrimalDualInitKernel(
                  geometry_helper, &gradient);
   // primal
   primal_dual_variables.Clear();
-  primal_dual_variables.weight = expf(length(gradient) / geometry_helper.voxel_size);
+  primal_dual_variables.inv_sigma2 = expf(length(gradient) / geometry_helper.voxel_size);
   primal_dual_variables.sdf0 = voxel.sdf;
   primal_dual_variables.mask = true;
 }
@@ -71,7 +71,7 @@ void PrimalDualIteratePass1Kernel(
 
   Voxel &voxel = block.voxels[threadIdx.x];
   PrimalDualVariables &primal_dual_variable = block.primal_dual_variables[threadIdx.x];
-  if (voxel.weight < EPSILON) return;
+  if (voxel.inv_sigma2 < EPSILON) return;
 
   int3 voxel_base_pos = geometry_helper.BlockToVoxel(entry.pos);
   uint3 offset = geometry_helper.DevectorizeIndex(threadIdx.x);
@@ -80,7 +80,7 @@ void PrimalDualIteratePass1Kernel(
   // Compute error
   float data_diff = fabsf(voxel.sdf - primal_dual_variable.sdf0);
   data_diff *= data_diff;
-  if (voxel.weight > EPSILON) {
+  if (voxel.inv_sigma2 > EPSILON) {
     atomicAdd(err_data, data_diff);
   }
 
@@ -122,7 +122,7 @@ void PrimalDualIteratePass2Kernel(
   Block& block = blocks[entry.ptr];
   Voxel &voxel = block.voxels[threadIdx.x];
   PrimalDualVariables& primal_dual_variables = block.primal_dual_variables[threadIdx.x];
-  if (voxel.weight < EPSILON)
+  if (voxel.inv_sigma2 < EPSILON)
     return;
 
   int3 voxel_base_pos = geometry_helper.BlockToVoxel(entry.pos);
@@ -140,11 +140,11 @@ void PrimalDualIteratePass2Kernel(
       geometry_helper, &dual_divergence
   );
 
-  lambda *= primal_dual_variables.weight;
+  lambda *= primal_dual_variables.inv_sigma2;
   voxel.sdf = voxel.sdf - tau * dual_divergence;
   voxel.sdf = (voxel.sdf + lambda * tau * primal_dual_variables.sdf0)
               / (1 + lambda * tau);
-  if (primal_dual_variables.weight > 2.0f)
+  if (primal_dual_variables.inv_sigma2 > 2.0f)
     voxel.sdf = primal_dual_variables.sdf0;
     // Extrapolation
   primal_dual_variables.sdf_bar = 2 * voxel.sdf - voxel_sdf_prev;

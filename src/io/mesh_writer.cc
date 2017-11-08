@@ -82,11 +82,15 @@ void SavePly(CompactMesh& compact_mesh, std::string path) {
 
   float3* vertices = new float3[compact_vertex_count];
   float3* normals  = new float3[compact_vertex_count];
+  float3* colors = new float3[compact_vertex_count];
   int3* triangles  = new int3  [compact_triangle_count];
   checkCudaErrors(cudaMemcpy(vertices, compact_mesh.vertices(),
                              sizeof(float3) * compact_vertex_count,
                              cudaMemcpyDeviceToHost));
   checkCudaErrors(cudaMemcpy(normals, compact_mesh.normals(),
+                             sizeof(float3) * compact_vertex_count,
+                             cudaMemcpyDeviceToHost));
+  checkCudaErrors(cudaMemcpy(colors, compact_mesh.colors(),
                              sizeof(float3) * compact_vertex_count,
                              cudaMemcpyDeviceToHost));
   checkCudaErrors(cudaMemcpy(triangles, compact_mesh.triangles(),
@@ -105,7 +109,10 @@ void SavePly(CompactMesh& compact_mesh, std::string path) {
       "property float z\n"
       "property float nx\n"
       "property float ny\n"
-      "property float nz\n";
+      "property float nz\n"
+      "property uchar red\n"
+      "property uchar green\n"
+      "property uchar blue\n";
   ss << "element face " << compact_triangle_count << "\n";
   ss << "property list uchar int vertex_index\n";
   ss << "end_header\n";
@@ -119,7 +126,10 @@ void SavePly(CompactMesh& compact_mesh, std::string path) {
        << vertices[i].z << " "
        << normals[i].x << " "
        << normals[i].y << " "
-       << normals[i].z << "\n";
+       << normals[i].z << " "
+       << int(255.0f * colors[i].x) << " "
+       << int(255.0f * colors[i].y) << " "
+       << int(255.0f * colors[i].z) << "\n";
     out << ss.str();
   }
 

@@ -53,7 +53,7 @@ inline bool GetSpatialValue(
     colorf += w * make_float3(voxel_query.color);
     a += w * voxel_query.a;
     b += w * voxel_query.b;
-    radius += w * sqrtf(1.0f / voxel_query.weight);
+    radius += w * sqrtf(1.0f / voxel_query.inv_sigma2);
     // TODO: Interpolation of stats
   }
 
@@ -61,7 +61,7 @@ inline bool GetSpatialValue(
   voxel->color = make_uchar3(colorf.x, colorf.y, colorf.z);
   voxel->a = a;
   voxel->b = b;
-  voxel->weight = 1.0f / squaref(radius);
+  voxel->inv_sigma2 = 1.0f / squaref(radius);
   return true;
 }
 

@@ -42,7 +42,7 @@ int main(int argc, char **argv) {
           float3 voxel_pos = {block.first.x + delta * i,
                               block.first.y + delta * j,
                               block.first.z + delta * k};
-          if (block.second.voxels[index].weight > 0) {
+          if (block.second.voxels[index].inv_sigma2 > 0) {
             pos.emplace_back(voxel_pos);
             sdf.emplace_back(ValToRGB(block.second.voxels[index].sdf,
                                       -truncation,

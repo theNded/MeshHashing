@@ -52,7 +52,7 @@ inline int AllocateVertexWithMutex(
                                  geometry_helper, &voxel_query);
     mesh_unit.vertex_ptrs[vertex_idx] = ptr;
     mesh.vertex(ptr).pos = vertex_pos;
-    mesh.vertex(ptr).radius = sqrtf(1.0f / voxel_query.weight);
+    mesh.vertex(ptr).radius = sqrtf(1.0f / voxel_query.inv_sigma2);
     if (enable_sdf_gradient) {
       mesh.vertex(ptr).normal = GetSpatialSDFGradient(vertex_pos,
                                                       blocks, hash_table,
@@ -108,7 +108,9 @@ void MarchingCubesPass1Kernel(
 
     // inlier ratio
     float rho = voxel_query.a / (voxel_query.a + voxel_query.b);
-    if (rho < 0.3f || voxel_query.weight < 9)
+//    if (threadIdx.x == 4)
+//      printf("%f\n", voxel_query.inv_sigma2);
+    if (rho < 0.5f || voxel_query.inv_sigma2 < squaref(0.33f / kVoxelSize))
       return;
 
     d[i] = voxel_query.sdf;

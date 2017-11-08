@@ -87,7 +87,7 @@ void PredictOutlierRatioKernel(
       float proj_dist = dot(vec, normalize(cTw * n));
       float proj_disk = sqrtf(dot(vec, vec) - squaref(proj_dist));
 
-      float w_dist = expf(- fabsf(proj_dist - this_voxel.sdf));
+      float w_dist = expf(- squaref(proj_dist - this_voxel.sdf) * this_voxel.inv_sigma2);
       float w_disk = expf(- fabsf(proj_disk / r));
       // cos (80) = 0.1736
       float w_angle = (cos_alpha - 0.1736f) / (1.0f - 0.1736f);
@@ -95,10 +95,6 @@ void PredictOutlierRatioKernel(
 
       float inlier_ratio = w_disk * w_dist * w_angle;
       inlier_ratio = fmaxf(inlier_ratio, 0.1f);
-//      if (threadIdx.x == 0) {
-//        printf("%f %f %f\n", inlier_ratio, this_voxel.a, this_voxel.b);
-//      }
-      // No lock here...
       AtomicMax(&sensor_data.inlier_ratio[image_idx], inlier_ratio);
     }
   }
@@ -151,16 +147,16 @@ void UpdateBlocksBayesianKernel(
   }
 
 //  // Depth filter
-  float tau = (depth - 0.4f) * 0.12f + 0.19f;
+  float tau = (depth - 0.4f) * 0.012f + 0.019f;
   // uninitialized
-  if (this_voxel.weight == 0) {
+  if (this_voxel.inv_sigma2 == 0) {
     this_voxel.sdf = x;
-    this_voxel.weight = 1.0f / squaref(tau);
+    this_voxel.inv_sigma2 = 1.0f / squaref(tau);
     this_voxel.a = 10;
     this_voxel.b = 10;
   } else {
     float mu = this_voxel.sdf;
-    float squared_sigma = 1.0f / this_voxel.weight;
+    float squared_sigma = 1.0f / this_voxel.inv_sigma2;
     float squared_tau = squaref(tau);
     float squared_s = 1.0f / (1.0f / squared_sigma + 1.0f / squared_tau);
     float m = squared_s * (mu / squared_sigma + x / squared_tau);
@@ -177,7 +173,7 @@ void UpdateBlocksBayesianKernel(
     float e = C1*(a+1)*(a+2)/((a+b+1)*(a+b+2)) + C2*a*(a+1)/((a+b+1)*(a+b+2));
 
     this_voxel.sdf = C1 * m + C2 * mu;
-    this_voxel.weight = 1.0f / (C1 * (squared_s + squaref(m))
+    this_voxel.inv_sigma2 = 1.0f / (C1 * (squared_s + squaref(m))
                                 + C2 * (squared_sigma + squaref(mu))
                                 - squaref(this_voxel.sdf));
     this_voxel.a = (e-f) / (f-e/f);
