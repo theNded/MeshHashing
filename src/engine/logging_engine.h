@@ -33,6 +33,10 @@ public:
   void WritePly(CompactMesh& mesh);
   void WriteMappingTimeStamp(double alloc_time, double collect_time, double update_time,
                                int frame_idx);
+  void WriteMappingTimeStamp(float alloc_time, float collect_time, float predict_time, float update_time,
+                             int frame_idx);
+  void WriteMeshingTimeStamp(float time, int frame_idx);
+  void WriteMeshStats(int vtx_count, int tri_count);
 
   BlockMap RecordBlockToMemory(
       const Block *block_gpu, uint block_num,
@@ -57,6 +61,8 @@ private:
   std::string prefix_;
   cv::VideoWriter video_writer_;
   std::ofstream time_stamp_file_;
+  std::ofstream meshing_time_file_;
+  std::ofstream mesh_stats_file_;
 };
 
 

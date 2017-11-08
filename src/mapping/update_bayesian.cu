@@ -3,6 +3,7 @@
 //
 
 #include <device_launch_parameters.h>
+#include <util/timer.h>
 #include "update_bayesian.h"
 
 #include "core/block_array.h"
@@ -84,20 +85,21 @@ void PredictOutlierRatioKernel(
 
       float3 vec = point_cam - cTw * x;
       float proj_dist = dot(vec, normalize(cTw * n));
-      float projection = sqrtf(dot(vec, vec) - squaref(proj_dist));
+      float proj_disk = sqrtf(dot(vec, vec) - squaref(proj_dist));
 
-      float w_radius = expf(- fabsf(proj_dist / r));
-      float w_dist = expf(- fabsf(projection / r));
+      float w_dist = expf(- fabsf(proj_dist - this_voxel.sdf));
+      float w_disk = expf(- fabsf(proj_disk / r));
       // cos (80) = 0.1736
       float w_angle = (cos_alpha - 0.1736f) / (1.0f - 0.1736f);
       w_angle = fmaxf(w_angle, 0.1f);
 
-      float inlier_ratio = w_radius * w_dist * w_angle;
+      float inlier_ratio = w_disk * w_dist * w_angle;
       inlier_ratio = fmaxf(inlier_ratio, 0.1f);
-      float prev_inlier_ratio = sensor_data.inlier_ratio[image_idx];
+//      if (threadIdx.x == 0) {
+//        printf("%f %f %f\n", inlier_ratio, this_voxel.a, this_voxel.b);
+//      }
       // No lock here...
-      sensor_data.inlier_ratio[image_idx]
-          = fmaxf(inlier_ratio, prev_inlier_ratio);
+      AtomicMax(&sensor_data.inlier_ratio[image_idx], inlier_ratio);
     }
   }
 }
@@ -138,7 +140,7 @@ void UpdateBlocksBayesianKernel(
   int image_idx = image_pos.x + image_pos.y * sensor_params.width;
 
   float x = depth - camera_pos.z;
-  float rou = sensor_data.inlier_ratio[image_idx];
+  float rho = sensor_data.inlier_ratio[image_idx];
   float truncation = geometry_helper.truncate_distance(depth);
   if (x <= -truncation)
     return;
@@ -151,7 +153,6 @@ void UpdateBlocksBayesianKernel(
 //  // Depth filter
   float tau = (depth - 0.4f) * 0.12f + 0.19f;
   // uninitialized
-  float a = 10.0, b = 0.0;
   if (this_voxel.weight == 0) {
     this_voxel.sdf = x;
     this_voxel.weight = 1.0f / squaref(tau);
@@ -164,12 +165,14 @@ void UpdateBlocksBayesianKernel(
     float squared_s = 1.0f / (1.0f / squared_sigma + 1.0f / squared_tau);
     float m = squared_s * (mu / squared_sigma + x / squared_tau);
 
-    float C1 = rou * gaussian(x, mu, squared_sigma + squared_tau);
-    float C2 = (1-rou) * 1.0f / (5.0f - 0.1f);
+    float C1 = rho * gaussian(x, mu, squared_sigma + squared_tau);
+    float C2 = (1-rho) * 1.0f / (5.0f - 0.1f);
     float sum_C1_C2 = C1 + C2;
     C1 /= sum_C1_C2;
     C2 /= sum_C1_C2;
 
+    float a = this_voxel.a;
+    float b = this_voxel.b;
     float f = C1*(a+1)/(a+b+1) + C2*a/(a+b+1);
     float e = C1*(a+1)*(a+2)/((a+b+1)*(a+b+2)) + C2*a*(a+1)/((a+b+1)*(a+b+2));
 
@@ -260,7 +263,7 @@ void BuildSensorDataEquationKernel(
   linear_equations.atomicAddfloat3(pixel_idx, b);
 }
 
-void PredictOutlierRatio(
+float PredictOutlierRatio(
     EntryArray& candidate_entries,
     BlockArray& blocks,
     Mesh& mesh,
@@ -271,8 +274,10 @@ void PredictOutlierRatio(
 
   uint candidate_entry_count = candidate_entries.count();
   if (candidate_entry_count <= 0)
-    return;
+    return -1;
 
+  Timer timer;
+  timer.Tick();
   const dim3 grid_size(candidate_entry_count, 1);
   const dim3 block_size(threads_per_block, 1);
   PredictOutlierRatioKernel << < grid_size, block_size >> > (
@@ -286,22 +291,26 @@ void PredictOutlierRatio(
           geometry_helper);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
+
+  return timer.Tock();
 }
 
 
-  void UpdateBlocksBayesian(
-    EntryArray &candidate_entries,
-    BlockArray &blocks,
-    Sensor &sensor,
-    HashTable &hash_table,
-    GeometryHelper &geometry_helper
+float UpdateBlocksBayesian(
+  EntryArray &candidate_entries,
+  BlockArray &blocks,
+  Sensor &sensor,
+  HashTable &hash_table,
+  GeometryHelper &geometry_helper
 ) {
   const uint threads_per_block = BLOCK_SIZE;
 
   uint candidate_entry_count = candidate_entries.count();
   if (candidate_entry_count <= 0)
-    return;
+    return - 1;
 
+  Timer timer;
+  timer.Tick();
   const dim3 grid_size(candidate_entry_count, 1);
   const dim3 block_size(threads_per_block, 1);
   UpdateBlocksBayesianKernel << < grid_size, block_size >> > (
@@ -314,6 +323,7 @@ void PredictOutlierRatio(
           geometry_helper);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
+  return timer.Tock();
 }
 
 void BuildSensorDataEquation(

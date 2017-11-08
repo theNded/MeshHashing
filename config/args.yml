@@ -4,13 +4,13 @@
 # 4   - SUN3D
 # 5   - SUN3D_ORIGINAL
 # 6   - PKU
-dataset_type:    4
+dataset_type:    3
 
 # -----------
 enable_bayesian_update: 1
 
 enable_sdf_gradient:    1
-enable_polygon_mode:    1
+enable_polygon_mode:    0
 
 enable_color:           1
 enable_navigation:      0

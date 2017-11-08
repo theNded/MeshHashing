@@ -12,7 +12,7 @@
 void LoggingEngine::Init(std::string path) {
   base_path_ = path;
 
-  time_stamp_file_.open(base_path_ + "/mappingstamp.txt");
+  time_stamp_file_.open(base_path_ + "/time_mapping.txt");
   if (!time_stamp_file_.is_open()) {
     LOG(ERROR) << "Can't open mappoing stamp file";
     return;
@@ -20,6 +20,10 @@ void LoggingEngine::Init(std::string path) {
 
   time_stamp_file_.flags(std::ios::right);
   time_stamp_file_.setf(std::ios::fixed);
+
+  meshing_time_file_.open(base_path_ + "/time_meshing.txt");
+
+  mesh_stats_file_.open(base_path_ + "/stats_mesh.txt");
 }
 
 LoggingEngine::~LoggingEngine() {
@@ -53,11 +57,40 @@ void LoggingEngine::WriteMappingTimeStamp(double alloc_time,
                                           double update_time,
                                           int frame_idx) {
 
-  time_stamp_file_ << "For " << frame_idx << "-th frame, "
-                   << "alloc time : " << alloc_time * 1000 << "ms "
-                   << "collect time : " << collect_time * 1000 << "ms "
-                   << "update time : " << update_time * 1000 << "ms\n";
+  time_stamp_file_ << frame_idx << " "
+                   //<< "alloc time : "
+                   << alloc_time * 1000 << " "//<< "ms "
+                   //<< "collect time : "
+                   << collect_time * 1000 << " "// << "ms "
+                   //<< "update time : "
+                   << update_time * 1000 << "\n";
 }
+
+void LoggingEngine::WriteMappingTimeStamp(float alloc_time,
+                                          float collect_time,
+                                          float predict_time,
+                                          float update_time,
+                                          int frame_idx) {
+
+  time_stamp_file_ << frame_idx << " "
+                   //<< "alloc time : "
+                   << alloc_time * 1000 << " "//<< "ms "
+                   //<< "collect time : "
+                   << collect_time * 1000 << " "// << "ms "
+                   << predict_time * 1000 << " "
+                   //<< "update time : "
+                   << update_time * 1000 << "\n";
+}
+
+void LoggingEngine::WriteMeshingTimeStamp(float time, int frame_idx) {
+  meshing_time_file_ << frame_idx << " " << time << "\n";
+}
+
+void LoggingEngine::WriteMeshStats(int vtx_count, int tri_count) {
+  mesh_stats_file_ << "Vertices: " << vtx_count << "\n"
+                   << "Triangles: " << tri_count;
+}
+
 
 void LoggingEngine::WriteRawBlocks(const BlockMap &blocks, std::string filename) {
   std::ofstream file(base_path_ + "/Blocks/" + filename + ".block",

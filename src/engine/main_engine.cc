@@ -39,54 +39,13 @@ void MainEngine::Mapping(Sensor &sensor) {
                                      sensor,
                                      hash_table_,
                                      geometry_helper_);
+    log_engine_.WriteMappingTimeStamp(
+        alloc_time,
+        collect_time,
+        update_time,
+        integrated_frame_count_);
   } else {
-//    LOG(INFO) << "Bayesian update";
-//    update_time = UpdateBlocksSimple(candidate_entries_,
-//                                     blocks_,
-//                                     sensor,
-//                                     hash_table_,
-//                                     geometry_helper_);
-//
-//    if (integrated_frame_count_ % 100 == 99) {
-//      LOG(INFO) << "Primal dual init";
-//      //CollectAllBlocks(hash_table_, candidate_entries_);
-//      PrimalDualInit(candidate_entries_, blocks_, hash_table_, geometry_helper_);
-//      for (int i = 0; i < 10; ++i) {
-//        std::stringstream ss("");
-//        ss << "primal_dual_" << i << "_";
-//
-//        //std::cout << "Primal dual iteration: " << i << std::endl;
-//        PrimalDualIterate(candidate_entries_, blocks_,
-//                          hash_table_, geometry_helper_,
-//                          2.0f, 0.1, 0.1);
-//        Meshing();
-//        Visualize(sensor.cTw());
-//        Log();
-
-//        if (i % 10 == 0) {
-//          RecordBlocks(ss.str());
-//        }
-//      }
-//    }
-
-//    map_engine_.linear_equations().Reset();
-//    BuildSensorDataEquation(
-//        candidate_entries_,
-//        blocks_,
-//        mesh_,
-//        sensor,
-//        hash_table_,
-//        geometry_helper_,
-//        map_engine_.linear_equations()
-//    );
-//
-//    SolveSensorDataEquation(
-//        map_engine_.linear_equations(),
-//        sensor,
-//        geometry_helper_
-//    );
-//
-    PredictOutlierRatio(
+    float predict_seconds = PredictOutlierRatio(
         candidate_entries_,
         blocks_,
         mesh_,
@@ -94,30 +53,33 @@ void MainEngine::Mapping(Sensor &sensor) {
         hash_table_,
         geometry_helper_
     );
-    UpdateBlocksBayesian(
+    float update_seconds = UpdateBlocksBayesian(
         candidate_entries_,
         blocks_,
         sensor,
         hash_table_,
         geometry_helper_
     );
+
+    log_engine_.WriteMappingTimeStamp(
+        alloc_time,
+        collect_time,
+        predict_seconds,
+        update_time,
+        integrated_frame_count_);
   }
-  log_engine_.WriteMappingTimeStamp(
-      alloc_time,
-      collect_time,
-      update_time,
-      integrated_frame_count_);
+
   integrated_frame_count_ ++;
 }
 
 void MainEngine::Meshing() {
-  MarchingCubes(candidate_entries_,
-                blocks_,
-                mesh_,
-                hash_table_,
-                geometry_helper_,
-                enable_sdf_gradient_);
-
+  float time = MarchingCubes(candidate_entries_,
+                             blocks_,
+                             mesh_,
+                             hash_table_,
+                             geometry_helper_,
+                             enable_sdf_gradient_);
+  log_engine_.WriteMeshingTimeStamp(time, integrated_frame_count_);
 }
 
 void MainEngine::Recycle() {
@@ -202,6 +164,8 @@ void MainEngine::FinalLog() {
   if (log_engine_.enable_ply()) {
     log_engine_.WritePly(vis_engine_.compact_mesh());
   }
+  log_engine_.WriteMeshStats(vis_engine_.compact_mesh().vertex_count(),
+                             vis_engine_.compact_mesh().triangle_count());
 }
 
 /// Life cycle

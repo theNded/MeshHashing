@@ -122,6 +122,8 @@ inline bool GetVoxelValue(
     voxel->sdf = v.sdf;
     voxel->weight = v.weight;
     voxel->color = v.color;
+    voxel->a = v.a;
+    voxel->b = v.b;
     return true;
   }
 }

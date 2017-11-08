@@ -30,7 +30,7 @@ void BuildSensorDataEquation(
     SensorLinearEquations &linear_equations
 );
 
-void UpdateBlocksBayesian(
+float UpdateBlocksBayesian(
     EntryArray &candidate_entries,
     BlockArray &blocks,
     Sensor &sensor,
@@ -38,7 +38,7 @@ void UpdateBlocksBayesian(
     GeometryHelper &geometry_helper
 );
 
-void PredictOutlierRatio(
+float PredictOutlierRatio(
     EntryArray& candidate_entries,
     BlockArray& blocks,
     Mesh& mesh,

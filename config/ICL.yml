@@ -1,5 +1,5 @@
 %YAML:1.0
-dataset_path:      "/home/wei/Work/data/ICL/office2/"
+dataset_path:      "/home/wei/Work/data/ICL/office1/"
 
 bucket_count:      40000
 bucket_size:       10
@@ -34,5 +34,5 @@ sample_sdf_threshold: 0.808
 sdf_threshold:        0.800
 enable_gradient:      1
 
-max_vertex_count:     3400000
-max_triangle_count:   5000000
+max_vertex_count:     8000000
+max_triangle_count:   8000000
