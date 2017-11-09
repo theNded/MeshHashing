@@ -54,7 +54,7 @@ void MainEngine::Mapping(Sensor &sensor) {
         hash_table_,
         geometry_helper_
     );
-    float update_seconds = UpdateBlocksBayesian(
+    update_time = UpdateBlocksBayesian(
         candidate_entries_,
         blocks_,
         sensor,
