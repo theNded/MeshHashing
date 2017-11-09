@@ -102,7 +102,7 @@ int main(int argc, char **argv) {
 
     main_engine.Log();
     //main_engine.RecordBlocks();
-    main_engine.Recycle();
+    //main_engine.Recycle();
   }
 
   main_engine.FinalLog();

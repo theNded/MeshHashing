@@ -15,7 +15,7 @@
 #include "engine/main_engine.h"
 #include "core/collect_block_array.h"
 
-void MarchingCubes(
+float MarchingCubes(
     EntryArray& candidate_entries,
     BlockArray& blocks,
     Mesh& mesh,

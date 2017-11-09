@@ -19,9 +19,9 @@ void StarveOccupiedBlocksKernel(
 ) {
   const uint idx = blockIdx.x;
   const HashEntry& entry = candidate_entries[idx];
-  float weight = blocks[entry.ptr].voxels[threadIdx.x].weight;
-  weight = fmaxf(0, weight - 1.0f);
-  blocks[entry.ptr].voxels[threadIdx.x].weight = weight;
+  float inv_sigma2 = blocks[entry.ptr].voxels[threadIdx.x].inv_sigma2;
+  inv_sigma2 = fmaxf(0, inv_sigma2 - 1.0f);
+  blocks[entry.ptr].voxels[threadIdx.x].inv_sigma2 = inv_sigma2;
 }
 
 /// Collect dead voxels
@@ -39,13 +39,13 @@ void CollectGarbageBlockArrayKernel(
   Voxel v1 = blocks[entry.ptr].voxels[2*threadIdx.x+1];
 
   float sdf0 = v0.sdf, sdf1 = v1.sdf;
-  if (v0.weight < EPSILON)	sdf0 = PINF;
-  if (v1.weight < EPSILON)	sdf1 = PINF;
+  if (v0.inv_sigma2 < EPSILON)	sdf0 = PINF;
+  if (v1.inv_sigma2 < EPSILON)	sdf1 = PINF;
 
   __shared__ float	shared_min_sdf   [BLOCK_SIZE / 2];
-  __shared__ float	shared_max_weight[BLOCK_SIZE / 2];
+  __shared__ float	shared_max_inv_sigma2[BLOCK_SIZE / 2];
   shared_min_sdf[threadIdx.x] = fminf(fabsf(sdf0), fabsf(sdf1));
-  shared_max_weight[threadIdx.x] = fmaxf(v0.weight, v1.weight);
+  shared_max_inv_sigma2[threadIdx.x] = fmaxf(v0.inv_sigma2, v1.inv_sigma2);
 
   /// reducing operation
 #pragma unroll 1
@@ -55,22 +55,22 @@ void CollectGarbageBlockArrayKernel(
     if ((threadIdx.x  & (stride-1)) == (stride-1)) {
       shared_min_sdf[threadIdx.x] = fminf(shared_min_sdf[threadIdx.x-stride/2],
                                           shared_min_sdf[threadIdx.x]);
-      shared_max_weight[threadIdx.x] = fmaxf(shared_max_weight[threadIdx.x-stride/2],
-                                             shared_max_weight[threadIdx.x]);
+      shared_max_inv_sigma2[threadIdx.x] = fmaxf(shared_max_inv_sigma2[threadIdx.x-stride/2],
+                                             shared_max_inv_sigma2[threadIdx.x]);
     }
   }
   __syncthreads();
 
   if (threadIdx.x == blockDim.x - 1) {
     float min_sdf = shared_min_sdf[threadIdx.x];
-    float max_weight = shared_max_weight[threadIdx.x];
+    float max_inv_sigma2 = shared_max_inv_sigma2[threadIdx.x];
 
     // TODO(wei): check this weird reference
     float t = geometry_helper.truncate_distance(5.0f);
 
     // TODO(wei): add || valid_triangles == 0 when memory leak is dealt with
     candidate_entries.flag(idx) =
-        (min_sdf >= t || max_weight < EPSILON) ? (uchar)1 : (uchar)0;
+        (min_sdf >= t || max_inv_sigma2 < EPSILON) ? (uchar)1 : (uchar)0;
   }
 }
 

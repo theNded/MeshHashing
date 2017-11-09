@@ -48,87 +48,21 @@ inline int AllocateVertexWithMutex(
 
   if (ptr >= 0) {
     Voxel voxel_query;
-    GetSpatialValue(vertex_pos, blocks, hash_table,
-                    geometry_helper, &voxel_query);
+    bool valid = GetSpatialValue(vertex_pos, blocks, hash_table,
+                                 geometry_helper, &voxel_query);
     mesh_unit.vertex_ptrs[vertex_idx] = ptr;
     mesh.vertex(ptr).pos = vertex_pos;
-    mesh.vertex(ptr).color = make_float3(voxel_query.color) / 255.0;
+    mesh.vertex(ptr).radius = sqrtf(1.0f / voxel_query.inv_sigma2);
     if (enable_sdf_gradient) {
       mesh.vertex(ptr).normal = GetSpatialSDFGradient(vertex_pos,
                                                       blocks, hash_table,
                                                       geometry_helper);
     }
-#ifdef STATS
-    float3 val = ValToRGB(stats.duration, 0, 100);
-    mesh.vertex(ptr).color = make_float3(val.x, val.y, val.z);
-#endif
+    float rho = voxel_query.a/(voxel_query.a + voxel_query.b);
+    //printf("%f %f\n", voxel_query.a, voxel_query.b);
+    mesh.vertex(ptr).color = ValToRGB(rho, 0, 1.0f);
   }
   return ptr;
-}
-
-__device__
-void RefineMesh(short &prev_cube, short &curr_cube, float d[8], int is_noise_bit[8]) {
-  float kTr = 0.0075;
-
-  /// Step 1: temporal
-  short temporal_diff = curr_cube ^prev_cube;
-  int dist = 0;
-  while (temporal_diff) {
-    temporal_diff &= (temporal_diff - 1);
-    dist++;
-  }
-  if (dist > 3) return;
-
-  /// Step 2: Spatially closest
-  float min_dist = 1e10;
-  int min_idx = -1;
-  for (int i = 0; i < 6; ++i) {
-    short spatial_diff = curr_cube ^kRegularCubeIndices[i];
-    short hamming_dist = 0;
-    float euclid_dist;
-
-    for (int j = 0; j < 8; ++j) {
-      short mask = (1 << j);
-      if (mask & spatial_diff) {
-        hamming_dist++;
-        euclid_dist += fabs(d[j]);
-        if (hamming_dist > 3) break;
-      }
-    }
-
-    if (hamming_dist <= 3 && euclid_dist < min_dist) {
-      min_dist = euclid_dist;
-      min_idx = i;
-    }
-  }
-  if (min_idx < 0) return;
-
-  /// Step 3: Valid?
-  int noise_bit[3];
-  short hamming_dist = 0;
-  short binary_xor = curr_cube ^kRegularCubeIndices[min_idx];
-  for (int j = 0; j < 8; ++j) {
-    short mask = (1 << j);
-    if (mask & binary_xor) {
-      noise_bit[hamming_dist] = j;
-      hamming_dist++;
-    }
-  }
-
-  for (int j = 0; j < hamming_dist; ++j) {
-    if (fabs(d[noise_bit[j]]) > kTr) {
-      return;
-    }
-  }
-
-  for (int i = 0; i < 8; ++i) {
-    is_noise_bit[i] = 0;
-  }
-  for (int j = 0; j < hamming_dist; ++j) {
-    //d[noise_bit[j]] = - d[noise_bit[j]];
-    is_noise_bit[noise_bit[j]] = 1;
-  }
-  curr_cube = kRegularCubeIndices[min_idx];
 }
 
 __global__
@@ -172,7 +106,11 @@ void MarchingCubesPass1Kernel(
       return;
     }
 
-    if (voxel_query.weight < 3.0f)
+    // inlier ratio
+    float rho = voxel_query.a / (voxel_query.a + voxel_query.b);
+//    if (threadIdx.x == 4)
+//      printf("%f\n", voxel_query.inv_sigma2);
+    if (rho < 0.5f || voxel_query.inv_sigma2 < squaref(0.33f / kVoxelSize))
       return;
 
     d[i] = voxel_query.sdf;
@@ -219,6 +157,8 @@ void MarchingCubesPass1Kernel(
     }
   }
 }
+
+
 
 __global__
 void MarchingCubesPass2Kernel(
@@ -348,49 +288,10 @@ void RecycleVerticesKernel(
   }
 }
 
-#ifdef STATS
-__global__
-void UpdateStatisticsKernel(HashTable        hash_table,
-                            EntryArray candidate_entries,
-                            BlockArray           blocks) {
-
-  const HashEntry &entry = candidate_entries.entries[blockIdx.x];
-  const uint local_idx   = threadIdx.x;
-
-  int3  voxel_base_pos  = BlockToVoxel(entry.pos);
-  uint3 voxel_local_pos = DevectorizeIndex(local_idx);
-  int3 voxel_pos        = voxel_base_pos + make_int3(voxel_local_pos);
-
-  const int3 offset[] = {
-      make_int3(1, 0, 0),
-      make_int3(-1, 0, 0),
-      make_int3(0, 1, 0),
-      make_int3(0, -1, 0),
-      make_int3(0, 0, 1),
-      make_int3(0, 0, -1)
-  };
-
-  float sdf = blocks[entry.ptr].voxels[local_idx].sdf;
-  float laplacian = 8 * sdf;
-
-  for (int i = 0; i < 3; ++i) {
-    Voxel vp = GetVoxel(hash_table, blocks, VoxelToWorld(voxel_pos + offset[2*i]));
-    Voxel vn = GetVoxel(hash_table, blocks, VoxelToWorld(voxel_pos + offset[2*i+1]));
-    if (vp.weight == 0 || vn.weight == 0) {
-      blocks[entry.ptr].voxels[local_idx].stats.laplacian = 1;
-      return;
-    }
-    laplacian += vp.sdf + vn.sdf;
-  }
-
-  blocks[entry.ptr].voxels[local_idx].stats.laplacian = laplacian;
-}
-#endif
-
 ////////////////////
 /// Host code
 ////////////////////
-void MarchingCubes(
+float MarchingCubes(
     EntryArray &candidate_entries,
     BlockArray &blocks,
     Mesh &mesh,
@@ -401,7 +302,7 @@ void MarchingCubes(
   uint occupied_block_count = candidate_entries.count();
   LOG(INFO) << "Marching cubes block count: " << occupied_block_count;
   if (occupied_block_count <= 0)
-    return;
+    return -1;
 
   const uint threads_per_block = BLOCK_SIZE;
   const dim3 grid_size(occupied_block_count, 1);
@@ -454,4 +355,6 @@ void MarchingCubes(
       candidate_entries, blocks, mesh);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
+
+  return (float)(pass1_seconds + pass2_seconds);
 }

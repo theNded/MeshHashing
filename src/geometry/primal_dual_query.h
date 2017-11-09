@@ -60,7 +60,7 @@ inline bool GetInitSDFGradient(
                                   geometry_helper,
                                   &voxel_query,
                                   &primal_dual_variable_query);
-  if (! valid || voxel_query.weight < EPSILON) {
+  if (! valid || voxel_query.inv_sigma2 < EPSILON) {
     printf("GetInitSDFGradinet: Invalid Center\n");
   }
 
@@ -74,7 +74,7 @@ inline bool GetInitSDFGradient(
                                &voxel_query,
                                &primal_dual_variable_query);
     if (! valid
-        || voxel_query.weight < EPSILON) {
+        || voxel_query.inv_sigma2 < EPSILON) {
       *primal_gradient = make_float3(0);
       return false;
     }
@@ -106,7 +106,7 @@ inline bool GetSDFGradient(
                                   &voxel_query,
                                   &primal_dual_variable_query);
   if (! valid
-      || voxel_query.weight < EPSILON
+      || voxel_query.inv_sigma2 < EPSILON
       || !primal_dual_variable_query.mask) {
     printf("GetSDFGradinet: Invalid Center\n");
   }
@@ -121,7 +121,7 @@ inline bool GetSDFGradient(
                                &voxel_query,
                                &primal_dual_variable_query);
     if (! valid
-        || voxel_query.weight < EPSILON
+        || voxel_query.inv_sigma2 < EPSILON
         || !primal_dual_variable_query.mask) {
       *primal_gradient = make_float3(0);
       return false;
@@ -154,7 +154,7 @@ inline bool GetDualDivergence(
                                   &voxel_query,
                                   &primal_dual_variable_query);
   if (! valid
-      || voxel_query.weight < EPSILON
+      || voxel_query.inv_sigma2 < EPSILON
       || !primal_dual_variable_query.mask) {
     printf("GetDualDivergence: Invalid Center\n");
     return false;
@@ -171,7 +171,7 @@ inline bool GetDualDivergence(
                                         &primal_dual_variable_query);
     dualn[i] = primal_dual_variable_query.p;
     if (! valid
-        || voxel_query.weight < EPSILON
+        || voxel_query.inv_sigma2 < EPSILON
         || !primal_dual_variable_query.mask) {
       *dual_divergence = 0;
       return false;
@@ -204,7 +204,7 @@ inline bool GetPrimalGradient(
                                   &voxel_query,
                                   &primal_dual_variable_query);
   if (! valid
-      || voxel_query.weight < EPSILON
+      || voxel_query.inv_sigma2 < EPSILON
       || !primal_dual_variable_query.mask) {
     printf("GetPrimalGradient: Invalid Center\n");
     return false;
@@ -220,7 +220,7 @@ inline bool GetPrimalGradient(
                                         &primal_dual_variable_query);
     primalp[i] = primal_dual_variable_query.sdf_bar;
     if (! valid
-        || voxel_query.weight < EPSILON
+        || voxel_query.inv_sigma2 < EPSILON
         || !primal_dual_variable_query.mask) {
       *primal_gradient = make_float3(0);
       return false;

@@ -35,6 +35,10 @@ inline bool GetSpatialValue(
   Voxel voxel_query;
   float sdf = 0.0f;
   float3 colorf = make_float3(0.0f, 0.0f, 0.0f);
+  float a = 0.0f;
+  float b = 0.0f;
+  float radius = 0.0f;
+
 #pragma unroll 1
   for (int i = 0; i < 8; ++i) {
     float3 mask = make_float3((i & 4) > 0, (i & 2) > 0, (i & 1) > 0);
@@ -47,11 +51,17 @@ inline bool GetSpatialValue(
     float w = r.x * r.y * r.z;
     sdf += w * voxel_query.sdf;
     colorf += w * make_float3(voxel_query.color);
+    a += w * voxel_query.a;
+    b += w * voxel_query.b;
+    radius += w * sqrtf(1.0f / voxel_query.inv_sigma2);
     // TODO: Interpolation of stats
   }
 
   voxel->sdf = sdf;
   voxel->color = make_uchar3(colorf.x, colorf.y, colorf.z);
+  voxel->a = a;
+  voxel->b = b;
+  voxel->inv_sigma2 = 1.0f / squaref(radius);
   return true;
 }
 

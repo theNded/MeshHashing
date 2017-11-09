@@ -12,9 +12,9 @@ enable_bayesian_update: 1
 enable_sdf_gradient:    1
 enable_polygon_mode:    0
 
-enable_color:           0
+enable_color:           1
 enable_navigation:      0
-enable_global_mesh:     0
+enable_global_mesh:     1
 enable_bounding_box:    0
 enable_trajectory:      0
 enable_ray_casting:     0
@@ -27,4 +27,4 @@ time_profile:    "tum3-nhm"
 memo_profile:    "tum3-nhm"
 
 # Others
-run_frames:     102
+run_frames:     -1

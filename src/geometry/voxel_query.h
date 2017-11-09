@@ -113,15 +113,17 @@ inline bool GetVoxelValue(
   HashEntry entry = hash_table.GetEntry(block_pos);
   if (entry.ptr == FREE_ENTRY) {
     voxel->sdf = 0;
-    voxel->weight = 0;
+    voxel->inv_sigma2 = 0;
     voxel->color = make_uchar3(0,0,0);
     return false;
   } else {
     uint i = geometry_helper.VectorizeOffset(offset);
     const Voxel& v = blocks[entry.ptr].voxels[i];
     voxel->sdf = v.sdf;
-    voxel->weight = v.weight;
+    voxel->inv_sigma2 = v.inv_sigma2;
     voxel->color = v.color;
+    voxel->a = v.a;
+    voxel->b = v.b;
     return true;
   }
 }

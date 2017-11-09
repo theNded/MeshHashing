@@ -51,7 +51,7 @@ void UpdateBlocksSimpleKernel(
       sensor_params.min_depth_range,
       sensor_params.max_depth_range
   );
-  float weight = fmaxf(10 * geometry_helper.weight_sample * (1.0f - normalized_depth),
+  float inv_sigma2 = fmaxf(10 * geometry_helper.weight_sample * (1.0f - normalized_depth),
                        1.0f);
   float truncation = geometry_helper.truncate_distance(depth);
   if (sdf <= -truncation)
@@ -65,7 +65,7 @@ void UpdateBlocksSimpleKernel(
   /// 5. Update
   Voxel delta;
   delta.sdf = sdf;
-  delta.weight = weight;
+  delta.inv_sigma2 = inv_sigma2;
 
   if (sensor_data.color_data) {
     float4 color = tex2D<float4>(sensor_data.color_texture, image_pos.x, image_pos.y);
