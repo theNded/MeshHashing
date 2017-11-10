@@ -53,20 +53,22 @@ inline int AllocateVertexWithMutex(
     mesh_unit.vertex_ptrs[vertex_idx] = ptr;
     mesh.vertex(ptr).pos = vertex_pos;
     mesh.vertex(ptr).radius = sqrtf(1.0f / voxel_query.inv_sigma2);
-    if (enable_sdf_gradient) {
-      mesh.vertex(ptr).normal = GetSpatialSDFGradient(vertex_pos,
-                                                      blocks, hash_table,
-                                                      geometry_helper);
-    }
+    mesh.vertex(ptr).normal = GetSpatialSDFGradient(
+        vertex_pos,
+        blocks, hash_table,
+        geometry_helper
+    );
+
     float rho = voxel_query.a/(voxel_query.a + voxel_query.b);
     //printf("%f %f\n", voxel_query.a, voxel_query.b);
     mesh.vertex(ptr).color = ValToRGB(rho, 0, 1.0f);
+    //mesh.vertex(ptr).color = ValToRGB(voxel_query.inv_sigma2/10000.0f, 0, 1.0f);
   }
   return ptr;
 }
 
 __global__
-void MarchingCubesPass1Kernel(
+void SurfelExtractionKernel(
     EntryArray candidate_entries,
     BlockArray blocks,
     Mesh mesh,
@@ -83,6 +85,7 @@ void MarchingCubesPass1Kernel(
   float3 world_pos = geometry_helper.VoxelToWorld(voxel_pos);
 
   MeshUnit &this_mesh_unit = block.mesh_units[threadIdx.x];
+  Voxel& this_voxel = block.voxels[threadIdx.x];
   //////////
   /// 1. Read the scalar values, see mc_tables.h
   const int kVertexCount = 8;
@@ -97,6 +100,12 @@ void MarchingCubesPass1Kernel(
   this_mesh_unit.prev_cube_idx = this_mesh_unit.curr_cube_idx;
   this_mesh_unit.curr_cube_idx = 0;
 
+  // inlier ratio
+//  if (this_voxel.inv_sigma2 < 5.0f) return;
+  float rho = this_voxel.a / (this_voxel.a + this_voxel.b);
+  if (rho < 0.1f || this_voxel.inv_sigma2 < squaref(0.33f / kVoxelSize))
+    return;
+
   /// Check 8 corners of a cube: are they valid?
   Voxel voxel_query;
   for (int i = 0; i < kVertexCount; ++i) {
@@ -106,16 +115,12 @@ void MarchingCubesPass1Kernel(
       return;
     }
 
-    // inlier ratio
-    float rho = voxel_query.a / (voxel_query.a + voxel_query.b);
-//    if (threadIdx.x == 4)
-//      printf("%f\n", voxel_query.inv_sigma2);
-    if (rho < 0.5f || voxel_query.inv_sigma2 < squaref(0.33f / kVoxelSize))
-      return;
-
     d[i] = voxel_query.sdf;
     if (fabs(d[i]) > kThreshold) return;
 
+    rho = voxel_query.a / (voxel_query.a + voxel_query.b);
+    if (rho < 0.1f || voxel_query.inv_sigma2 < squaref(0.33f / kVoxelSize))
+      return;
     if (d[i] < kIsoLevel) cube_index |= (1 << i);
     p[i] = world_pos + kVoxelSize * make_float3(kVtxOffset[i]);
   }
@@ -158,10 +163,8 @@ void MarchingCubesPass1Kernel(
   }
 }
 
-
-
 __global__
-void MarchingCubesPass2Kernel(
+void TriangleExtractionKernel(
     EntryArray candidate_entries,
     BlockArray blocks,
     Mesh mesh,
@@ -321,7 +324,7 @@ float MarchingCubes(
   /// Use divide and conquer to avoid read-write conflict
   Timer timer;
   timer.Tick();
-  MarchingCubesPass1Kernel << < grid_size, block_size >> > (
+  SurfelExtractionKernel << < grid_size, block_size >> > (
       candidate_entries,
           blocks,
           mesh,
@@ -334,7 +337,7 @@ float MarchingCubes(
   LOG(INFO) << "Pass1 duration: " << pass1_seconds;
 
   timer.Tick();
-  MarchingCubesPass2Kernel << < grid_size, block_size >> > (
+  TriangleExtractionKernel << < grid_size, block_size >> > (
       candidate_entries,
           blocks,
           mesh,

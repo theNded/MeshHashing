@@ -85,9 +85,9 @@ void MainEngine::Meshing() {
 
 void MainEngine::Recycle() {
   // TODO(wei): change it via global parameters
-
   int kRecycleGap = 15;
-  if (integrated_frame_count_ % kRecycleGap == kRecycleGap - 1) {
+  if (!map_engine_.enable_bayesian_update()
+      && integrated_frame_count_ % kRecycleGap == kRecycleGap - 1) {
     StarveOccupiedBlockArray(candidate_entries_, blocks_);
 
     CollectGarbageBlockArray(candidate_entries_,

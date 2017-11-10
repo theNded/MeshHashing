@@ -88,7 +88,7 @@ void PredictOutlierRatioKernel(
       float proj_disk = sqrtf(dot(vec, vec) - squaref(proj_dist));
 
       float w_dist = expf(- squaref(proj_dist - this_voxel.sdf) * this_voxel.inv_sigma2);
-      float w_disk = expf(- fabsf(proj_disk / r));
+      float w_disk = 0.5f + 0.5f / (1.0f + expf(- fabsf(proj_disk / r)));
       // cos (80) = 0.1736
       float w_angle = (cos_alpha - 0.1736f) / (1.0f - 0.1736f);
       w_angle = fmaxf(w_angle, 0.1f);
@@ -152,7 +152,7 @@ void UpdateBlocksBayesianKernel(
   if (this_voxel.inv_sigma2 == 0) {
     this_voxel.sdf = x;
     this_voxel.inv_sigma2 = 1.0f / squaref(tau);
-    this_voxel.a = 10;
+    this_voxel.a = 0;
     this_voxel.b = 10;
   } else {
     float mu = this_voxel.sdf;
@@ -162,7 +162,10 @@ void UpdateBlocksBayesianKernel(
     float m = squared_s * (mu / squared_sigma + x / squared_tau);
 
     float C1 = rho * gaussian(x, mu, squared_sigma + squared_tau);
-    float C2 = (1-rho) * 1.0f / (5.0f - 0.1f);
+    float d_min = sensor_params.min_depth_range;
+    float d_max = sensor_params.max_depth_range;
+    float C2 = (depth < d_max && depth >= d_min) ?
+               (1-rho) * 1.0f / (5.0f - 0.1f) : 1.0f;
     float sum_C1_C2 = C1 + C2;
     C1 /= sum_C1_C2;
     C2 /= sum_C1_C2;
