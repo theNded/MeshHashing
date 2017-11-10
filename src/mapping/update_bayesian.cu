@@ -94,7 +94,7 @@ void PredictOutlierRatioKernel(
       w_angle = fmaxf(w_angle, 0.1f);
 
       float inlier_ratio = w_disk * w_dist * w_angle;
-      inlier_ratio = fmaxf(inlier_ratio, 0.1f);
+      inlier_ratio = fmaxf(inlier_ratio, 0.01f);
       AtomicMax(&sensor_data.inlier_ratio[image_idx], inlier_ratio);
     }
   }

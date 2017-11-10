@@ -103,7 +103,7 @@ void SurfelExtractionKernel(
   // inlier ratio
 //  if (this_voxel.inv_sigma2 < 5.0f) return;
   float rho = this_voxel.a / (this_voxel.a + this_voxel.b);
-  if (rho < 0.1f || this_voxel.inv_sigma2 < squaref(0.33f / kVoxelSize))
+  if (rho < 0.2f || this_voxel.inv_sigma2 < squaref(0.33f / kVoxelSize))
     return;
 
   /// Check 8 corners of a cube: are they valid?
@@ -119,7 +119,7 @@ void SurfelExtractionKernel(
     if (fabs(d[i]) > kThreshold) return;
 
     rho = voxel_query.a / (voxel_query.a + voxel_query.b);
-    if (rho < 0.1f || voxel_query.inv_sigma2 < squaref(0.33f / kVoxelSize))
+    if (rho < 0.2f || voxel_query.inv_sigma2 < squaref(0.33f / kVoxelSize))
       return;
     if (d[i] < kIsoLevel) cube_index |= (1 << i);
     p[i] = world_pos + kVoxelSize * make_float3(kVtxOffset[i]);
@@ -163,6 +163,14 @@ void SurfelExtractionKernel(
   }
 }
 
+__device__
+inline bool IsInner(uint3 offset) {
+  return (offset.x >= 1 && offset.y >= 1 && offset.z >= 1
+          && offset.x < BLOCK_SIDE_LENGTH - 1
+          && offset.y < BLOCK_SIDE_LENGTH - 1
+          && offset.z < BLOCK_SIDE_LENGTH - 1);
+}
+
 __global__
 void TriangleExtractionKernel(
     EntryArray candidate_entries,
@@ -174,6 +182,11 @@ void TriangleExtractionKernel(
 ) {
   const HashEntry &entry = candidate_entries[blockIdx.x];
   Block& block = blocks[entry.ptr];
+  if (threadIdx.x == 0) {
+    block.boundary_surfel_count = 0;
+    block.inner_surfel_count = 0;
+  }
+  __syncthreads();
 
   int3   voxel_base_pos = geometry_helper.BlockToVoxel(entry.pos);
   uint3  offset = geometry_helper.DevectorizeIndex(threadIdx.x);
@@ -181,7 +194,16 @@ void TriangleExtractionKernel(
   float3 world_pos = geometry_helper.VoxelToWorld(voxel_pos);
 
   MeshUnit &this_mesh_unit = block.mesh_units[threadIdx.x];
-
+  bool is_inner = IsInner(offset);
+  for (int i = 0; i < 3; ++i) {
+    if (this_mesh_unit.vertex_ptrs[i] >= 0) {
+      if (is_inner) {
+        atomicAdd(&block.inner_surfel_count, 1);
+      } else {
+        atomicAdd(&block.boundary_surfel_count, 1);
+      }
+    }
+  }
   /// Cube type unchanged: NO need to update triangles
 //  if (this_cube.curr_cube_idx == this_cube.prev_cube_idx) {
 //    blocks[entry.ptr].voxels[local_idx].stats.duration += 1.0f;
@@ -213,7 +235,8 @@ void TriangleExtractionKernel(
                                 edge_owner_cube_offset.y,
                                 edge_owner_cube_offset.z),
           blocks,
-          hash_table, geometry_helper);
+          hash_table,
+          geometry_helper);
 
       vertex_ptrs[i] = mesh_unit.GetVertex(edge_owner_cube_offset.w);
       mesh_unit.ResetMutexes();
@@ -304,22 +327,12 @@ float MarchingCubes(
 ) {
   uint occupied_block_count = candidate_entries.count();
   LOG(INFO) << "Marching cubes block count: " << occupied_block_count;
-  if (occupied_block_count <= 0)
+  if (occupied_block_count == 0)
     return -1;
 
   const uint threads_per_block = BLOCK_SIZE;
   const dim3 grid_size(occupied_block_count, 1);
   const dim3 block_size(threads_per_block, 1);
-
-  /// First update statistics
-#ifdef STATS
-  UpdateStatisticsKernel<<<grid_size, block_size>>>(
-      hash_table,
-          candidate_entries,
-          blocks);
-  checkCudaErrors(cudaDeviceSynchronize());
-  checkCudaErrors(cudaGetLastError());
-#endif
 
   /// Use divide and conquer to avoid read-write conflict
   Timer timer;

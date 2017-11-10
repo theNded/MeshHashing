@@ -80,6 +80,16 @@ void MainEngine::Meshing() {
                              hash_table_,
                              geometry_helper_,
                              enable_sdf_gradient_);
+  CollectLowSurfelBlocks(candidate_entries_,
+                         blocks_,
+                         hash_table_,
+                         geometry_helper_);
+  if (integrated_frame_count_ % 10 == 0) {
+    RecycleGarbageBlockArray(candidate_entries_,
+                             blocks_,
+                             mesh_,
+                             hash_table_);
+  }
   log_engine_.WriteMeshingTimeStamp(time, integrated_frame_count_);
 }
 

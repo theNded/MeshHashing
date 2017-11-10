@@ -74,6 +74,45 @@ void CollectGarbageBlockArrayKernel(
   }
 }
 
+
+/// Collect dead voxels
+__global__
+void CollectLowSurfelBlocksKernel(
+    EntryArray candidate_entries,
+    BlockArray blocks,
+    HashTable hash_table,
+    GeometryHelper geometry_helper,
+    int processing_block_count
+) {
+  const int idx = blockIdx.x * blockDim.x + threadIdx.x;
+  if (idx >= processing_block_count) {
+    return;
+  }
+  const HashEntry& entry = candidate_entries[idx];
+
+  candidate_entries.flag(idx) = 0;
+  if (blocks[entry.ptr].inner_surfel_count < 10
+      && blocks[entry.ptr].boundary_surfel_count == 0) {
+    blocks[entry.ptr].life_count_down--;
+  } else {
+    blocks[entry.ptr].life_count_down = BLOCK_LIFE;
+  }
+  __syncthreads();
+
+  const int3 offsets[6] = {
+      {0,0,1},{0,0,-1},{0,1,0},{0,-1,0},{1,0,0},{-1,0,0}
+  };
+  if (blocks[entry.ptr].life_count_down <= 0) {
+    for (int j = 0; j < 6; ++j) {
+      HashEntry query_entry = hash_table.GetEntry(entry.pos + offsets[j]);
+      if (query_entry.ptr == FREE_ENTRY) continue;
+      if (blocks[query_entry.ptr].life_count_down != 0)
+        return;
+    }
+    candidate_entries.flag(idx) = 1;
+  }
+}
+
 /// !!! Their mesh not recycled
 __global__
 void RecycleGarbageTrianglesKernel(
@@ -177,6 +216,31 @@ void CollectGarbageBlockArray(
       candidate_entries,
           blocks,
           geometry_helper);
+  checkCudaErrors(cudaDeviceSynchronize());
+  checkCudaErrors(cudaGetLastError());
+}
+
+void CollectLowSurfelBlocks(
+    EntryArray& candidate_entries,
+    BlockArray& blocks,
+    HashTable& hash_table,
+    GeometryHelper& geometry_helper
+) {
+  uint processing_block_count = candidate_entries.count();
+  if (processing_block_count <= 0)
+    return;
+
+  const int threads_per_block = 64;
+  const dim3 grid_size((processing_block_count + threads_per_block - 1)
+                       / threads_per_block, 1);
+  const dim3 block_size(threads_per_block, 1);
+
+  CollectLowSurfelBlocksKernel <<<grid_size, block_size >>>(
+      candidate_entries,
+          blocks,
+          hash_table,
+          geometry_helper,
+          processing_block_count);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
 }
