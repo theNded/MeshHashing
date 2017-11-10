@@ -148,10 +148,13 @@ int MainEngine::Visualize(float4x4 view) {
 
 
   if (vis_engine_.enable_ray_casting()) {
+    Timer timer;
+    timer.Tick();
     vis_engine_.RenderRayCaster(view,
                                 blocks_,
                                 hash_table_,
                                 geometry_helper_);
+    LOG(INFO) << " Raycasting time: " << timer.Tock();
   }
 
   return  vis_engine_.Render();
