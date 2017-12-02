@@ -61,7 +61,7 @@ inline int AllocateVertexWithMutex(
 
     float rho = voxel_query.a/(voxel_query.a + voxel_query.b);
     //printf("%f %f\n", voxel_query.a, voxel_query.b);
-    mesh.vertex(ptr).color = ValToRGB(rho, 0, 1.0f);
+    mesh.vertex(ptr).color = ValToRGB(rho, 0.4f, 1.0f);
     //mesh.vertex(ptr).color = ValToRGB(voxel_query.inv_sigma2/10000.0f, 0, 1.0f);
   }
   return ptr;
@@ -102,9 +102,9 @@ void SurfelExtractionKernel(
 
   // inlier ratio
 //  if (this_voxel.inv_sigma2 < 5.0f) return;
-  float rho = this_voxel.a / (this_voxel.a + this_voxel.b);
-  if (rho < 0.2f || this_voxel.inv_sigma2 < squaref(0.33f / kVoxelSize))
-    return;
+//  float rho = this_voxel.a / (this_voxel.a + this_voxel.b);
+//  if (rho < 0.2f || this_voxel.inv_sigma2 < squaref(0.33f / kVoxelSize))
+//    return;
 
   /// Check 8 corners of a cube: are they valid?
   Voxel voxel_query;
@@ -118,9 +118,10 @@ void SurfelExtractionKernel(
     d[i] = voxel_query.sdf;
     if (fabs(d[i]) > kThreshold) return;
 
-    rho = voxel_query.a / (voxel_query.a + voxel_query.b);
-    if (rho < 0.2f || voxel_query.inv_sigma2 < squaref(0.33f / kVoxelSize))
+    float rho = voxel_query.a / (voxel_query.a + voxel_query.b);
+    if (rho < 0.20f || voxel_query.inv_sigma2 < squaref(1.0f / kVoxelSize))
       return;
+//    if (voxel_query.inv_sigma2 < 50.0f) return;
     if (d[i] < kIsoLevel) cube_index |= (1 << i);
     p[i] = world_pos + kVoxelSize * make_float3(kVtxOffset[i]);
   }

@@ -13,9 +13,9 @@ enable_sdf_gradient:    1
 enable_polygon_mode:    0
 
 enable_color:           1
-enable_navigation:      0
+enable_navigation:      1
 enable_global_mesh:     1
-enable_bounding_box:    0
+enable_bounding_box:    1
 enable_trajectory:      0
 enable_ray_casting:     0
 

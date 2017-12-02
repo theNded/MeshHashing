@@ -152,8 +152,8 @@ void UpdateBlocksBayesianKernel(
   if (this_voxel.inv_sigma2 == 0) {
     this_voxel.sdf = x;
     this_voxel.inv_sigma2 = 1.0f / squaref(tau);
-    this_voxel.a = 0;
-    this_voxel.b = 10;
+    this_voxel.a = rho * 10.0f;
+    this_voxel.b = (1 - rho) * 10.0f;
   } else {
     float mu = this_voxel.sdf;
     float squared_sigma = 1.0f / this_voxel.inv_sigma2;
