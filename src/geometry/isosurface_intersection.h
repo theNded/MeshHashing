@@ -28,9 +28,10 @@ inline bool BisectionIntersection(
     GeometryHelper& geometry_helper,
     float &t, uchar3 &color) {
   float l = t_near, r = t_far, m = (l + r) * 0.5f;
-  float l_sdf = sdf_near, r_sdf = sdf_far, m_sdf;
+  float l_sdf = sdf_near, r_sdf = sdf_far;
 
   const uint kIterations = 3;
+  Voxel voxel_query;
 #pragma unroll 1
   for (uint i = 0; i < kIterations; i++) {
     m = LinearIntersection(l, r, l_sdf, r_sdf);
@@ -38,9 +39,9 @@ inline bool BisectionIntersection(
                          blocks,
                          hash_table,
                          geometry_helper,
-                         m_sdf, color))
+                         &voxel_query))
       return false;
-
+    float m_sdf = voxel_query.sdf;
     if (l_sdf * m_sdf > 0.0) {
       l = m;
       l_sdf = m_sdf;

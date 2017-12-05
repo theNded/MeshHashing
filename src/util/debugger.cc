@@ -97,7 +97,7 @@ void Debugger::DebugAll() {
     std::vector<int3>   triangles;
     for (int i = 0; i < BLOCK_SIZE; ++i) {
       /// SDF info
-      uint3 local_pos = IdxToVoxelLocalPos(i);
+      uint3 local_pos = DevectorizeIndex(i);
       float3 world_pos = voxel_size_ * make_float3(voxel_pos + make_int3(local_pos));
 
       out << world_pos.x << " " << world_pos.y << " " << world_pos.z << " "

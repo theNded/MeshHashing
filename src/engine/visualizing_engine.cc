@@ -36,10 +36,10 @@ int VisualizingEngine::Render() {
     RenderHelper();
 
   window_.swap_buffer();
-  if (window_.get_key(GLFW_KEY_ESCAPE) == GLFW_PRESS ) {
+  if (window_.get_key(GLFW_KEY_ESCAPE) == GLFW_PRESS) {
     return -1;
   }
-    return 0;
+  return 0;
 }
 
 void VisualizingEngine::set_interaction_mode(
@@ -60,7 +60,7 @@ void VisualizingEngine::set_view_matrix(glm::mat4 view) {
   mvp_ = camera_.projection() * view_ * camera_.model();
 }
 
-void VisualizingEngine::set_light(Light& light) {
+void VisualizingEngine::set_light(Light &light) {
   light_ = light;
 }
 
@@ -68,22 +68,31 @@ void VisualizingEngine::BindMainProgram(
     uint max_vertices,
     uint max_triangles,
     bool enable_global_mesh,
-    bool enable_polygon_mode
+    bool enable_polygon_mode,
+    bool enable_color
 ) {
   std::stringstream ss;
   ss << light_.light_srcs.size();
 
-  main_program_.Load(kShaderPath + "/model_multi_light_vertex.glsl", gl::kVertexShader);
-  main_program_.ReplaceMacro("LIGHT_COUNT", ss.str(), gl::kVertexShader);
-  main_program_.Load(kShaderPath + "/model_multi_light_fragment.glsl", gl::kFragmentShader);
-  main_program_.ReplaceMacro("LIGHT_COUNT", ss.str(), gl::kFragmentShader);
-  main_program_.Build();
+  if (!enable_color) {
+    main_program_.Load(kShaderPath + "/model_multi_light_vertex.glsl", gl::kVertexShader);
+    main_program_.ReplaceMacro("LIGHT_COUNT", ss.str(), gl::kVertexShader);
+    main_program_.Load(kShaderPath + "/model_multi_light_fragment.glsl", gl::kFragmentShader);
+    main_program_.ReplaceMacro("LIGHT_COUNT", ss.str(), gl::kFragmentShader);
+    main_program_.Build();
 
-  main_uniforms_.GetLocation(main_program_.id(), "mvp", gl::kMatrix4f);
-  main_uniforms_.GetLocation(main_program_.id(), "c_T_w", gl::kMatrix4f);
-  main_uniforms_.GetLocation(main_program_.id(), "light",gl::kVector3f);
-  main_uniforms_.GetLocation(main_program_.id(), "light_power",gl::kFloat);
-  main_uniforms_.GetLocation(main_program_.id(), "light_color",gl::kVector3f);
+    main_uniforms_.GetLocation(main_program_.id(), "mvp", gl::kMatrix4f);
+    main_uniforms_.GetLocation(main_program_.id(), "c_T_w", gl::kMatrix4f);
+    main_uniforms_.GetLocation(main_program_.id(), "light", gl::kVector3f);
+    main_uniforms_.GetLocation(main_program_.id(), "light_power", gl::kFloat);
+    main_uniforms_.GetLocation(main_program_.id(), "light_color", gl::kVector3f);
+  } else {
+    main_program_.Load(kShaderPath + "/model_color_vertex.glsl", gl::kVertexShader);
+    main_program_.Load(kShaderPath + "/model_color_fragment.glsl", gl::kFragmentShader);
+    main_program_.Build();
+
+    main_uniforms_.GetLocation(main_program_.id(), "mvp", gl::kMatrix4f);
+  }
 
   main_args_.Init(3, true);
   main_args_.InitBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
@@ -95,22 +104,30 @@ void VisualizingEngine::BindMainProgram(
 
   enable_global_mesh_ = enable_global_mesh;
   enable_polygon_mode_ = enable_polygon_mode;
+  enable_color_ = enable_color;
 };
 
 
 void VisualizingEngine::BindMainUniforms() {
   main_uniforms_.Bind("mvp", &mvp_, 1);
-  main_uniforms_.Bind("c_T_w", &view_, 1);
-  main_uniforms_.Bind("light", light_.light_srcs.data(), light_.light_srcs.size());
-  main_uniforms_.Bind("light_color", &light_.light_color, 1);
-  main_uniforms_.Bind("light_power", &light_.light_power, 1);
+
+  if (!enable_color_) {
+    main_uniforms_.Bind("c_T_w", &view_, 1);
+    main_uniforms_.Bind("light", light_.light_srcs.data(), light_.light_srcs.size());
+    main_uniforms_.Bind("light_color", &light_.light_color, 1);
+    main_uniforms_.Bind("light_power", &light_.light_power, 1);
+  }
 }
 
 void VisualizingEngine::BindMainData() {
   main_args_.BindBuffer(0, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
                         compact_mesh_.vertex_count(), compact_mesh_.vertices());
-  main_args_.BindBuffer(1, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-                        compact_mesh_.vertex_count(), compact_mesh_.normals());
+  if (enable_color_)
+    main_args_.BindBuffer(1, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+                          compact_mesh_.vertex_count(), compact_mesh_.colors());
+  else
+    main_args_.BindBuffer(1, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+                          compact_mesh_.vertex_count(), compact_mesh_.normals());
   main_args_.BindBuffer(2, {GL_ELEMENT_ARRAY_BUFFER, sizeof(int), 3, GL_UNSIGNED_INT},
                         compact_mesh_.triangle_count(), compact_mesh_.triangles());
 }
@@ -207,11 +224,11 @@ void VisualizingEngine::BuildRayCaster(
 
 void VisualizingEngine::RenderRayCaster(
     float4x4 view,
-    BlockArray& blocks,
-    HashTable& hash_table,
-    GeometryHelper& geometry_helper
+    BlockArray &blocks,
+    HashTable &hash_table,
+    GeometryHelper &geometry_helper
 ) {
-  ray_caster_.Cast(hash_table, blocks, ray_caster_.data() , geometry_helper, view);
+  ray_caster_.Cast(hash_table, blocks, ray_caster_.data(), geometry_helper, view);
   cv::imshow("RayCasting", ray_caster_.surface_image());
   cv::waitKey(1);
 }

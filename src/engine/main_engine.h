@@ -23,7 +23,7 @@ public:
   // configure main data
   MainEngine(
       const HashParams& hash_params,
-      const VolumeParams& sdf_params,
+      const VolumeParams& volume_params,
       const MeshParams& mesh_params,
       const SensorParams& sensor_params,
       const RayCasterParams& ray_caster_params
@@ -33,7 +33,7 @@ public:
 
   // configure engines
   void ConfigMappingEngine(
-      bool enable_input_refine
+      bool enable_bayesian_update
   );
   void ConfigVisualizingEngine(
       Light& light,
@@ -42,7 +42,8 @@ public:
       bool enable_bounding_box,
       bool enable_trajectory,
       bool enable_polygon_mode,
-      bool enable_ray_caster
+      bool enable_ray_caster,
+      bool enable_color
   );
 
   void ConfigLoggingEngine(
@@ -57,6 +58,7 @@ public:
   void Recycle();
   int Visualize(float4x4 view);
   void Log();
+  void RecordBlocks(std::string prefix = "");
   void FinalLog();
 
   const int& frame_count() {
@@ -81,13 +83,13 @@ private:
   Mesh             mesh_;
 
   // Geometry
-  GeometryHelper geometry_helper_;
+  GeometryHelper  geometry_helper_;
 
-  int             integrated_frame_count_;
+  int             integrated_frame_count_ = 0;
   bool            enable_sdf_gradient_;
 
   HashParams hash_params_;
-  VolumeParams  volume_params_;
+  VolumeParams volume_params_;
   MeshParams mesh_params_;
   SensorParams sensor_params_;
   RayCasterParams ray_caster_params_;

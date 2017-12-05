@@ -53,7 +53,7 @@ public:
   uint AllocVertex() {
     uint addr = atomicSub(&vertex_heap_counter_[0], 1);
     if (addr < MEMORY_LIMIT) {
-      printf("v: %d -> %d\n", addr, vertex_heap_[addr]);
+      printf("vertex heap: %d -> %d\n", addr, vertex_heap_[addr]);
     }
     return vertex_heap_[addr];
   }
@@ -67,7 +67,7 @@ public:
   uint AllocTriangle() {
     uint addr = atomicSub(&triangle_heap_counter_[0], 1);
     if (addr < MEMORY_LIMIT) {
-      printf("t: %d -> %d\n", addr, vertex_heap_[addr]);
+      printf("triangle heap: %d -> %d\n", addr, triangle_heap_[addr]);
     }
     return triangle_heap_[addr];
   }

@@ -2,7 +2,8 @@
 // Created by wei on 17-10-22.
 //
 
-#include <mapping/update_probabilistic.h>
+#include <mapping/update_bayesian.h>
+#include <optimize/primal_dual.h>
 #include "engine/main_engine.h"
 
 #include "core/collect_block_array.h"
@@ -17,66 +18,86 @@
 /// Host code
 ////////////////////
 void MainEngine::Mapping(Sensor &sensor) {
-  AllocBlockArray(hash_table_,
-                  sensor,
-                  geometry_helper_);
+  double alloc_time = AllocBlockArray(
+      hash_table_,
+      sensor,
+      geometry_helper_
+  );
 
-  CollectBlocksInFrustum(hash_table_,
-                         sensor,
-                         geometry_helper_,
-                         candidate_entries_);
+  double collect_time = CollectBlocksInFrustum(
+      hash_table_,
+      sensor,
+      geometry_helper_,
+      candidate_entries_
+  );
 
-  if (! map_engine_.enable_input_refine()) {
-    UpdateBlocksSimple(candidate_entries_,
-                       blocks_,
-                       sensor,
-                       hash_table_,
-                       geometry_helper_);
+  double update_time = 0;
+  if (!map_engine_.enable_bayesian_update()) {
+    LOG(INFO) << "Simple update";
+    update_time = UpdateBlocksSimple(candidate_entries_,
+                                     blocks_,
+                                     sensor,
+                                     hash_table_,
+                                     geometry_helper_);
+    log_engine_.WriteMappingTimeStamp(
+        alloc_time,
+        collect_time,
+        update_time,
+        integrated_frame_count_);
   } else {
-    map_engine_.linear_equations().Reset();
-    BuildSensorDataEquation(
+    LOG(INFO) << "Bayesian update";
+    float predict_seconds = PredictOutlierRatio(
         candidate_entries_,
         blocks_,
         mesh_,
         sensor,
         hash_table_,
-        geometry_helper_,
-        map_engine_.linear_equations()
-    );
-
-    SolveSensorDataEquation(
-        map_engine_.linear_equations(),
-        sensor,
         geometry_helper_
     );
-
-    UpdateBlocksBayesian(
+    update_time = UpdateBlocksBayesian(
         candidate_entries_,
         blocks_,
         sensor,
-        map_engine_.linear_equations(),
         hash_table_,
         geometry_helper_
     );
+
+    log_engine_.WriteMappingTimeStamp(
+        alloc_time,
+        collect_time,
+        predict_seconds,
+        update_time,
+        integrated_frame_count_);
   }
+
   integrated_frame_count_ ++;
 }
 
 void MainEngine::Meshing() {
-  MarchingCubes(candidate_entries_,
-                blocks_,
-                mesh_,
-                hash_table_,
-                geometry_helper_,
-                enable_sdf_gradient_);
-
+  float time = MarchingCubes(candidate_entries_,
+                             blocks_,
+                             mesh_,
+                             hash_table_,
+                             geometry_helper_,
+                             enable_sdf_gradient_);
+  CollectLowSurfelBlocks(candidate_entries_,
+                         blocks_,
+                         hash_table_,
+                         geometry_helper_);
+  if (integrated_frame_count_ % 10 == 0) {
+    RecycleGarbageBlockArray(candidate_entries_,
+                             blocks_,
+                             mesh_,
+                             hash_table_);
+  }
+  log_engine_.WriteMeshingTimeStamp(time, integrated_frame_count_);
 }
 
 void MainEngine::Recycle() {
   // TODO(wei): change it via global parameters
-
   int kRecycleGap = 15;
-  if (integrated_frame_count_ % kRecycleGap == kRecycleGap - 1) {
+  if (!map_engine_.enable_bayesian_update()
+      && integrated_frame_count_ % kRecycleGap == kRecycleGap - 1) {
     StarveOccupiedBlockArray(candidate_entries_, blocks_);
 
     CollectGarbageBlockArray(candidate_entries_,
@@ -126,12 +147,14 @@ int MainEngine::Visualize(float4x4 view) {
   }
 
 
-
   if (vis_engine_.enable_ray_casting()) {
+    Timer timer;
+    timer.Tick();
     vis_engine_.RenderRayCaster(view,
                                 blocks_,
                                 hash_table_,
                                 geometry_helper_);
+    LOG(INFO) << " Raycasting time: " << timer.Tock();
   }
 
   return  vis_engine_.Render();
@@ -145,22 +168,31 @@ void MainEngine::Log() {
 }
 
 void MainEngine::FinalLog() {
+  CollectAllBlocks(hash_table_, candidate_entries_);
+  Meshing();
+  int3 timing;
+  CompressMesh(candidate_entries_,
+               blocks_,
+               mesh_,
+               vis_engine_.compact_mesh(), timing);
   if (log_engine_.enable_ply()) {
     log_engine_.WritePly(vis_engine_.compact_mesh());
   }
+  log_engine_.WriteMeshStats(vis_engine_.compact_mesh().vertex_count(),
+                             vis_engine_.compact_mesh().triangle_count());
 }
 
 /// Life cycle
 MainEngine::MainEngine(
     const HashParams& hash_params,
-    const VolumeParams &sdf_params,
+    const VolumeParams &volume_params,
     const MeshParams &mesh_params,
     const SensorParams &sensor_params,
     const RayCasterParams &ray_caster_params
 ) {
 
   hash_params_ = hash_params;
-  volume_params_ = sdf_params;
+  volume_params_ = volume_params;
   mesh_params_ = mesh_params;
   sensor_params_ = sensor_params;
   ray_caster_params_ = ray_caster_params;
@@ -171,13 +203,7 @@ MainEngine::MainEngine(
 
   mesh_.Resize(mesh_params);
 
-  geometry_helper_.voxel_size = sdf_params.voxel_size;
-  geometry_helper_.truncation_distance_scale =
-      sdf_params.truncation_distance_scale;
-  geometry_helper_.truncation_distance =
-      sdf_params.truncation_distance;
-  geometry_helper_.sdf_upper_bound = sdf_params.sdf_upper_bound;
-  geometry_helper_.weight_sample = sdf_params.weight_sample;
+  geometry_helper_.Init(volume_params);
 }
 
 MainEngine::~MainEngine() {
@@ -200,11 +226,11 @@ void MainEngine::Reset() {
 }
 
 void MainEngine::ConfigMappingEngine(
-    bool enable_input_refine
+    bool enable_bayesian_update
 ) {
   map_engine_.Init(sensor_params_.width,
                    sensor_params_.height,
-                   enable_input_refine);
+                   enable_bayesian_update);
 }
 
 void MainEngine::ConfigVisualizingEngine(
@@ -214,7 +240,8 @@ void MainEngine::ConfigVisualizingEngine(
     bool enable_bounding_box,
     bool enable_trajectory,
     bool enable_polygon_mode,
-    bool enable_ray_caster
+    bool enable_ray_caster,
+    bool enable_color
 ) {
   vis_engine_.Init("VisEngine", 640, 480);
   vis_engine_.set_interaction_mode(enable_navigation);
@@ -222,7 +249,8 @@ void MainEngine::ConfigVisualizingEngine(
   vis_engine_.BindMainProgram(mesh_params_.max_vertex_count,
                               mesh_params_.max_triangle_count,
                               enable_global_mesh,
-                              enable_polygon_mode);
+                              enable_polygon_mode,
+                              enable_color);
   vis_engine_.compact_mesh().Resize(mesh_params_);
 
   if (enable_bounding_box || enable_trajectory) {
@@ -253,4 +281,15 @@ void MainEngine::ConfigLoggingEngine(
   if (enable_ply) {
     log_engine_.ConfigPlyWriter();
   }
+}
+
+void MainEngine::RecordBlocks(std::string prefix) {
+  //CollectAllBlocks(hash_table_, candidate_entries_);
+  BlockMap block_map = log_engine_.RecordBlockToMemory(
+      blocks_.GetGPUPtr(), hash_params_.value_capacity,
+      candidate_entries_.GetGPUPtr(), candidate_entries_.count());
+
+  std::stringstream ss("");
+  ss << integrated_frame_count_ - 1;
+  log_engine_.WriteRawBlocks(block_map, prefix + ss.str());
 }

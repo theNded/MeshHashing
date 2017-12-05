@@ -8,6 +8,21 @@
 #define MINF __int_as_float(0xff800000)
 
 __global__
+void ResetInlierRatioKernel(
+    float* inlier_ratio,
+    int width,
+    int height
+) {
+  const int x = blockIdx.x * blockDim.x + threadIdx.x;
+  const int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+  if (x >= width || y >= height) return;
+  const int idx = y * width + x;
+  /// Convert mm -> m
+  inlier_ratio[idx] = 0.1f;
+}
+
+__global__
 void ConvertDepthFormatKernel(
     float *dst, short *src,
     uint width, uint height,
@@ -37,17 +52,36 @@ void ConvertColorFormatKernel(float4 *dst, uchar4 *src,
 
   uchar4 c = src[idx];
   bool is_valid = (c.x != 0 && c.y != 0 && c.z != 0);
-  dst[idx] = is_valid ? make_float4(c.x / 255.0f, c.y / 255.0f,
-                                    c.z / 255.0f, c.w / 255.0f)
+  dst[idx] = is_valid ? make_float4(c.z / 255.0f, c.y / 255.0f,
+                                    c.x / 255.0f, c.w / 255.0f)
                       : make_float4(MINF, MINF, MINF, MINF);
 }
 
 //////////
 /// Member function: (CPU calling GPU kernels)
-void ConvertDepthFormat(cv::Mat& depth_img,
-                        short* depth_buffer,
-                        float* depth_data,
-                        SensorParams& params) {
+__host__
+void ResetInlierRatio(
+    float* inlier_ratio,
+    SensorParams& params
+) {
+  uint width = params.width;
+  uint height = params.height;
+
+  const uint threads_per_block = 16;
+  const dim3 grid_size((width + threads_per_block - 1)/threads_per_block,
+                       (height + threads_per_block - 1)/threads_per_block);
+  const dim3 block_size(threads_per_block, threads_per_block);
+  ResetInlierRatioKernel<<<grid_size, block_size>>>(
+      inlier_ratio, width, height);
+}
+
+__host__
+void ConvertDepthFormat(
+    cv::Mat& depth_img,
+    short* depth_buffer,
+    float* depth_data,
+    SensorParams& params
+) {
   /// First copy cpu data in to cuda short
   uint width = params.width;
   uint height = params.height;
@@ -71,10 +105,12 @@ void ConvertDepthFormat(cv::Mat& depth_img,
 }
 
 __host__
-void ConvertColorFormat(cv::Mat &color_img,
-                        uchar4* color_buffer,
-                        float4* color_data,
-                        SensorParams& params) {
+void ConvertColorFormat(
+    cv::Mat &color_img,
+    uchar4* color_buffer,
+    float4* color_data,
+    SensorParams& params
+) {
 
   uint width = params.width;
   uint height = params.height;
@@ -95,3 +131,4 @@ void ConvertColorFormat(cv::Mat &color_img,
           width,
           height);
 }
+

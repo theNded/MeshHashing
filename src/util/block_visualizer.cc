@@ -21,11 +21,11 @@ int main() {
   float3 *voxel_colors  = new float3[block_voxel_count];
 
   for (int i = 0; i < block_voxel_count; ++i) {
-    float3 voxel_pos; float sdf; uint weight;
+    float3 voxel_pos; float sdf; uint inv_sigma2;
     in >> voxel_pos.x >> voxel_pos.y >> voxel_pos.z;
-    in >> sdf >> weight;
+    in >> sdf >> inv_sigma2;
     voxel_centers[i] = voxel_pos;
-    voxel_colors[i] = (weight == 0) ? make_float3(1) : ValToRGB(sdf, -0.1f, 0.1f);
+    voxel_colors[i] = (inv_sigma2 == 0) ? make_float3(1) : ValToRGB(sdf, -0.1f, 0.1f);
   }
 
   float3* cuda_voxel_centers, *cuda_voxel_colors;

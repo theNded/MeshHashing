@@ -26,27 +26,18 @@ inline bool GetSpatialValue(
     const BlockArray &blocks,
     const HashTable &hash_table,
     GeometryHelper &geometry_helper,
-    float &sdf,
-    uchar3 &color
-#ifdef STATS
-,
-Stat  &stats,
-#endif
+    Voxel* voxel
 ) {
   const float offset = geometry_helper.voxel_size;
   const float3 pos_corner = pos - 0.5f * offset;
   float3 ratio = frac(geometry_helper.WorldToVoxelf(pos));
 
-  float w;
-  Voxel v;
-
-  sdf = 0.0f;
+  Voxel voxel_query;
+  float sdf = 0.0f;
   float3 colorf = make_float3(0.0f, 0.0f, 0.0f);
-  float3 v_color;
-
-#ifdef STATS
-  stats.Clear();
-#endif
+  float a = 0.0f;
+  float b = 0.0f;
+  float radius = 0.0f;
 
 #pragma unroll 1
   for (int i = 0; i < 8; ++i) {
@@ -54,86 +45,57 @@ Stat  &stats,
     // 0 --> 1 - r, 1 --> r
     float3 r = (make_float3(1.0f) - mask) * (make_float3(1.0) - ratio)
                + (mask) * ratio;
-    v = GetVoxel(pos_corner + mask * offset, blocks, hash_table, geometry_helper);
-    if (v.weight < EPSILON) return false;
-    v_color = make_float3(v.color.x, v.color.y, v.color.z);
-    w = r.x * r.y * r.z;
-    sdf += w * v.sdf;
-    colorf += w * v_color;
+    bool valid = GetVoxelValue(pos_corner + mask * offset, blocks, hash_table,
+                               geometry_helper, &voxel_query);
+    if (! valid) return false;
+    float w = r.x * r.y * r.z;
+    sdf += w * voxel_query.sdf;
+    colorf += w * make_float3(voxel_query.color);
+    a += w * voxel_query.a;
+    b += w * voxel_query.b;
+    radius += w * sqrtf(1.0f / voxel_query.inv_sigma2);
     // TODO: Interpolation of stats
   }
 
-  color = make_uchar3(colorf.x, colorf.y, colorf.z);
+  voxel->sdf = sdf;
+  voxel->color = make_uchar3(colorf.x, colorf.y, colorf.z);
+  voxel->a = a;
+  voxel->b = b;
+  voxel->inv_sigma2 = 1.0f / squaref(radius);
   return true;
 }
 
 __device__
-inline float3 GetSpatialGradient(
+inline float3 GetSpatialSDFGradient(
     const float3 &pos,
     const BlockArray &blocks,
     const HashTable &hash_table,
     GeometryHelper &geometry_helper
 ) {
-  const float voxel_size = geometry_helper.voxel_size;
-  float3 offset = make_float3(voxel_size, voxel_size, voxel_size);
+  const float3 grad_masks[3] = {{0.5, 0, 0}, {0, 0.5, 0}, {0, 0, 0.5}};
+  const float3 offset = make_float3(geometry_helper.voxel_size);
 
-  /// negative
-  float distn00;
-  uchar3 colorn00;
-  GetSpatialValue(pos - make_float3(0.5f * offset.x, 0.0f, 0.0f),
-                  blocks,
-                  hash_table,
-                  geometry_helper,
-                  distn00, colorn00);
-  float dist0n0;
-  uchar3 color0n0;
-  GetSpatialValue(pos - make_float3(0.0f, 0.5f * offset.y, 0.0f),
-                  blocks,
-                  hash_table,
-                  geometry_helper,
-                  dist0n0, color0n0);
-
-  float dist00n;
-  uchar3 color00n;
-  GetSpatialValue(pos - make_float3(0.0f, 0.0f, 0.5f * offset.z),
-                  blocks,
-                  hash_table,
-                  geometry_helper,
-                  dist00n, color00n);
-
-  /// positive
-  float distp00;
-  uchar3 colorp00;
-  GetSpatialValue(pos + make_float3(0.5f * offset.x, 0.0f, 0.0f),
-                  blocks,
-                  hash_table,
-                  geometry_helper,
-                  distp00, colorp00);
-  float dist0p0;
-  uchar3 color0p0;
-  GetSpatialValue(pos + make_float3(0.0f, 0.5f * offset.y, 0.0f),
-                  blocks,
-                  hash_table,
-                  geometry_helper,
-                  dist0p0, color0p0);
-
-  float dist00p;
-  uchar3 color00p;
-  GetSpatialValue(pos + make_float3(0.0f, 0.0f, 0.5f * offset.z),
-                  blocks,
-                  hash_table,
-                  geometry_helper,
-                  dist00p, color00p);
-
-  float3 grad = make_float3((distp00 - distn00) / offset.x,
-                            (dist0p0 - dist0n0) / offset.y,
-                            (dist00p - dist00n) / offset.z);
-
-  float l = length(grad);
-  if (l == 0.0f) {
-    return make_float3(0.0f, 0.0f, 0.0f);
+  bool valid = true;
+  float sdfp[3], sdfn[3];
+  Voxel voxel_query;
+#pragma unroll 1
+  for (int i = 0; i < 3; ++i) {
+    float3 dpos = grad_masks[i] * offset;
+    valid = valid && GetSpatialValue(pos - dpos, blocks, hash_table,
+                                     geometry_helper, &voxel_query);
+    sdfn[i] = voxel_query.sdf;
+    valid = valid && GetSpatialValue(pos + dpos, blocks, hash_table,
+                                     geometry_helper, &voxel_query);
+    sdfp[i] = voxel_query.sdf;
   }
 
+  float3 grad = make_float3((sdfp[0] - sdfn[0]) / offset.x,
+                            (sdfp[1] - sdfn[1]) / offset.y,
+                            (sdfp[2] - sdfn[2]) / offset.z);
+  float l = length(grad);
+  if (l == 0.0f || ! valid) {
+    return make_float3(0.0f, 0.0f, 0.0f);
+  }
   return grad / l;
 }
 

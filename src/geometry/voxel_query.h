@@ -18,23 +18,6 @@
 // get Voxel in @param blocks
 // with the help of @param hash_table and geometry_helper
 __device__
-inline Voxel GetVoxel(
-    const float3 world_pos,
-    const BlockArray &blocks,
-    const HashTable &hash_table,
-    GeometryHelper &geometry_helper
-) {
-  HashEntry hash_entry = hash_table.GetEntry(geometry_helper.WorldToBlock(world_pos));
-  Voxel v;
-  if (hash_entry.ptr == FREE_ENTRY) {
-    v.ClearSDF();
-  } else {
-    int3 voxel_pos = geometry_helper.WorldToVoxeli(world_pos);
-    int i = geometry_helper.VoxelPosToIdx(voxel_pos);
-    v = blocks[hash_entry.ptr].voxels[i];
-  }
-  return v;
-}
 
 // function:
 // block-pos @param curr_entry -> voxel-pos @param voxel_local_pos
@@ -43,58 +26,105 @@ inline Voxel GetVoxel(
 __device__
 inline Voxel &GetVoxelRef(
     const HashEntry &curr_entry,
-    const uint3 voxel_local_pos,
+    const int3 voxel_pos,
     BlockArray &blocks,
     const HashTable &hash_table,
     GeometryHelper &geometry_helper
 ) {
+  int3 block_pos = geometry_helper.VoxelToBlock(voxel_pos);
+  uint3 offset = geometry_helper.VoxelToOffset(block_pos, voxel_pos);
 
-  int3 block_offset = make_int3(voxel_local_pos) / BLOCK_SIDE_LENGTH;
-
-  if (block_offset == make_int3(0)) {
-    uint i = geometry_helper.VoxelLocalPosToIdx(voxel_local_pos);
+  if (curr_entry.pos == block_pos) {
+    uint i = geometry_helper.VectorizeOffset(offset);
     return blocks[curr_entry.ptr].voxels[i];
   } else {
-    HashEntry entry = hash_table.GetEntry(curr_entry.pos + block_offset);
+    HashEntry entry = hash_table.GetEntry(block_pos);
     if (entry.ptr == FREE_ENTRY) {
       printf("GetVoxelRef: should never reach here!\n");
     }
-    uint i = geometry_helper.VoxelLocalPosToIdx(voxel_local_pos % BLOCK_SIDE_LENGTH);
+    uint i = geometry_helper.VectorizeOffset(offset);
     return blocks[entry.ptr].voxels[i];
   }
 }
 
-// TODO: put a dummy here
+__device__
+inline MeshUnit &GetMeshUnitRef(
+    const HashEntry &curr_entry,
+    const int3 voxel_pos,
+    BlockArray &blocks,
+    const HashTable &hash_table,
+    GeometryHelper &geometry_helper
+) {
+  int3 block_pos = geometry_helper.VoxelToBlock(voxel_pos);
+  uint3 offset = geometry_helper.VoxelToOffset(block_pos, voxel_pos);
+
+  if (curr_entry.pos == block_pos) {
+    uint i = geometry_helper.VectorizeOffset(offset);
+    return blocks[curr_entry.ptr].mesh_units[i];
+  } else {
+    HashEntry entry = hash_table.GetEntry(block_pos);
+    if (entry.ptr == FREE_ENTRY) {
+      printf("GetVoxelRef: should never reach here!\n");
+    }
+    uint i = geometry_helper.VectorizeOffset(offset);
+    return blocks[entry.ptr].mesh_units[i];
+  }
+}
+
 // function:
 // block-pos @param curr_entry -> voxel-pos @param voxel_local_pos
 // get SDF in @param blocks
 // with the help of @param hash_table and geometry_helper
 __device__
-inline void GetVoxelValue(
+inline bool GetVoxelValue(
     const HashEntry &curr_entry,
-    const uint3 voxel_local_pos,
+    const int3 voxel_pos,
     const BlockArray &blocks,
     const HashTable &hash_table,
     GeometryHelper &geometry_helper,
-    float &sdf,
-    float &weight) {
-  sdf = 0.0;
-  weight = 0;
-  int3 block_offset = make_int3(voxel_local_pos) / BLOCK_SIDE_LENGTH;
+    Voxel* voxel) {
+  int3 block_pos = geometry_helper.VoxelToBlock(voxel_pos);
+  uint3 offset = geometry_helper.VoxelToOffset(block_pos, voxel_pos);
 
-  if (block_offset == make_int3(0)) {
-    uint i = geometry_helper.VoxelLocalPosToIdx(voxel_local_pos);
-    const Voxel &v = blocks[curr_entry.ptr].voxels[i];
-    sdf = v.sdf;
-    weight = v.weight;
+  if (curr_entry.pos == block_pos) {
+    uint i = geometry_helper.VectorizeOffset(offset);
+    *voxel = blocks[curr_entry.ptr].voxels[i];
   } else {
-    HashEntry entry = hash_table.GetEntry(curr_entry.pos + block_offset);
-    if (entry.ptr == FREE_ENTRY) return;
-    uint i = geometry_helper.VoxelLocalPosToIdx(voxel_local_pos % BLOCK_SIDE_LENGTH);
+    HashEntry entry = hash_table.GetEntry(block_pos);
+    if (entry.ptr == FREE_ENTRY) return false;
+    uint i = geometry_helper.VectorizeOffset(offset);
+    *voxel = blocks[entry.ptr].voxels[i];
+  }
+  return true;
+}
 
-    const Voxel &v = blocks[entry.ptr].voxels[i];
-    sdf = v.sdf;
-    weight = v.weight;
+__device__
+inline bool GetVoxelValue(
+    const float3 world_pos,
+    const BlockArray &blocks,
+    const HashTable &hash_table,
+    GeometryHelper &geometry_helper,
+    Voxel* voxel
+) {
+  int3 voxel_pos = geometry_helper.WorldToVoxeli(world_pos);
+  int3 block_pos = geometry_helper.VoxelToBlock(voxel_pos);
+  uint3 offset = geometry_helper.VoxelToOffset(block_pos, voxel_pos);
+
+  HashEntry entry = hash_table.GetEntry(block_pos);
+  if (entry.ptr == FREE_ENTRY) {
+    voxel->sdf = 0;
+    voxel->inv_sigma2 = 0;
+    voxel->color = make_uchar3(0,0,0);
+    return false;
+  } else {
+    uint i = geometry_helper.VectorizeOffset(offset);
+    const Voxel& v = blocks[entry.ptr].voxels[i];
+    voxel->sdf = v.sdf;
+    voxel->inv_sigma2 = v.inv_sigma2;
+    voxel->color = v.color;
+    voxel->a = v.a;
+    voxel->b = v.b;
+    return true;
   }
 }
 

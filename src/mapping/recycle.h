@@ -29,6 +29,13 @@ void CollectGarbageBlockArray(
     GeometryHelper& geometry_helper
 );
 
+void CollectLowSurfelBlocks(
+    EntryArray& candidate_entries,
+    BlockArray& blocks,
+    HashTable& hash_table,
+    GeometryHelper& geometry_helper);
+
+
 // TODO(wei): Check vertex / triangles in detail
 // @function
 // Enumerate @param candidate_entries

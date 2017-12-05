@@ -14,10 +14,10 @@ void CollectVerticesAndTrianglesKernel(
     Mesh             mesh,
     CompactMesh      compact_mesh) {
   const HashEntry &entry = candidate_entries[blockIdx.x];
-  Voxel &cube = blocks[entry.ptr].voxels[threadIdx.x];
+  MeshUnit &mesh_unit = blocks[entry.ptr].mesh_units[threadIdx.x];
 
   for (int i = 0; i < N_TRIANGLE; ++i) {
-    int triangle_ptrs = cube.triangle_ptrs[i];
+    int triangle_ptrs = mesh_unit.triangle_ptrs[i];
     if (triangle_ptrs != FREE_PTR) {
       int3& triangle = mesh.triangle(triangle_ptrs).vertex_ptrs;
       atomicAdd(&compact_mesh.triangles_ref_count()[triangle_ptrs], 1);
@@ -107,7 +107,8 @@ void CompressMesh(EntryArray& candidate_entries,
     const dim3 grid_size(occupied_block_count, 1);
     const dim3 block_size(threads_per_block, 1);
 
-    LOG(INFO) << "Before: " << compact_mesh.vertex_count() << " " << compact_mesh.triangle_count();
+    LOG(INFO) << "Before: " << compact_mesh.vertex_count()
+              << " " << compact_mesh.triangle_count();
     CollectVerticesAndTrianglesKernel <<< grid_size, block_size >>> (
         candidate_entries,
             blocks,

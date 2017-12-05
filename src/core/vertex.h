@@ -12,6 +12,7 @@ struct __ALIGN__(4) Vertex {
   float3 pos;
   float3 normal;
   float3 color;
+  float  radius;
   int    ref_count;
 
   __device__
@@ -19,6 +20,7 @@ struct __ALIGN__(4) Vertex {
     pos = make_float3(0.0);
     normal = make_float3(0.0);
     color = make_float3(0);
+    radius = 0;
     ref_count = 0;
   }
 };

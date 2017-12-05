@@ -63,7 +63,7 @@ int main(int argc, char **argv) {
   );
 
   main_engine.ConfigMappingEngine(
-      true
+      args.enable_bayesian_update
   );
   main_engine.ConfigVisualizingEngine(
       light,
@@ -72,7 +72,8 @@ int main(int argc, char **argv) {
       args.enable_bounding_box,
       args.enable_trajectory,
       args.enable_polygon_mode,
-      args.enable_ray_casting
+      args.enable_ray_casting,
+      args.enable_color
   );
   main_engine.ConfigLoggingEngine(
       ".",
@@ -100,6 +101,7 @@ int main(int argc, char **argv) {
       break;
 
     main_engine.Log();
+    //main_engine.RecordBlocks();
     main_engine.Recycle();
   }
 

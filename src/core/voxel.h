@@ -24,33 +24,12 @@ struct __ALIGN__(4) Stat {
   }
 };
 
-//  + --------> //
-//  | \         //
-//  |  \        //
-//  |   \       //
-//  v　　 v      //
-// A voxel holds:
-// float: *sdf* and *weight* on its corner
-// int[3]: *vertex_ptrs* on its 3 adjacent edges
-// int[5]: *triangle_ptrs* for its potential triangles
-struct __ALIGN__(8) Voxel {
-  float  sdf;    // signed distance function
-  float  weight;
-  uchar3 color;  // color
-
+struct __ALIGN__(4) MeshUnit {
+  // mesh
   int vertex_ptrs   [N_VERTEX];  // 3
   int vertex_mutexes[N_VERTEX];  // 3
-  int triangle_ptrs [N_TRIANGLE];// 5
-
-#ifdef STATS
-  Stat   stats;
-#endif
+  int triangle_ptrs [N_TRIANGLE];//
   short curr_cube_idx, prev_cube_idx;
-
-//#ifdef PRIMAL_DUAL
-  float  x, x_bar;
-  float3 p;
-//#endif
 
   __host__ __device__
   void ResetMutexes() {
@@ -66,21 +45,6 @@ struct __ALIGN__(8) Voxel {
 
   __host__ __device__
   void Clear() {
-    ClearSDF();
-    ClearTriangle();
-#ifdef STATS
-    stats.Clear();
-#endif
-  }
-
-  __host__ __device__
-  void ClearSDF() {
-    sdf = weight = 0.0f;
-    color = make_uchar3(0, 0, 0);
-  }
-
-  __host__ __device__
-  void ClearTriangle() {
     vertex_ptrs[0] = vertex_mutexes[0] = FREE_PTR;
     vertex_ptrs[1] = vertex_mutexes[1] = FREE_PTR;
     vertex_ptrs[2] = vertex_mutexes[2] = FREE_PTR;
@@ -93,6 +57,51 @@ struct __ALIGN__(8) Voxel {
 
     curr_cube_idx = prev_cube_idx = 0;
   }
+};
+
+struct __ALIGN__(4) PrimalDualVariables {
+  bool   mask;
+  float  sdf0, sdf_bar, inv_sigma2;
+  float3 p;
+
+  __host__ __device__
+  void operator = (const PrimalDualVariables& pdv) {
+    mask = pdv.mask;
+    sdf0 = pdv.sdf0;
+    sdf_bar = pdv.sdf_bar;
+    p = pdv.p;
+  }
+
+  __host__ __device__
+  void Clear() {
+    mask = false;
+    sdf0 = sdf_bar = 0;
+    inv_sigma2 = 0;
+    p = make_float3(0);
+  }
+};
+
+struct __ALIGN__(4) Voxel {
+  float  sdf;    // signed distance function, mu
+  float  inv_sigma2; // sigma
+  float  a, b;
+  uchar3 color;  // color
+
+  __host__ __device__
+  void operator = (const Voxel& v) {
+    sdf = v.sdf;
+    inv_sigma2 = v.inv_sigma2;
+    color = v.color;
+    a = v.a;
+    b = v.b;
+  }
+
+  __host__ __device__
+  void Clear() {
+    sdf = inv_sigma2 = 0.0f;
+    color = make_uchar3(0, 0, 0);
+    a = b = 0;
+  }
 
   __host__ __device__
   void Update(const Voxel &delta) {
@@ -101,8 +110,8 @@ struct __ALIGN__(8) Voxel {
     float3 c_curr  = 0.5f * c_prev + 0.5f * c_delta;
     color = make_uchar3(c_curr.x + 0.5f, c_curr.y + 0.5f, c_curr.z + 0.5f);
 
-    sdf = (sdf * weight + delta.sdf * delta.weight) / (weight + delta.weight);
-    weight = weight + delta.weight;
+    sdf = (sdf * inv_sigma2 + delta.sdf * delta.inv_sigma2) / (inv_sigma2 + delta.inv_sigma2);
+    inv_sigma2 = inv_sigma2 + delta.inv_sigma2;
   }
 };
 

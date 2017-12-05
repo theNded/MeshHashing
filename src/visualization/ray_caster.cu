@@ -60,29 +60,16 @@ void CastKernel(const HashTable hash_table,
   // TODO: Check this weird case : return causes illegal address failure
   bool return_flag = false;
 
+  Voxel voxel_query;
 #pragma unroll 1
   for (float t = t_min; t < t_max & !return_flag; t += ray_caster_params.raycast_step) {
     float3 world_sample_pos = world_cam_pos + t * world_ray_dir;
-    float  sdf;
-    uchar3 color;
-#ifdef STATS
-    Stat stats;
-#endif
     /// a voxel surrounded by valid voxels
-    if (GetSpatialValue(world_sample_pos,
-                 blocks,
-                 hash_table,
-                 geometry_helper,
-                 sdf,
-                 color
-#ifdef STATS
-        , stats
-#endif
-    )) {
-
+    if (GetSpatialValue(world_sample_pos, blocks, hash_table,
+                        geometry_helper, &voxel_query)) {
       /// Zero crossing exist
       if (prev_sample.weight > 0 // valid previous sample
-          && prev_sample.sdf > 0.0f && sdf < 0.0f) { // zero-crossing
+          && prev_sample.sdf > 0.0f && voxel_query.sdf < 0.0f) { // zero-crossing
 
         float interpolated_t;
         uchar3 interpolated_color;
@@ -90,9 +77,8 @@ void CastKernel(const HashTable hash_table,
         bool is_isosurface_found = BisectionIntersection(
                 world_cam_pos, world_ray_dir,
                 prev_sample.sdf, prev_sample.t,
-                sdf, t,
-                blocks,
-                hash_table,
+                voxel_query.sdf, t,
+                blocks, hash_table,
                 geometry_helper,
                 interpolated_t, interpolated_color);
 
@@ -101,9 +87,10 @@ void CastKernel(const HashTable hash_table,
 
         /// Good enough sample
         if (is_isosurface_found
-            && abs(prev_sample.sdf - sdf) < ray_caster_params.sample_sdf_threshold) {
+            && fabsf(prev_sample.sdf - voxel_query.sdf)
+               < ray_caster_params.sample_sdf_threshold) {
           /// Trick from the original author of voxel-hashing
-          if (abs(sdf) < ray_caster_params.sdf_threshold) {
+          if (fabsf(voxel_query.sdf) < ray_caster_params.sdf_threshold) {
             float depth = interpolated_t * camera_ray_dir.z;
 
             float3 rgb = ValToRGB(depth, 0.3, 5.0);
@@ -123,7 +110,7 @@ void CastKernel(const HashTable hash_table,
                                   interpolated_color.z / 255.f, 1.0f);
 
             if (ray_caster_params.enable_gradients) {
-              float3 normal = GetSpatialGradient(world_pos_isosurface, blocks, hash_table, geometry_helper);
+              float3 normal = GetSpatialSDFGradient(world_pos_isosurface, blocks, hash_table, geometry_helper);
               normal = -normal;
               float4 n = c_T_w * make_float4(normal, 0.0f);
               ray_caster_data.normal[pixel_idx]
@@ -151,10 +138,7 @@ void CastKernel(const HashTable hash_table,
       }
 
       /// No zero crossing || not good
-      prev_sample.sdf = sdf;
-#ifdef STATS
-      prev_sample.entropy = stats.entropy;
-#endif
+      prev_sample.sdf = voxel_query.sdf;
       prev_sample.t = t;
       prev_sample.weight = 1;
     }

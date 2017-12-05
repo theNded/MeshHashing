@@ -11,9 +11,20 @@
 #include "core/hash_table.h"
 #include "geometry/geometry_helper.h"
 
+void PrimalDualInit(
+    EntryArray& candidate_entries,
+    BlockArray& blocks,
+    HashTable& hash_table,
+    GeometryHelper& geometry_helper
+);
+
 void PrimalDualIterate(
     EntryArray& candidate_entries,
     BlockArray& blocks,
-    GeometryHelper& geometry_helper
+    HashTable& hash_table,
+    GeometryHelper& geometry_helper,
+    const float lambda,
+    const float sigma,
+    const float tau
 );
 #endif //MESH_HASHING_PRIMAL_DUAL_H

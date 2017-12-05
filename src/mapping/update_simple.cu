@@ -1,4 +1,5 @@
 #include <device_launch_parameters.h>
+#include <util/timer.h>
 
 #include "core/block_array.h"
 #include "mapping/update_simple.h"
@@ -17,14 +18,15 @@ void UpdateBlocksSimpleKernel(
     SensorParams sensor_params,
     float4x4 cTw,
     HashTable hash_table,
-    GeometryHelper geometry_helper) {
+    GeometryHelper geometry_helper
+) {
 
   //TODO check if we should load this in shared memory (entries)
   /// 1. Select voxel
   const HashEntry &entry = candidate_entries[blockIdx.x];
   int3 voxel_base_pos = geometry_helper.BlockToVoxel(entry.pos);
   uint local_idx = threadIdx.x;  //inside of an SDF block
-  int3 voxel_pos = voxel_base_pos + make_int3(geometry_helper.IdxToVoxelLocalPos(local_idx));
+  int3 voxel_pos = voxel_base_pos + make_int3(geometry_helper.DevectorizeIndex(local_idx));
 
   Voxel &this_voxel = blocks[entry.ptr].voxels[local_idx];
   /// 2. Project to camera
@@ -49,7 +51,8 @@ void UpdateBlocksSimpleKernel(
       sensor_params.min_depth_range,
       sensor_params.max_depth_range
   );
-  float weight = (1.0f - normalized_depth);
+  float inv_sigma2 = fmaxf(10 * geometry_helper.weight_sample * (1.0f - normalized_depth),
+                       1.0f);
   float truncation = geometry_helper.truncate_distance(depth);
   if (sdf <= -truncation)
     return;
@@ -62,7 +65,7 @@ void UpdateBlocksSimpleKernel(
   /// 5. Update
   Voxel delta;
   delta.sdf = sdf;
-  delta.weight = weight;
+  delta.inv_sigma2 = inv_sigma2;
 
   if (sensor_data.color_data) {
     float4 color = tex2D<float4>(sensor_data.color_texture, image_pos.x, image_pos.y);
@@ -73,18 +76,23 @@ void UpdateBlocksSimpleKernel(
   this_voxel.Update(delta);
 }
 
-void UpdateBlocksSimple(EntryArray &candidate_entries,
-                      BlockArray &blocks,
-                      Sensor &sensor,
-                      HashTable &hash_table,
-                      GeometryHelper &geometry_helper) {
+double UpdateBlocksSimple(
+    EntryArray &candidate_entries,
+    BlockArray &blocks,
+    Sensor &sensor,
+    HashTable &hash_table,
+    GeometryHelper &geometry_helper
+) {
+
+  Timer timer;
+  timer.Tick();
   const uint threads_per_block = BLOCK_SIZE;
 
-  uint compacted_entry_count = candidate_entries.count();
-  if (compacted_entry_count <= 0)
-    return;
+  uint candidate_entry_count = candidate_entries.count();
+  if (candidate_entry_count <= 0)
+    return timer.Tock();
 
-  const dim3 grid_size(compacted_entry_count, 1);
+  const dim3 grid_size(candidate_entry_count, 1);
   const dim3 block_size(threads_per_block, 1);
   UpdateBlocksSimpleKernel << < grid_size, block_size >> > (
       candidate_entries,
@@ -96,4 +104,5 @@ void UpdateBlocksSimple(EntryArray &candidate_entries,
           geometry_helper);
   checkCudaErrors(cudaDeviceSynchronize());
   checkCudaErrors(cudaGetLastError());
+  return timer.Tock();
 }

@@ -76,13 +76,13 @@ struct SensorParams {
 /// Just a supersede of argv editing...
 struct RuntimeParams {
   int  dataset_type;
+  bool enable_bayesian_update;
 
   bool enable_navigation;
-
   bool enable_polygon_mode;
   bool enable_global_mesh;
   bool enable_sdf_gradient;
-  bool render_type;
+  bool enable_color;
 
   bool enable_bounding_box;
   bool enable_trajectory;
