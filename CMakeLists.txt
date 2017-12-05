@@ -169,28 +169,28 @@ TARGET_LINK_LIBRARIES(reconstruction
         ${GLOG_LIBRARIES})
 
 ### An ORB app
-OPTION(WITH_ORBSLAM2 "Build with orb slam" ON)
-if (WITH_ORBSLAM2)
-    SET(ORB_SLAM2_PATH ${VH}/extern/orb_slam2)
-    MESSAGE(STATUS "Build with ORB-SLAM2")
-
-    FIND_PACKAGE(Pangolin REQUIRED)
-    FIND_PACKAGE(Eigen3 REQUIRED)
-    INCLUDE_DIRECTORIES(
-            ${ORB_SLAM2_PATH}
-            ${ORB_SLAM2_PATH}/include
-            ${EIGEN3_INCLUDE_DIR})
-    LINK_DIRECTORIES(${ORB_SLAM2_PATH}/lib)
-
-    ADD_EXECUTABLE(orb_slam2 src/app/orb_slam2.cc)
-    TARGET_LINK_LIBRARIES(orb_slam2
-            mesh-hashing
-            ORB_SLAM2
-            -lopencv_core -lopencv_highgui
-            ${Pangolin_LIBRARIES}
-            ${GLOG_LIBRARIES})
-
-    SET_TARGET_PROPERTIES(orb_slam2
-            PROPERTIES
-            COMPILE_DEFINITIONS USE_CUDA_GL)
-endif(WITH_ORBSLAM2)
+#OPTION(WITH_ORBSLAM2 "Build with orb slam" OFF)
+#if (WITH_ORBSLAM2)
+#    SET(ORB_SLAM2_PATH ${VH}/extern/orb_slam2)
+#    MESSAGE(STATUS "Build with ORB-SLAM2")
+#
+#    FIND_PACKAGE(Pangolin REQUIRED)
+#    FIND_PACKAGE(Eigen3 REQUIRED)
+#    INCLUDE_DIRECTORIES(
+#            ${ORB_SLAM2_PATH}
+#            ${ORB_SLAM2_PATH}/include
+#            ${EIGEN3_INCLUDE_DIR})
+#    LINK_DIRECTORIES(${ORB_SLAM2_PATH}/lib)
+#
+#    ADD_EXECUTABLE(orb_slam2 src/app/orb_slam2.cc)
+#    TARGET_LINK_LIBRARIES(orb_slam2
+#            mesh-hashing
+#            ORB_SLAM2
+#            -lopencv_core -lopencv_highgui
+#            ${Pangolin_LIBRARIES}
+#            ${GLOG_LIBRARIES})
+#
+#    SET_TARGET_PROPERTIES(orb_slam2
+#            PROPERTIES
+#            COMPILE_DEFINITIONS USE_CUDA_GL)
+#endif(WITH_ORBSLAM2)
