@@ -19,7 +19,7 @@ enable_bounding_box:    0
 enable_trajectory:      0
 enable_ray_casting:     0
 
-enable_video_recording:  1
+enable_video_recording:  0
 enable_ply_saving:       1
 
 filename_prefix: "copyroom"
