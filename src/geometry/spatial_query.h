@@ -96,7 +96,7 @@ inline float3 GetSpatialSDFGradient(
   if (l == 0.0f || ! valid) {
     return make_float3(0.0f, 0.0f, 0.0f);
   }
-  return grad / l;
+  return grad;
 }
 
 #endif

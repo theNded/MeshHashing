@@ -25,6 +25,7 @@ FIND_PACKAGE(GLEW   REQUIRED)
 FIND_PACKAGE(OpenGL REQUIRED)
 # CV utilities
 FIND_PACKAGE(OpenCV REQUIRED)
+FIND_PACKAGE(Eigen3 REQUIRED)
 # Parallel computation
 FIND_PACKAGE(CUDA REQUIRED)
 
@@ -82,6 +83,7 @@ INCLUDE_DIRECTORIES(
         ${VH}
         ${VH}/extern/cuda
         ${GL_WRAPPER}/include
+        ${EIGEN3_INCLUDE_DIR}
         ${GLOG_INCLUDE_DIRS}
         ${CUDA_TOOLKIT_INCLUDE})
 
@@ -114,6 +116,7 @@ CUDA_ADD_LIBRARY(mesh-hashing-cuda
         ${VH}/sensor/rgbd_sensor.cu
         ${VH}/sensor/preprocess.cu
 
+        ${VH}/localizing/point_to_psdf.cu
         ${VH}/mapping/allocate.cu
         ${VH}/mapping/update_simple.cu
         ${VH}/mapping/update_bayesian.cu
@@ -164,6 +167,15 @@ SET_TARGET_PROPERTIES(reconstruction
         PROPERTIES
         COMPILE_DEFINITIONS USE_CUDA_GL)
 TARGET_LINK_LIBRARIES(reconstruction
+        mesh-hashing
+        -lopencv_core -lopencv_highgui
+        ${GLOG_LIBRARIES})
+
+ADD_EXECUTABLE(slam src/app/slam.cc)
+SET_TARGET_PROPERTIES(slam
+        PROPERTIES
+        COMPILE_DEFINITIONS USE_CUDA_GL)
+TARGET_LINK_LIBRARIES(slam
         mesh-hashing
         -lopencv_core -lopencv_highgui
         ${GLOG_LIBRARIES})

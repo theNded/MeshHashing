@@ -1531,7 +1531,7 @@ public:
     return sqrt(norm1DSquared());
   }
 
-private:
+//private:
 
   union
   {

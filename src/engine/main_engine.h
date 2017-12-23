@@ -35,6 +35,8 @@ public:
   void ConfigMappingEngine(
       bool enable_bayesian_update
   );
+
+  void ConfigLocalizingEngine();
   void ConfigVisualizingEngine(
       gl::Light& light,
       bool enable_navigation,
@@ -52,7 +54,7 @@ public:
       bool enable_ply
   );
 
-
+  void Localizing(Sensor &sensor);
   void Mapping(Sensor &sensor);
   void Meshing();
   void Recycle();

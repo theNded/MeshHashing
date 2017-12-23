@@ -7,6 +7,7 @@
 #include "engine/main_engine.h"
 
 #include "core/collect_block_array.h"
+#include "localizing/point_to_psdf.h"
 #include "mapping/allocate.h"
 #include "mapping/update_simple.h"
 #include "mapping/recycle.h"
@@ -17,6 +18,54 @@
 ////////////////////
 /// Host code
 ////////////////////
+void MainEngine::Localizing(Sensor &sensor) {
+  for (int iter = 0; iter < 20; ++iter) {
+    mat6x6 A;
+    mat6x1 b;
+    int count;
+    float error = PointToSurface(blocks_, sensor, hash_table_, geometry_helper_,
+                                 A, b, count);
+    if (count == 0) {
+      LOG(INFO) << "Count equals 0!";
+      return;
+    };
+
+    LOG(INFO) << "Localization error: " << error << " / " << count << " = "
+              << error / count;
+
+    Eigen::Matrix<float, 6, 6> eigen_A;
+    Eigen::Matrix<float, 6, 1> eigen_b;
+    for (int i = 0; i < 6; ++i) {
+      for (int j = 0; j < 6; ++j) {
+        eigen_A.coeffRef(i, j) = A.entries2D[i][j];
+      }
+      eigen_b.coeffRef(i) = b.entries[i];
+    }
+    Sophus::SE3f::Tangent dxi = -eigen_A.inverse() * eigen_b;
+
+    Eigen::Matrix4f eigen_wTc;
+    for (int i = 0; i < 4; ++i) {
+      for (int j = 0; j < 4; ++j) {
+        eigen_wTc.coeffRef(i, j) = sensor.wTc().entries2[i][j];
+      }
+    }
+
+    sensor.SE3_mat_to_tangent();
+    se3 w_xi_c = sensor.w_xi_c();
+    Sophus::SE3f::Tangent tangent;
+    tangent << w_xi_c.t1, w_xi_c.t2, w_xi_c.t3, w_xi_c.w1, w_xi_c.w2, w_xi_c.w3;
+    eigen_wTc = Sophus::SE3f::exp(tangent + dxi).matrix();
+
+    float4x4 wTc;
+    for (int i = 0; i < 4; ++i) {
+      for (int j = 0; j < 4; ++j) {
+        wTc.entries2[i][j] = eigen_wTc.coeff(i,j);
+      }
+    }
+    sensor.set_transform(wTc);
+  }
+}
+
 void MainEngine::Mapping(Sensor &sensor) {
   double alloc_time = AllocBlockArray(
       hash_table_,
@@ -261,7 +310,7 @@ void MainEngine::ConfigVisualizingEngine(
     vis_engine_.InitBoundingBoxData(hash_params_.value_capacity*24);
   }
   if (enable_trajectory) {
-    vis_engine_.InitTrajectoryData(10000);
+    vis_engine_.InitTrajectoryData(80000);
   }
 
   if (enable_ray_caster) {
