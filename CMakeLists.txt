@@ -89,11 +89,11 @@ INCLUDE_DIRECTORIES(
 ## Building Libraries
 ### 1. OpenGL util
 ADD_LIBRARY(gl-util
-        ${GL_WRAPPER}/src/args.cc
-        ${GL_WRAPPER}/src/program.cc
-        ${GL_WRAPPER}/src/window.cc
-        ${GL_WRAPPER}/src//uniforms.cc
-        ${GL_WRAPPER}/src/camera.cc)
+        ${GL_WRAPPER}/src/core/args.cc
+        ${GL_WRAPPER}/src/core/program.cc
+        ${GL_WRAPPER}/src/core/window.cc
+        ${GL_WRAPPER}/src/core/uniforms.cc
+        ${GL_WRAPPER}/src/core/camera.cc)
 SET_TARGET_PROPERTIES(gl-util
         PROPERTIES
         COMPILE_DEFINITIONS USE_CUDA_GL)

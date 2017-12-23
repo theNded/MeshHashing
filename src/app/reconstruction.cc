@@ -32,15 +32,6 @@
 
 #define DEBUG_
 
-Light light = {
-    {
-        glm::vec3(0, -2, 0),
-        glm::vec3(4, -2, 0)
-    },
-    glm::vec3(1, 1, 1),
-    3.0f
-};
-
 int main(int argc, char **argv) {
   /// Use this to substitute tedious argv parsing
   RuntimeParams args;
@@ -65,6 +56,9 @@ int main(int argc, char **argv) {
   main_engine.ConfigMappingEngine(
       args.enable_bayesian_update
   );
+
+  gl::Light light;
+  light.Load("../config/lights.yaml");
   main_engine.ConfigVisualizingEngine(
       light,
       args.enable_navigation,

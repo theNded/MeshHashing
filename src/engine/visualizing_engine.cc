@@ -7,7 +7,9 @@
 
 const std::string kShaderPath = "../src/extern/opengl-wrapper/shader";
 
-VisualizingEngine::VisualizingEngine(std::string window_name, int width, int height) {
+VisualizingEngine::VisualizingEngine(std::string window_name,
+                                     int width,
+                                     int height) {
   Init(window_name, width, height);
 }
 
@@ -20,7 +22,7 @@ VisualizingEngine::~VisualizingEngine() {
 
 void VisualizingEngine::Init(std::string window_name, int width, int height) {
   window_.Init(window_name, width, height);
-  camera_.set_perspective(width, height);
+  camera_.set_projection(width, height);
   glm::mat4 m = glm::mat4(1.0f);
   m[1][1] = -1;
   m[2][2] = -1;
@@ -60,8 +62,11 @@ void VisualizingEngine::set_view_matrix(glm::mat4 view) {
   mvp_ = camera_.projection() * view_ * camera_.model();
 }
 
-void VisualizingEngine::set_light(Light &light) {
+void VisualizingEngine::set_light(gl::Light &light) {
   light_ = light;
+}
+void VisualizingEngine::LoadLight(std::string path) {
+  light_.Load(path);
 }
 
 void VisualizingEngine::BindMainProgram(
@@ -71,24 +76,39 @@ void VisualizingEngine::BindMainProgram(
     bool enable_polygon_mode,
     bool enable_color
 ) {
-  std::stringstream ss;
-  ss << light_.light_srcs.size();
-
   if (!enable_color) {
-    main_program_.Load(kShaderPath + "/model_multi_light_vertex.glsl", gl::kVertexShader);
-    main_program_.ReplaceMacro("LIGHT_COUNT", ss.str(), gl::kVertexShader);
-    main_program_.Load(kShaderPath + "/model_multi_light_fragment.glsl", gl::kFragmentShader);
-    main_program_.ReplaceMacro("LIGHT_COUNT", ss.str(), gl::kFragmentShader);
+    main_program_.Load(kShaderPath + "/img_vtx_normal_uni_light_vert.glsl",
+                       gl::kVertexShader);
+    main_program_.ReplaceMacro("LIGHT_COUNT", light_.count_str,
+                               gl::kVertexShader);
+    main_program_.Load(kShaderPath + "/img_vtx_normal_uni_light_frag.glsl",
+                       gl::kFragmentShader);
+    main_program_.ReplaceMacro("LIGHT_COUNT", light_.count_str,
+                               gl::kFragmentShader);
     main_program_.Build();
 
     main_uniforms_.GetLocation(main_program_.id(), "mvp", gl::kMatrix4f);
-    main_uniforms_.GetLocation(main_program_.id(), "c_T_w", gl::kMatrix4f);
+    main_uniforms_.GetLocation(main_program_.id(), "view", gl::kMatrix4f);
     main_uniforms_.GetLocation(main_program_.id(), "light", gl::kVector3f);
     main_uniforms_.GetLocation(main_program_.id(), "light_power", gl::kFloat);
-    main_uniforms_.GetLocation(main_program_.id(), "light_color", gl::kVector3f);
+    main_uniforms_.GetLocation(main_program_.id(),
+                               "ambient_coeff",
+                               gl::kVector3f);
+    main_uniforms_.GetLocation(main_program_.id(),
+                               "specular_coeff",
+                               gl::kVector3f);
+    main_uniforms_.GetLocation(main_program_.id(),
+                               "diffuse_color",
+                               gl::kVector3f);
+    main_uniforms_.GetLocation(main_program_.id(),
+                               "light_color",
+                               gl::kVector3f);
+
   } else {
-    main_program_.Load(kShaderPath + "/model_color_vertex.glsl", gl::kVertexShader);
-    main_program_.Load(kShaderPath + "/model_color_fragment.glsl", gl::kFragmentShader);
+    main_program_.Load(kShaderPath + "/img_vtx_color_vert.glsl",
+                       gl::kVertexShader);
+    main_program_.Load(kShaderPath + "/img_vtx_color_frag.glsl",
+                       gl::kFragmentShader);
     main_program_.Build();
 
     main_uniforms_.GetLocation(main_program_.id(), "mvp", gl::kMatrix4f);
@@ -99,7 +119,9 @@ void VisualizingEngine::BindMainProgram(
                         max_vertices);
   main_args_.InitBuffer(1, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
                         max_vertices);
-  main_args_.InitBuffer(2, {GL_ELEMENT_ARRAY_BUFFER, sizeof(int), 3, GL_UNSIGNED_INT},
+  main_args_.InitBuffer(2,
+                        {GL_ELEMENT_ARRAY_BUFFER, sizeof(int), 3,
+                         GL_UNSIGNED_INT},
                         max_triangles);
 
   enable_global_mesh_ = enable_global_mesh;
@@ -107,15 +129,18 @@ void VisualizingEngine::BindMainProgram(
   enable_color_ = enable_color;
 };
 
-
 void VisualizingEngine::BindMainUniforms() {
   main_uniforms_.Bind("mvp", &mvp_, 1);
 
   if (!enable_color_) {
-    main_uniforms_.Bind("c_T_w", &view_, 1);
-    main_uniforms_.Bind("light", light_.light_srcs.data(), light_.light_srcs.size());
+    main_uniforms_.Bind("mvp", &mvp_, 1);
+    main_uniforms_.Bind("view", &view_, 1);
+    main_uniforms_.Bind("light", light_.positions.data(), light_.count);
+    main_uniforms_.Bind("light_power", &light_.power, 1);
+    main_uniforms_.Bind("ambient_coeff", &light_.ambient_coeff, 1);
+    main_uniforms_.Bind("specular_coeff", &light_.specular_coeff, 1);
+    main_uniforms_.Bind("diffuse_color", &light_.diffuse_color, 1);
     main_uniforms_.Bind("light_color", &light_.light_color, 1);
-    main_uniforms_.Bind("light_power", &light_.light_power, 1);
   }
 }
 
@@ -126,10 +151,15 @@ void VisualizingEngine::BindMainData() {
     main_args_.BindBuffer(1, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
                           compact_mesh_.vertex_count(), compact_mesh_.colors());
   else
-    main_args_.BindBuffer(1, {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
-                          compact_mesh_.vertex_count(), compact_mesh_.normals());
-  main_args_.BindBuffer(2, {GL_ELEMENT_ARRAY_BUFFER, sizeof(int), 3, GL_UNSIGNED_INT},
-                        compact_mesh_.triangle_count(), compact_mesh_.triangles());
+    main_args_.BindBuffer(1,
+                          {GL_ARRAY_BUFFER, sizeof(float), 3, GL_FLOAT},
+                          compact_mesh_.vertex_count(),
+                          compact_mesh_.normals());
+  main_args_.BindBuffer(2,
+                        {GL_ELEMENT_ARRAY_BUFFER, sizeof(int), 3,
+                         GL_UNSIGNED_INT},
+                        compact_mesh_.triangle_count(),
+                        compact_mesh_.triangles());
 }
 
 void VisualizingEngine::RenderMain() {
@@ -143,16 +173,23 @@ void VisualizingEngine::RenderMain() {
   if (enable_polygon_mode_) {
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
   }
-  glDrawElements(GL_TRIANGLES, compact_mesh_.triangle_count() * 3, GL_UNSIGNED_INT, 0);
+  glDrawElements(GL_TRIANGLES,
+                 compact_mesh_.triangle_count() * 3,
+                 GL_UNSIGNED_INT,
+                 0);
 }
 
 void VisualizingEngine::BuildHelperProgram() {
-  helper_program_.Load(kShaderPath + "/line_vertex.glsl", gl::kVertexShader);
-  helper_program_.Load(kShaderPath + "/line_fragment.glsl", gl::kFragmentShader);
+  helper_program_.Load(kShaderPath + "/img_uni_color_vert.glsl",
+                       gl::kVertexShader);
+  helper_program_.Load(kShaderPath + "/img_uni_color_frag.glsl",
+                       gl::kFragmentShader);
   helper_program_.Build();
 
   helper_uniforms_.GetLocation(helper_program_.id(), "mvp", gl::kMatrix4f);
-  helper_uniforms_.GetLocation(helper_program_.id(), "uni_color", gl::kVector3f);
+  helper_uniforms_.GetLocation(helper_program_.id(),
+                               "uni_color",
+                               gl::kVector3f);
 }
 
 void VisualizingEngine::BindHelperUniforms() {
@@ -228,7 +265,11 @@ void VisualizingEngine::RenderRayCaster(
     HashTable &hash_table,
     GeometryHelper &geometry_helper
 ) {
-  ray_caster_.Cast(hash_table, blocks, ray_caster_.data(), geometry_helper, view);
+  ray_caster_.Cast(hash_table,
+                   blocks,
+                   ray_caster_.data(),
+                   geometry_helper,
+                   view);
   cv::imshow("RayCasting", ray_caster_.surface_image());
   cv::waitKey(1);
 }

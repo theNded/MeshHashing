@@ -12,12 +12,6 @@
 #include "visualization/ray_caster.h"
 #include "visualization/bounding_box.h"
 
-struct Light {
-  std::vector<glm::vec3> light_srcs;
-  glm::vec3 light_color;
-  float light_power;
-};
-
 // TODO: setup a factory
 class VisualizingEngine {
 public:
@@ -35,7 +29,8 @@ public:
     return window_.CaptureRGB();
   }
   // Call set_lights before this
-  void set_light(Light& light);
+  void set_light(gl::Light& light);
+  void LoadLight(std::string path);
   void BindMainProgram(
       uint max_vertices,
       uint max_triangles,
@@ -108,7 +103,7 @@ private:
   bool enable_color_ = false;
 
   // Lighting conditions
-  Light light_;
+  gl::Light light_;
 
   // Shared viewpoint
   glm::mat4  mvp_;

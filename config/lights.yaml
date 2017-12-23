@@ -1,0 +1,11 @@
+%YAML:1.0
+
+positions:
+ - {x: 0.0, y: -2.0, z: 0.0}
+ - {x: 4.0, y: -2.0, z: 0.0}
+
+ambient_coeff: {r: 0.0, g: 0.0, b: 0.0}
+specular_coeff: {r: 0.0, g: 0.0, b: 0.0}
+diffuse_color:  {r: 0.8, g: 0.0, b: 0.0}
+light_color: {r: 1.0, g: 1.0, b: 1.0}
+power: 7.0

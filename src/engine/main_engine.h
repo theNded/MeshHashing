@@ -36,7 +36,7 @@ public:
       bool enable_bayesian_update
   );
   void ConfigVisualizingEngine(
-      Light& light,
+      gl::Light& light,
       bool enable_navigation,
       bool enable_global_mesh,
       bool enable_bounding_box,
