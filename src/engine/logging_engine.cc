@@ -24,6 +24,8 @@ void LoggingEngine::Init(std::string path) {
   meshing_time_file_.open(base_path_ + "/time_meshing.txt");
 
   mesh_stats_file_.open(base_path_ + "/stats_mesh.txt");
+
+  localization_err_file_.open(base_path_ + "/localization_error.txt");
 }
 
 LoggingEngine::~LoggingEngine() {
@@ -50,6 +52,10 @@ void LoggingEngine::ConfigPlyWriter() {
 }
 void LoggingEngine::WritePly(CompactMesh &mesh) {
   SavePly(mesh, base_path_ + "/mesh.ply");
+}
+
+void LoggingEngine::WriteLocalizationError(float error) {
+  localization_err_file_ << error << "\n";
 }
 
 void LoggingEngine::WriteMappingTimeStamp(double alloc_time,

@@ -53,11 +53,16 @@ inline int AllocateVertexWithMutex(
     mesh_unit.vertex_ptrs[vertex_idx] = ptr;
     mesh.vertex(ptr).pos = vertex_pos;
     mesh.vertex(ptr).radius = sqrtf(1.0f / voxel_query.inv_sigma2);
-    mesh.vertex(ptr).normal = GetSpatialSDFGradient(
+
+    float3 grad;
+    valid = GetSpatialSDFGradient(
         vertex_pos,
         blocks, hash_table,
-        geometry_helper
+        geometry_helper,
+        &grad
     );
+    float l = length(grad);
+    mesh.vertex(ptr).normal = l > 0 && valid ? grad / l : make_float3(0);
 
     float rho = voxel_query.a/(voxel_query.a + voxel_query.b);
     //printf("%f %f\n", voxel_query.a, voxel_query.b);
@@ -119,7 +124,7 @@ void SurfelExtractionKernel(
     if (fabs(d[i]) > kThreshold) return;
 
     float rho = voxel_query.a / (voxel_query.a + voxel_query.b);
-    if (rho < 0.20f || voxel_query.inv_sigma2 < squaref(1.0f / kVoxelSize))
+    if (rho < 0.1f || voxel_query.inv_sigma2 < squaref(1.0f / kVoxelSize))
       return;
 //    if (voxel_query.inv_sigma2 < 50.0f) return;
     if (d[i] < kIsoLevel) cube_index |= (1 << i);

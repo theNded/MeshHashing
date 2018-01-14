@@ -92,10 +92,14 @@ int main(int argc, char **argv) {
     // Preprocess data
     sensor.Process(depth, color);
 
-    main_engine.Localizing(sensor);
+    main_engine.Localizing(sensor, 20, wTc);
+    //sensor.set_transform(wTc);
+    //main_engine.Localizing(sensor, 10, wTc);
+
     main_engine.Mapping(sensor);
     main_engine.Meshing();
 
+    cTw = sensor.cTw();
     if (main_engine.Visualize(cTw))
       break;
 

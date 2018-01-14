@@ -10,6 +10,7 @@ template<unsigned int N, unsigned int M>
 __device__
 void AtomicAdd(matNxM<N, M> *A, const matNxM<N, M> dA) {
   const int n = N * M;
+#pragma unroll 1
   for (int i = 0; i < n; ++i) {
     atomicAdd(&(A->entries[i]), dA.entries[i]);
   }
@@ -33,7 +34,13 @@ void PointToSurfaceKernel(
   if (x >= sensor_params.width || y >= sensor_params.height) {
     return;
   }
+  if (x % 2 == 0 || y % 2 == 0)
+    return;
+
   float depth = tex2D<float>(sensor_data.depth_texture, x, y);
+  if (depth == MINF || depth == 0.0f
+      || depth >= geometry_helper.sdf_upper_bound)
+    return;
 
   float3 point_cam = geometry_helper.ImageReprojectToCamera(x,
                                                             y,
@@ -47,10 +54,13 @@ void PointToSurfaceKernel(
   bool valid = GetSpatialValue(point_world, blocks, hash_table,
                                geometry_helper, &voxel);
   if (!valid) return;
-  float pi = voxel.a / (voxel.a + voxel.b);
   float d = voxel.sdf;
-  float3 grad = GetSpatialSDFGradient(point_world, blocks, hash_table,
-                                      geometry_helper);
+
+  float3 grad;
+  valid = GetSpatialSDFGradient(point_world, blocks, hash_table,
+                                geometry_helper, &grad);
+  if (! valid) return;
+
   // A = \sum
   // \nabla D * [- y_x | I]
   // [dDx, dDy, dDz] * [ 1 0 0 | 0 z -y ]
@@ -59,7 +69,7 @@ void PointToSurfaceKernel(
   float dDdx1_data[6] = {
       grad.x, grad.y, grad.x,
       (-grad.y * point_world.z + grad.z * point_world.y),
-      (+grad.x * point_world.z - grad.z * point_world.x),
+      (-grad.z * point_world.x + grad.x * point_world.z),
       (-grad.x * point_world.y + grad.y * point_world.x)
   };
   mat6x1 dDdxi(dDdx1_data);
@@ -67,6 +77,7 @@ void PointToSurfaceKernel(
   AtomicAdd<6, 6>(A, dA);
   AtomicAdd<6, 1>(b, d * dDdxi);
   atomicAdd(err, d * d);
+  //printf("%d %d -> %f\n", x, y, d);
   atomicAdd(count, 1);
 }
 
@@ -100,12 +111,12 @@ float PointToSurface(BlockArray &blocks,
   checkCudaErrors(cudaMemcpy(b, &cpu_b, sizeof(mat6x1),
                              cudaMemcpyHostToDevice));
 
-  checkCudaErrors(cudaMalloc(&err, sizeof(float)));
-  checkCudaErrors(cudaMemcpy(err, &cpu_err, sizeof(float),
-                             cudaMemcpyHostToDevice));
-
   checkCudaErrors(cudaMalloc(&count, sizeof(int)));
   checkCudaErrors(cudaMemcpy(count, &cpu_count, sizeof(int),
+                             cudaMemcpyHostToDevice));
+
+  checkCudaErrors(cudaMalloc(&err, sizeof(float)));
+  checkCudaErrors(cudaMemcpy(err, &cpu_err, sizeof(float),
                              cudaMemcpyHostToDevice));
 
   PointToSurfaceKernel << < grid_size, block_size >> > (
@@ -120,18 +131,17 @@ float PointToSurface(BlockArray &blocks,
           err,
           count
   );
+  checkCudaErrors(cudaDeviceSynchronize());
+  checkCudaErrors(cudaGetLastError());
 
   checkCudaErrors(cudaMemcpy(&cpu_A, A, sizeof(mat6x6),
                              cudaMemcpyDeviceToHost));
   checkCudaErrors(cudaMemcpy(&cpu_b, b, sizeof(mat6x1),
                              cudaMemcpyDeviceToHost));
-  checkCudaErrors(cudaMemcpy(&cpu_err, err, sizeof(float),
-                             cudaMemcpyDeviceToHost));
   checkCudaErrors(cudaMemcpy(&cpu_count, count, sizeof(int),
                              cudaMemcpyDeviceToHost));
-
-  checkCudaErrors(cudaDeviceSynchronize());
-  checkCudaErrors(cudaGetLastError());
+  checkCudaErrors(cudaMemcpy(&cpu_err, err, sizeof(float),
+                             cudaMemcpyDeviceToHost));
 
   return cpu_err;
 }

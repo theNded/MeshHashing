@@ -12,16 +12,6 @@
 #include "core/params.h"
 #include "sensor/preprocess.h"
 #include <glog/logging.h>
-
-struct se3 {
-  union {
-    struct {
-      float t1; float t2; float t3;
-      float w1; float w2; float w3;
-    };
-    float entries[6];
-  };
-};
 /// At first get rid of CUDARGBDAdaptor and Sensor, use it directly
 struct SensorData {
   /// sensor data raw
@@ -58,43 +48,9 @@ public:
 
   int Process(cv::Mat &depth, cv::Mat &color);
 
-  void SE3_tangent_to_mat() {
-    Eigen::Matrix<float, 6, 1> xi_wTc;
-    xi_wTc << xi_wTc_.t1, xi_wTc_.t2, xi_wTc_.t3,
-        xi_wTc_.w1, xi_wTc_.w2, xi_wTc_.w3;
-    Sophus::SE3f SE3_from_xi = Sophus::SE3f::exp(xi_wTc);
-    Eigen::Matrix4f m = SE3_from_xi.matrix();
-    for (int i = 0; i < 4; ++i) {
-      for (int j = 0; j < 4; ++j) {
-        wTc_.entries2[i][j] = m.coeff(i, j);
-      }
-    }
-  }
-
-  void SE3_mat_to_tangent() {
-    Eigen::Matrix<float, 3, 4> m;
-    for (int i = 0; i < 3; ++i) {
-      for (int j = 0; j < 4; ++j) {
-        m.coeffRef(i, j) = wTc_.entries2[i][j];
-      }
-    }
-
-    Sophus::SE3f SE3_from_mat;
-    SE3_from_mat.setRotationMatrix(m.leftCols(3));
-    SE3_from_mat.translation() = m.rightCols(1);
-
-    Sophus::SE3f::Tangent xi_ = Sophus::SE3f::log(SE3_from_mat);
-    for (int i = 0; i < 6; ++i) {
-      xi_wTc_.entries[i] = xi_.coeff(i);
-    }
-  }
-
   void set_transform(float4x4 wTc) {
     wTc_ = wTc;
     cTw_ = wTc_.getInverse();
-  }
-  const se3& w_xi_c() const {
-    return xi_wTc_;
   }
   const float4x4& wTc() const {
     return wTc_;
@@ -124,9 +80,6 @@ private:
 
   float4x4      wTc_; // camera -> world
   float4x4      cTw_;
-
-  se3 xi_wTc_;
-  se3 dxi_wTc_;
 };
 
 #endif //VH_SENSOR_H

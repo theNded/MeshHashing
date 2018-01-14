@@ -31,6 +31,7 @@ public:
   void ConfigPlyWriter();
   void WriteVideo(cv::Mat& mat);
   void WritePly(CompactMesh& mesh);
+  void WriteLocalizationError(float error);
   void WriteMappingTimeStamp(double alloc_time, double collect_time, double update_time,
                                int frame_idx);
   void WriteMappingTimeStamp(float alloc_time, float collect_time, float predict_time, float update_time,
@@ -63,6 +64,7 @@ private:
   std::ofstream time_stamp_file_;
   std::ofstream meshing_time_file_;
   std::ofstream mesh_stats_file_;
+  std::ofstream localization_err_file_;
 };
 
 

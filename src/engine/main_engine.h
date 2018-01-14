@@ -54,11 +54,13 @@ public:
       bool enable_ply
   );
 
-  void Localizing(Sensor &sensor);
+  void Localizing(Sensor &sensor, int iters, float4x4& gt);
   void Mapping(Sensor &sensor);
   void Meshing();
   void Recycle();
   int Visualize(float4x4 view);
+  int Visualize(float4x4 view, float4x4 view_gt);
+
   void Log();
   void RecordBlocks(std::string prefix = "");
   void FinalLog();

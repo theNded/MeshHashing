@@ -66,11 +66,12 @@ inline bool GetSpatialValue(
 }
 
 __device__
-inline float3 GetSpatialSDFGradient(
+inline bool GetSpatialSDFGradient(
     const float3 &pos,
     const BlockArray &blocks,
     const HashTable &hash_table,
-    GeometryHelper &geometry_helper
+    GeometryHelper &geometry_helper,
+    float3* grad
 ) {
   const float3 grad_masks[3] = {{0.5, 0, 0}, {0, 0.5, 0}, {0, 0, 0.5}};
   const float3 offset = make_float3(geometry_helper.voxel_size);
@@ -89,14 +90,10 @@ inline float3 GetSpatialSDFGradient(
     sdfp[i] = voxel_query.sdf;
   }
 
-  float3 grad = make_float3((sdfp[0] - sdfn[0]) / offset.x,
-                            (sdfp[1] - sdfn[1]) / offset.y,
-                            (sdfp[2] - sdfn[2]) / offset.z);
-  float l = length(grad);
-  if (l == 0.0f || ! valid) {
-    return make_float3(0.0f, 0.0f, 0.0f);
-  }
-  return grad;
+  *grad = make_float3((sdfp[0] - sdfn[0]) / offset.x,
+                      (sdfp[1] - sdfn[1]) / offset.y,
+                      (sdfp[2] - sdfn[2]) / offset.z);
+  return valid;
 }
 
 #endif

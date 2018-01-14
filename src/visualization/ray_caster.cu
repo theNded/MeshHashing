@@ -110,7 +110,11 @@ void CastKernel(const HashTable hash_table,
                                   interpolated_color.z / 255.f, 1.0f);
 
             if (ray_caster_params.enable_gradients) {
-              float3 normal = GetSpatialSDFGradient(world_pos_isosurface, blocks, hash_table, geometry_helper);
+              float3 grad;
+              bool valid =  GetSpatialSDFGradient(world_pos_isosurface, blocks,
+                                      hash_table, geometry_helper, &grad);
+              float l = length(grad);
+              float3 normal = l > 0 && valid ? grad / l : make_float3(0);
               normal = -normal;
               float4 n = c_T_w * make_float4(normal, 0.0f);
               ray_caster_data.normal[pixel_idx]

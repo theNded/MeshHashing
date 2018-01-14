@@ -13,18 +13,18 @@ enable_sdf_gradient:    1
 enable_polygon_mode:    0
 
 enable_color:           0
-enable_navigation:      0
+enable_navigation:      1
 enable_global_mesh:     1
 enable_bounding_box:    0
-enable_trajectory:      1
+enable_trajectory:      0
 enable_ray_casting:     0
 
 enable_video_recording:  1
 enable_ply_saving:       1
 
-filename_prefix: "copyroom"
+filename_prefix: "burghers"
 time_profile:    "tum3-nhm"
 memo_profile:    "tum3-nhm"
 
 # Others
-run_frames:    10
+run_frames:  -1

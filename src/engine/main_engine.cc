@@ -18,12 +18,70 @@
 ////////////////////
 /// Host code
 ////////////////////
-void MainEngine::Localizing(Sensor &sensor) {
-  for (int iter = 0; iter < 20; ++iter) {
+/// GPU -> mat6x6, mat6x1
+/// solve by Eigen -> Matrix<float, 6, 1> dxi
+/// turn to Sophus -> Sophus::SE3f::Tangent
+/// expf in Eigen  -> Matrix4f dT
+/// Eigen::Matrix4f -> float4x4
+/// cTw float4x4
+
+float4x4 SolveAndConvertDeltaXi(const mat6x6& A, const mat6x1&b, float lambda) {
+  Eigen::Matrix<float, 6, 6> eigen_A;
+  Eigen::Matrix<float, 6, 1> eigen_b, eigen_dxi;
+
+  for (int i = 0; i < 6; ++i) {
+    for (int j = 0; j < 6; ++j) {
+      eigen_A.coeffRef(i, j) = A.entries2D[i][j];
+    }
+    eigen_b.coeffRef(i) = b.entries[i];
+  }
+
+  eigen_A = eigen_A + lambda * Eigen::Matrix<float, 6, 6>::Identity();
+  eigen_dxi = eigen_A.ldlt().solve(-eigen_b);
+  //LOG(INFO) << "\n" << eigen_A;
+  //LOG(INFO) << "\n" << eigen_b.transpose();
+  //eigen_dxi = eigen_A.inverse() * eigen_b;
+  //LOG(INFO) << eigen_dxi.transpose();
+  Eigen::Matrix4f eigen_dT = Sophus::SE3f::exp(eigen_dxi).matrix();
+  float4x4 dT;
+  for (int i = 0; i < 4; ++i) {
+    for (int j = 0; j < 4; ++j) {
+      dT.entries2[i][j] = eigen_dT.coeff(i, j);
+    }
+  }
+
+  return dT;
+}
+
+Eigen::Matrix<float, 6, 1> SE3Tose3(float4x4 mat) {
+  Eigen::Matrix4f eigen_mat;
+  for (int i = 0; i < 4; ++i) {
+    for (int j = 0; j < 4; ++j) {
+      eigen_mat(i, j) = mat.entries2[i][j];
+    }
+  }
+  /// [t ~ omega] in Sophus
+  Sophus::SE3f SE3;
+  SE3.setRotationMatrix(eigen_mat.topLeftCorner<3, 3>());
+  SE3.translation() = eigen_mat.topRightCorner<3, 1>();
+  return SE3.log();
+};
+
+void MainEngine::Localizing(Sensor &sensor, int iters, float4x4& gt) {
+  for (int iter = 0; iter < iters; ++iter) {
+//    Eigen::Matrix<float, 6, 1> pose = SE3Tose3(sensor.wTc());
+//    Eigen::Matrix<float, 6, 1> gt_pose = SE3Tose3(gt);
+//    std::stringstream ss;
+//    for (int i = 0; i < 6; ++i) {
+//      ss << pose(i) - gt_pose(i) << " ";
+//    }
+//    LOG(INFO) << "Delta pose: " << ss.str();
+
     mat6x6 A;
     mat6x1 b;
     int count;
-    float error = PointToSurface(blocks_, sensor, hash_table_, geometry_helper_,
+    float error = PointToSurface(blocks_, sensor,
+                                 hash_table_, geometry_helper_,
                                  A, b, count);
     if (count == 0) {
       LOG(INFO) << "Count equals 0!";
@@ -32,37 +90,10 @@ void MainEngine::Localizing(Sensor &sensor) {
 
     LOG(INFO) << "Localization error: " << error << " / " << count << " = "
               << error / count;
+    log_engine_.WriteLocalizationError(error);
 
-    Eigen::Matrix<float, 6, 6> eigen_A;
-    Eigen::Matrix<float, 6, 1> eigen_b;
-    for (int i = 0; i < 6; ++i) {
-      for (int j = 0; j < 6; ++j) {
-        eigen_A.coeffRef(i, j) = A.entries2D[i][j];
-      }
-      eigen_b.coeffRef(i) = b.entries[i];
-    }
-    Sophus::SE3f::Tangent dxi = -eigen_A.inverse() * eigen_b;
-
-    Eigen::Matrix4f eigen_wTc;
-    for (int i = 0; i < 4; ++i) {
-      for (int j = 0; j < 4; ++j) {
-        eigen_wTc.coeffRef(i, j) = sensor.wTc().entries2[i][j];
-      }
-    }
-
-    sensor.SE3_mat_to_tangent();
-    se3 w_xi_c = sensor.w_xi_c();
-    Sophus::SE3f::Tangent tangent;
-    tangent << w_xi_c.t1, w_xi_c.t2, w_xi_c.t3, w_xi_c.w1, w_xi_c.w2, w_xi_c.w3;
-    eigen_wTc = Sophus::SE3f::exp(tangent + dxi).matrix();
-
-    float4x4 wTc;
-    for (int i = 0; i < 4; ++i) {
-      for (int j = 0; j < 4; ++j) {
-        wTc.entries2[i][j] = eigen_wTc.coeff(i,j);
-      }
-    }
-    sensor.set_transform(wTc);
+    float4x4 dT = SolveAndConvertDeltaXi(A, b, 100000);
+    sensor.set_transform(dT * sensor.wTc());
   }
 }
 
@@ -161,6 +192,55 @@ void MainEngine::Recycle() {
 }
 
 // view: world -> camera
+int MainEngine::Visualize(float4x4 view, float4x4 view_gt) {
+  if (vis_engine_.enable_interaction()) {
+    vis_engine_.update_view_matrix();
+  } else {
+    glm::mat4 glm_view;
+    for (int i = 0; i < 4; ++i)
+      for (int j = 0; j < 4; ++j)
+        glm_view[i][j] = view.entries2[i][j];
+    glm_view = glm::transpose(glm_view);
+    vis_engine_.set_view_matrix(glm_view);
+  }
+
+  if (vis_engine_.enable_global_mesh()) {
+    CollectAllBlocks(hash_table_, candidate_entries_);
+  } // else CollectBlocksInFrustum
+
+  int3 timing;
+  CompressMesh(candidate_entries_,
+               blocks_,
+               mesh_,
+               vis_engine_.compact_mesh(),
+               timing);
+
+  if (vis_engine_.enable_bounding_box()) {
+    vis_engine_.bounding_box().Reset();
+
+    ExtractBoundingBox(candidate_entries_,
+                       vis_engine_.bounding_box(),
+                       geometry_helper_);
+  }
+  if (vis_engine_.enable_trajectory()) {
+    vis_engine_.trajectory().AddPose(view.getInverse());
+    vis_engine_.trajectory().AddPose(view_gt.getInverse());
+  }
+
+
+  if (vis_engine_.enable_ray_casting()) {
+    Timer timer;
+    timer.Tick();
+    vis_engine_.RenderRayCaster(view,
+                                blocks_,
+                                hash_table_,
+                                geometry_helper_);
+    LOG(INFO) << " Raycasting time: " << timer.Tock();
+  }
+
+  return  vis_engine_.Render();
+}
+
 int MainEngine::Visualize(float4x4 view) {
   if (vis_engine_.enable_interaction()) {
     vis_engine_.update_view_matrix();
